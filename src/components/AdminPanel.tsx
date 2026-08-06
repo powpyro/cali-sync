@@ -9,6 +9,8 @@ import {
   forcerOuverture,
   cloturerSession,
   reinitialiserArbitrages,
+  getApiUrl,
+  setApiUrl,
   type SessionInfo,
   type Template,
   type ProfilEvaluateur,
@@ -88,16 +90,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [createdPin, setCreatedPin] = useState<string | null>(null);
   const [createdSessionId, setCreatedSessionId] = useState<string | null>(null);
 
-  // ── Action Loading Trackers ─────────────────────────────────────────────────
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [apiConnectionError, setApiConnectionError] = useState<string | null>(null);
+  const [editableApiUrl, setEditableApiUrl] = useState(getApiUrl());
 
   // ── Data Fetching ───────────────────────────────────────────────────────────
   const fetchSessions = async () => {
     setSessionsLoading(true);
     const res = await listerToutesSessions();
     setSessionsLoading(false);
-    if (res && res.success && Array.isArray(res.sessions)) setSessions(res.sessions);
-    else setSessions([]);
+    if (res && res.success && Array.isArray(res.sessions)) {
+      setSessions(res.sessions);
+      setApiConnectionError(null);
+    } else {
+      setSessions([]);
+      if (res && !res.success && res.message) {
+        setApiConnectionError(res.message);
+      }
+    }
   };
 
   const fetchDemandes = async () => {
@@ -114,10 +124,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setTemplatesLoading(false);
     if (res && res.success && Array.isArray(res.templates)) {
       setTemplates(res.templates);
+      setApiConnectionError(null);
       if (res.templates.length > 0 && !newSessionTemplate) {
         setNewSessionTemplate(res.templates[0].template_id);
       }
-    } else setTemplates([]);
+    } else {
+      setTemplates([]);
+      if (res && !res.success && res.message && !apiConnectionError) {
+        setApiConnectionError(res.message);
+      }
+    }
   };
 
   const fetchEvaluateurs = async () => {
@@ -261,6 +277,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  const handleSaveApiUrl = (e: React.FormEvent) => {
+    e.preventDefault();
+    setApiUrl(editableApiUrl);
+    setApiConnectionError(null);
+    setActionFeedback({ success: true, message: "URL API mise à jour ! Test de connexion en cours..." });
+    fetchSessions();
+    fetchTemplates();
+    fetchDemandes();
+    fetchEvaluateurs();
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).catch(() => {});
   };
@@ -280,8 +307,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       </span>
     );
   };
-
-  const apiUrl = import.meta.env.VITE_API_URL || "";
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -322,7 +347,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
       <main className="flex-1 px-4 sm:px-8 py-8">
         <div className="max-w-6xl mx-auto space-y-8">
-          {/* Feedback */}
+          {/* Action Feedback Toast */}
+      {apiConnectionError && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+          <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-200 flex items-start gap-3 shadow-lg">
+            <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" />
+            <div className="space-y-1 text-xs sm:text-sm">
+              <div className="font-bold text-rose-300">⚠️ Erreur de connexion avec Google Apps Script</div>
+              <div>{apiConnectionError}</div>
+              <div className="text-slate-300 font-normal">
+                L'URL Web App configurée retourne une erreur HTML (ex: "Page introuvable"). Cela se produit lorsque le script Google Apps Script n'est pas déployé en <strong>Application Web</strong> ou si une nouvelle URL a été générée.
+                Veuillez vérifier votre déploiement dans Apps Script (<em>Exécuter en tant que : Moi</em>, <em>Accès : Tout le monde</em>) et saisir la nouvelle URL au bas de cette page.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Action Feedback Toast */}
           {actionFeedback && (
             <div
               className={`p-4 rounded-xl flex items-center gap-3 border ${
@@ -817,21 +859,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <section className="glass-card p-6 rounded-2xl space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm font-bold text-white">
-                <Server className="w-4 h-4 text-indigo-400" /> Backend Google Apps Script
+                <Server className="w-4 h-4 text-indigo-400" /> Backend Google Apps Script (Web App Endpoint)
               </div>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                 VITE_API_URL
               </span>
             </div>
 
-            <div className="p-3 bg-slate-900/90 border border-slate-800 rounded-xl text-xs font-mono text-slate-300 truncate">
-              {apiUrl || "Non configuré"}
-            </div>
+            <form onSubmit={handleSaveApiUrl} className="space-y-3">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  value={editableApiUrl}
+                  onChange={(e) => setEditableApiUrl(e.target.value)}
+                  placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+                  className="flex-1 bg-slate-900/90 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> Tester & Appliquer
+                </button>
+              </div>
+            </form>
 
             <div className="flex items-start gap-2 text-xs text-slate-400">
               <Info className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
               <span>
-                Modifiez <code className="text-amber-300">VITE_API_URL</code> dans <code className="text-amber-300">.env</code> pour changer l'endpoint.
+                Collez l'URL de votre déploiement Web App Google Apps Script (se terminant par <code className="text-amber-300">/exec</code>). Assurez-vous d'avoir réglé <strong>Qui a accès</strong> sur <strong>Tout le monde</strong> lors du déploiement.
               </span>
             </div>
           </section>

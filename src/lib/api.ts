@@ -1,7 +1,22 @@
 // src/lib/api.ts
 // Client API vers le backend Google Apps Script (Cali-Sync_DB)
 
-const API_URL = import.meta.env.VITE_API_URL || "";
+let customApiUrl: string | null = typeof localStorage !== "undefined" ? localStorage.getItem("CALISYNC_CUSTOM_API_URL") : null;
+
+export function getApiUrl(): string {
+  return customApiUrl || import.meta.env.VITE_API_URL || "";
+}
+
+export function setApiUrl(url: string) {
+  customApiUrl = url.trim();
+  if (typeof localStorage !== "undefined") {
+    if (customApiUrl) {
+      localStorage.setItem("CALISYNC_CUSTOM_API_URL", customApiUrl);
+    } else {
+      localStorage.removeItem("CALISYNC_CUSTOM_API_URL");
+    }
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // INTERFACES — Types de données
@@ -304,7 +319,8 @@ async function callGAS(
     }, {} as Record<string, string>),
   });
 
-  const urlWithParams = `${API_URL}?${queryParams.toString()}`;
+  const apiUrl = getApiUrl();
+  const urlWithParams = `${apiUrl}?${queryParams.toString()}`;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s — Apps Script cold start can take 15-25s
