@@ -1635,6 +1635,12 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                   SOUMISSIONS CLOSES — ARBITRAGE EN COURS
                 </div>
               )}
+              {n1Roots.length > 0 && n1Roots.every((n) => !!n.decision_finale) && !isReadOnly && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-black uppercase tracking-wider">
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                  100% ARBITRÉ — PRÊT POUR CLÔTURE
+                </div>
+              )}
               {sessionStatut === "CLOSED" && (
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-700/80 text-slate-300 border border-slate-600 text-xs font-black uppercase tracking-wider">
                   <CheckCircle className="w-3 h-3 text-slate-400" />
@@ -1686,19 +1692,28 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
               </button>
             )}
 
-            {!isReadOnly && sessionStatut !== "LOCKED" && (
+            {!isReadOnly && (
               <button
                 type="button"
                 onClick={handleCloseSessionClick}
                 disabled={isClosingSession}
-                className="px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs rounded-2xl transition-all shadow-lg shadow-rose-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                className={`px-4 py-2.5 font-extrabold text-xs rounded-2xl transition-all shadow-lg flex items-center gap-2 cursor-pointer disabled:opacity-50 ${
+                  n1Roots.length > 0 && n1Roots.every((n) => !!n.decision_finale)
+                    ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30 ring-2 ring-rose-400/80 animate-pulse"
+                    : "bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+                }`}
+                title={
+                  n1Roots.length > 0 && n1Roots.every((n) => !!n.decision_finale)
+                    ? "Tous les items sont arbitrés — Prêt pour la clôture !"
+                    : "Il reste des items à arbitrer avant la clôture"
+                }
               >
                 {isClosingSession ? (
                   <RefreshCw className="w-4 h-4 animate-spin" />
                 ) : (
                   <Lock className="w-4 h-4" />
                 )}
-                Clôturer Session
+                Clôturer Session {n1Roots.length > 0 && n1Roots.every((n) => !!n.decision_finale) && "✅"}
               </button>
             )}
           </div>
