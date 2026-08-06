@@ -8,6 +8,7 @@ import {
   approuverDemandeCalibrage,
   forcerOuverture,
   cloturerSession,
+  reinitialiserArbitrages,
   type SessionInfo,
   type Template,
   type ProfilEvaluateur,
@@ -37,6 +38,7 @@ import {
   Calendar,
   FileText,
   Music,
+  RotateCcw,
 } from "lucide-react";
 
 interface AdminPanelProps {
@@ -240,6 +242,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       fetchSessions();
     } else {
       setActionFeedback({ success: false, message: res.message || "Erreur." });
+    }
+  };
+
+  // ── Reset Arbitrages ────────────────────────────────────────────────────────
+  const handleResetArbitrages = async (sessionId: string) => {
+    if (!window.confirm(`Êtes-vous sûr de vouloir réinitialiser TOUS les arbitrages enregistrés pour la session ${sessionId} ?\n\nCette action va effacer les décisions d'arbitrage actuelles pour vous permettre de recommencer l'arbitrage.`)) return;
+
+    setActionLoadingId(sessionId);
+    const res = await reinitialiserArbitrages(sessionId);
+    setActionLoadingId(null);
+
+    if (res.success) {
+      setActionFeedback({ success: true, message: res.message || `Arbitrages de la session ${sessionId} réinitialisés.` });
+      fetchSessions();
+    } else {
+      setActionFeedback({ success: false, message: res.message || "Erreur lors de la réinitialisation." });
     }
   };
 
@@ -716,6 +734,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           className="px-3 py-1.5 bg-purple-600/20 border border-purple-500/30 text-purple-300 text-xs font-bold rounded-lg hover:bg-purple-600/30 transition-all cursor-pointer flex items-center gap-1.5"
                         >
                           <ExternalLink className="w-3 h-3" /> Cockpit Live
+                        </button>
+                        <button
+                          onClick={() => handleResetArbitrages(session.session_id)}
+                          disabled={actionLoadingId === session.session_id}
+                          className="px-3 py-1.5 bg-amber-600/20 border border-amber-500/30 text-amber-300 text-xs font-bold rounded-lg hover:bg-amber-600/30 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                          title="Effacer tous les arbitrages enregistrés pour cette session"
+                        >
+                          {actionLoadingId === session.session_id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <RotateCcw className="w-3 h-3 text-amber-400" />
+                          )}
+                          Réinitialiser Arbitrages
                         </button>
                         <button
                           onClick={() => handleCloseSession(session.session_id)}

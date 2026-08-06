@@ -3,6 +3,7 @@ import {
   getSessionData,
   enregistrerDecisionsBatch,
   cloturerSession,
+  reinitialiserArbitrages,
   getRapportPdf,
   type SessionDataResponse,
   type CockpitNode,
@@ -33,6 +34,7 @@ import {
   X,
   MinusCircle,
   Award,
+  RotateCcw,
   CornerDownRight,
   HelpCircle,
   Flame,
@@ -643,6 +645,30 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
       }
     } catch {
       setIsClosingSession(false);
+      showToast("Erreur réseau.");
+    }
+  };
+
+  // Reset Arbitrages in Cockpit
+  const handleResetArbitragesInCockpit = async () => {
+    if (!sessionId) return;
+    if (
+      !window.confirm(
+        "Êtes-vous sûr de vouloir réinitialiser TOUS les arbitrages enregistrés pour cette session ?\n\nTous les arbitrages actuels seront effacés pour vous permettre de tout recommencer."
+      )
+    )
+      return;
+
+    try {
+      const res = await reinitialiserArbitrages(sessionId);
+      if (res && res.success) {
+        setLocalArbitratedN1Ids(new Set());
+        showToast("🔄 Arbitrages réinitialisés avec succès !");
+        fetchSession(true);
+      } else {
+        showToast(res?.message || "Erreur lors de la réinitialisation.");
+      }
+    } catch {
       showToast("Erreur réseau.");
     }
   };
@@ -1696,6 +1722,18 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
               >
                 <ArrowLeft className="w-4 h-4" />
                 Rapport de Variances
+              </button>
+            )}
+
+            {!isReadOnly && (
+              <button
+                type="button"
+                onClick={handleResetArbitragesInCockpit}
+                className="px-3.5 py-2.5 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-300 font-extrabold text-xs rounded-2xl transition-all flex items-center gap-1.5 cursor-pointer"
+                title="Effacer tous les arbitrages enregistrés pour cette session afin de recommencer à zéro"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                Réinitialiser Arbitrages
               </button>
             )}
 

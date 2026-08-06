@@ -601,3 +601,9 @@ export async function enregistrerDecisionsBatch(
   });
 }
 
+export async function reinitialiserArbitrages(sessionId: string): Promise<ApiResponse> {
+  return callGAS("reinitialiser_arbitrages", {
+    session_id: sessionId,
+  });
+}
+
