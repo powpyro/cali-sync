@@ -9,6 +9,7 @@ import {
   forcerOuverture,
   cloturerSession,
   reinitialiserArbitrages,
+  getRapportPdf,
   getApiUrl,
   setApiUrl,
   type SessionInfo,
@@ -274,6 +275,31 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       fetchSessions();
     } else {
       setActionFeedback({ success: false, message: res.message || "Erreur lors de la réinitialisation." });
+    }
+  };
+
+  const handleDownloadPdfForSession = async (sessionId: string) => {
+    setActionLoadingId(sessionId);
+    const targetWindow = window.open("", "_blank");
+    try {
+      const res = await getRapportPdf(sessionId);
+      if (res && res.success && (res as any).pdf_url) {
+        const url = (res as any).pdf_url;
+        if (targetWindow) {
+          targetWindow.location.href = url;
+        } else {
+          window.open(url, "_blank");
+        }
+        setActionFeedback({ success: true, message: `Rapport PDF ouvert dans un nouvel onglet pour la session ${sessionId}.` });
+      } else {
+        if (targetWindow) targetWindow.close();
+        setActionFeedback({ success: false, message: res?.message || "Rapport PDF non disponible. Réessayez dans quelques instants." });
+      }
+    } catch {
+      if (targetWindow) targetWindow.close();
+      setActionFeedback({ success: false, message: "Erreur lors de la récupération du rapport PDF." });
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
@@ -801,6 +827,32 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             <FileLock2 className="w-3 h-3" />
                           )}
                           Clôturer & PDF
+                        </button>
+                      </>
+                    )}
+
+                    {session.statut === "CLOSED" && (
+                      <>
+                        <button
+                          onClick={() => handleDownloadPdfForSession(session.session_id)}
+                          disabled={actionLoadingId === session.session_id}
+                          className="px-3 py-1.5 bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 text-xs font-bold rounded-lg hover:bg-indigo-600/30 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                          title="Ouvrir ou Générer le Rapport PDF de cette session"
+                        >
+                          {actionLoadingId === session.session_id ? (
+                            <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />
+                          ) : (
+                            <FileText className="w-3 h-3 text-indigo-400" />
+                          )}
+                          Rapport PDF 📄
+                        </button>
+
+                        <button
+                          onClick={() => onOpenCockpit(session.session_id)}
+                          className="px-3 py-1.5 bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold rounded-lg hover:bg-slate-700 transition-all cursor-pointer flex items-center gap-1.5"
+                          title="Consulter le cockpit archivé en lecture seule"
+                        >
+                          <ExternalLink className="w-3 h-3 text-slate-400" /> Consulter Cockpit
                         </button>
                       </>
                     )}
