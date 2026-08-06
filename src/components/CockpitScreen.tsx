@@ -704,8 +704,34 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
     if (!sessionId) return;
     setPdfLoading(true);
 
-    // Open target window synchronously to bypass browser popup blockers
+    // Open target window synchronously and render a nice dark loading page
     const targetWindow = window.open("", "_blank");
+    if (targetWindow) {
+      targetWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Génération du Rapport PDF — CaliSync</title>
+            <meta charset="utf-8">
+            <style>
+              body { background-color: #0b0f19; color: #e2e8f0; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; }
+              .card { background: #1e293b; padding: 40px; border-radius: 24px; border: 1px solid #334155; max-width: 480px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }
+              .spinner { border: 4px solid #334155; border-top: 4px solid #6366f1; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 20px auto; }
+              @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+              h2 { color: #f8fafc; font-size: 20px; margin-bottom: 8px; font-weight: 800; }
+              p { color: #94a3b8; font-size: 13px; line-height: 1.6; margin: 0; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <div class="spinner"></div>
+              <h2>📄 Génération du Rapport PDF en cours</h2>
+              <p>Le document est en cours de création et d'export dans Google Drive.<br>Redirection automatique dans quelques secondes...</p>
+            </div>
+          </body>
+        </html>
+      `);
+    }
 
     try {
       const res = await getRapportPdf(sessionId);
@@ -719,11 +745,28 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
         }
         showToast("✅ Rapport PDF chargé avec succès !");
       } else {
-        if (targetWindow) targetWindow.close();
-        showToast(res?.message || "Rapport PDF non disponible. Réessayez dans quelques instants.");
+        const errMsg = res?.message || "Erreur lors de la génération du rapport PDF.";
+        if (targetWindow) {
+          targetWindow.document.body.innerHTML = `
+            <div class="card" style="border-color: #f43f5e;">
+              <h2 style="color: #f43f5e;">⚠️ Rapport PDF Indisponible</h2>
+              <p style="color: #cbd5e1; margin-bottom: 12px;">${errMsg}</p>
+              <p style="font-size: 11px; color: #94a3b8;">N'oubliez pas de mettre à jour le script dans Apps Script avec <strong>Code_v12.gs</strong> et de republier une nouvelle version.</p>
+            </div>
+          `;
+        }
+        showToast(`⚠️ ${errMsg}`);
       }
-    } catch {
-      if (targetWindow) targetWindow.close();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erreur de connexion.";
+      if (targetWindow) {
+        targetWindow.document.body.innerHTML = `
+          <div class="card" style="border-color: #f43f5e;">
+            <h2 style="color: #f43f5e;">⚠️ Erreur Réseau</h2>
+            <p style="color: #cbd5e1;">${msg}</p>
+          </div>
+        `;
+      }
       showToast("Erreur lors de la récupération du rapport PDF.");
     } finally {
       setPdfLoading(false);
