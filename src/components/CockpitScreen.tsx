@@ -688,19 +688,42 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
     }
   };
 
-  // Fetch PDF URL separately if not returned on cloture
+  // Auto-fetch PDF URL when session is CLOSED and pdfUrl is not yet set
+  useEffect(() => {
+    if (sessionId && data?.statut === "CLOSED" && !pdfUrl && !pdfLoading) {
+      getRapportPdf(sessionId).then((res) => {
+        if (res && res.success && (res as any).pdf_url) {
+          setPdfUrl((res as any).pdf_url);
+        }
+      });
+    }
+  }, [sessionId, data?.statut]);
+
+  // Fetch PDF URL separately with popup blocker bypass
   const handleFetchPdf = async () => {
     if (!sessionId) return;
     setPdfLoading(true);
+
+    // Open target window synchronously to bypass browser popup blockers
+    const targetWindow = window.open("", "_blank");
+
     try {
       const res = await getRapportPdf(sessionId);
       if (res && res.success && (res as any).pdf_url) {
-        setPdfUrl((res as any).pdf_url);
-        window.open((res as any).pdf_url, "_blank");
+        const url = (res as any).pdf_url;
+        setPdfUrl(url);
+        if (targetWindow) {
+          targetWindow.location.href = url;
+        } else {
+          window.open(url, "_blank");
+        }
+        showToast("✅ Rapport PDF chargé avec succès !");
       } else {
-        showToast("Rapport PDF en cours de génération, veuillez réessayer dans quelques instants.");
+        if (targetWindow) targetWindow.close();
+        showToast(res?.message || "Rapport PDF non disponible. Réessayez dans quelques instants.");
       }
     } catch {
+      if (targetWindow) targetWindow.close();
       showToast("Erreur lors de la récupération du rapport PDF.");
     } finally {
       setPdfLoading(false);
@@ -1027,28 +1050,47 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
             Actions disponibles
           </h2>
           <div className="grid sm:grid-cols-2 gap-3">
-            {/* PDF Download */}
-            <button
-              onClick={() => pdfUrl ? window.open(pdfUrl, "_blank") : handleFetchPdf()}
-              disabled={pdfLoading}
-              className="flex items-center gap-3 p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 hover:border-indigo-400 hover:bg-indigo-500/20 transition-all cursor-pointer disabled:opacity-50 group"
-            >
-              {pdfLoading ? (
-                <RefreshCw className="w-6 h-6 text-indigo-400 animate-spin flex-shrink-0" />
-              ) : (
-                <FileText className="w-6 h-6 text-indigo-400 flex-shrink-0 group-hover:scale-110 transition-transform" />
-              )}
-              <div className="text-left">
-                <div className="text-sm font-black text-white">
-                  {pdfUrl ? "Ouvrir le Rapport PDF" : pdfLoading ? "Génération en cours..." : "Télécharger le Rapport PDF"}
+            {/* PDF Download Direct Link / Button */}
+            {pdfUrl ? (
+              <a
+                href={pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 p-4 rounded-2xl bg-indigo-500/20 border border-indigo-500/50 hover:border-indigo-400 hover:bg-indigo-500/30 transition-all cursor-pointer group shadow-lg shadow-indigo-500/10"
+              >
+                <FileText className="w-6 h-6 text-indigo-300 flex-shrink-0 group-hover:scale-110 transition-transform" />
+                <div className="text-left">
+                  <div className="text-sm font-black text-white flex items-center gap-1.5">
+                    Télécharger / Ouvrir le Rapport PDF <ExternalLink className="w-3.5 h-3.5 text-indigo-300" />
+                  </div>
+                  <div className="text-[11px] text-slate-300 font-medium">
+                    Rapport complet du calibrage (Google Drive)
+                  </div>
                 </div>
-                <div className="text-[11px] text-slate-400 font-medium">
-                  Rapport complet du calibrage avec les arbitrages
+                <Download className="w-5 h-5 text-indigo-300 ml-auto flex-shrink-0" />
+              </a>
+            ) : (
+              <button
+                onClick={handleFetchPdf}
+                disabled={pdfLoading}
+                className="flex items-center gap-3 p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 hover:border-indigo-400 hover:bg-indigo-500/20 transition-all cursor-pointer disabled:opacity-50 group"
+              >
+                {pdfLoading ? (
+                  <RefreshCw className="w-6 h-6 text-indigo-400 animate-spin flex-shrink-0" />
+                ) : (
+                  <FileText className="w-6 h-6 text-indigo-400 flex-shrink-0 group-hover:scale-110 transition-transform" />
+                )}
+                <div className="text-left">
+                  <div className="text-sm font-black text-white">
+                    {pdfLoading ? "Chargement du PDF..." : "Télécharger le Rapport PDF"}
+                  </div>
+                  <div className="text-[11px] text-slate-400 font-medium">
+                    Rapport complet du calibrage avec les arbitrages
+                  </div>
                 </div>
-              </div>
-              {pdfUrl && <ExternalLink className="w-4 h-4 text-indigo-400 ml-auto flex-shrink-0" />}
-              {!pdfUrl && !pdfLoading && <Download className="w-4 h-4 text-indigo-400 ml-auto flex-shrink-0" />}
-            </button>
+                <Download className="w-4 h-4 text-indigo-400 ml-auto flex-shrink-0" />
+              </button>
+            )}
 
             {/* Read-only Cockpit */}
             <button
