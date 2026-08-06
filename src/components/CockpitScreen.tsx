@@ -1197,25 +1197,41 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                       <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> CRITIQUE
                     </span>
                   )}
-                  <span
-                    className={`px-3 py-0.5 rounded-full text-xs font-extrabold border ${
-                      isAccord
-                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+
+                  {node.decision_finale ? (
+                    <span
+                      className={`px-3 py-0.5 rounded-full text-xs font-black border flex items-center gap-1.5 shadow-sm ${
+                        node.decision_finale.decision === "Oui"
+                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                          : node.decision_finale.decision === "Non"
+                          ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                          : "bg-slate-700/80 text-slate-300 border-slate-600"
+                      }`}
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      ARBITRÉ : {node.decision_finale.decision === "Oui" ? "CONFORME (OUI)" : node.decision_finale.decision === "Non" ? "IMPUTÉ (NON)" : "NON APPLICABLE (N.A.)"}
+                    </span>
+                  ) : (
+                    <span
+                      className={`px-3 py-0.5 rounded-full text-xs font-extrabold border ${
+                        isAccord
+                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                          : isDivergence
+                          ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                          : isSubItem && isParentN2Oui && totalVotes === 0
+                          ? "bg-slate-800/80 text-slate-400 border-slate-700/80"
+                          : "bg-slate-800 text-slate-400 border-slate-700"
+                      }`}
+                    >
+                      {isAccord
+                        ? "100% ACCORD UNANIME"
                         : isDivergence
-                        ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                        ? "DIVERGENCE — DÉBAT EN LIVE"
                         : isSubItem && isParentN2Oui && totalVotes === 0
-                        ? "bg-slate-800/80 text-slate-400 border-slate-700/80"
-                        : "bg-slate-800 text-slate-400 border-slate-700"
-                    }`}
-                  >
-                    {isAccord
-                      ? "100% ACCORD UNANIME"
-                      : isDivergence
-                      ? "DIVERGENCE — DÉBAT EN LIVE"
-                      : isSubItem && isParentN2Oui && totalVotes === 0
-                      ? "NON REQUIS (Parent Validé Oui)"
-                      : "EN ATTENTE VOTES"}
-                  </span>
+                        ? "NON REQUIS (Parent Validé Oui)"
+                        : "EN ATTENTE VOTES"}
+                    </span>
+                  )}
                 </div>
 
                 <h3 className="font-black text-xl sm:text-2xl text-white leading-snug tracking-tight">
@@ -1227,17 +1243,28 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
             {/* Decision Status Badge or Action Button */}
             <div className="flex items-center gap-3">
               {node.decision_finale ? (
-                <div className="px-4 py-2.5 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center gap-2.5 flex-shrink-0 shadow-md">
-                  <Award className="w-5 h-5 text-amber-400" />
-                  <div>
-                    <div className="text-[10px] font-black uppercase tracking-wider text-amber-400">
-                      Arbitrage Validé
+                <button
+                  type="button"
+                  onClick={() => !isReadOnly && openArbitrageModal(node)}
+                  className={`px-4 py-2.5 rounded-2xl flex items-center gap-2.5 flex-shrink-0 shadow-md border transition-all ${
+                    node.decision_finale.decision === "Oui"
+                      ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30"
+                      : node.decision_finale.decision === "Non"
+                      ? "bg-rose-500/20 border-rose-500/40 text-rose-300 hover:bg-rose-500/30"
+                      : "bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800"
+                  } ${!isReadOnly ? "cursor-pointer group" : ""}`}
+                  title={!isReadOnly ? "Cliquer pour modifier l'arbitrage de cet item" : undefined}
+                >
+                  <Award className="w-5 h-5 flex-shrink-0 text-amber-400" />
+                  <div className="text-left">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-amber-400 flex items-center gap-1">
+                      Arbitrage Validé {!isReadOnly && <span className="text-[9px] underline font-normal">(Modifier)</span>}
                     </div>
                     <div className="text-xs font-black text-white">
                       Critère : {node.decision_finale.decision} {node.decision_finale.justification && `("${node.decision_finale.justification}")`}
                     </div>
                   </div>
-                </div>
+                </button>
               ) : isReadOnly || isSubItem ? null : totalVotes === 0 && !node.gauge?.critere ? (
                 <button
                   type="button"
@@ -2032,6 +2059,46 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
             resolveChildren(selectedArbitrageNode);
           }
 
+          // 2. Optimistically update local React state immediately for instant feedback
+          setData((prevData) => {
+            if (!prevData || !prevData.grille_hierarchique) return prevData;
+            const updateNodes = (nodes: CockpitNode[]): CockpitNode[] => {
+              return nodes.map((n) => {
+                const match = requests.find((r) => r.itemId === n.item_id);
+                let updated = n;
+                if (match) {
+                  const specComm = payload.itemComments[n.item_id]?.trim();
+                  const finalJust = specComm || payload.justification;
+                  updated = {
+                    ...n,
+                    decision_finale: {
+                      decision: match.decision,
+                      justification: finalJust,
+                      animateur_id: "admin",
+                      timestamp: new Date().toISOString(),
+                    },
+                  };
+                }
+                if (updated.children && updated.children.length > 0) {
+                  updated = {
+                    ...updated,
+                    children: updateNodes(updated.children),
+                  };
+                }
+                return updated;
+              });
+            };
+            return {
+              ...prevData,
+              grille_hierarchique: updateNodes(prevData.grille_hierarchique),
+            };
+          });
+
+          showToast(
+            `Arbitrage multi-imputations enregistré (${requests.length} niveau(x) mis à jour) !`
+          );
+          setSelectedArbitrageNode(null);
+
           try {
             await Promise.all(
               requests.map((r) => {
@@ -2046,11 +2113,8 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                 );
               })
             );
-            showToast(
-              `Arbitrage multi-imputations enregistré (${requests.length} niveau(x) mis à jour) !`
-            );
-            setSelectedArbitrageNode(null);
-            fetchSession();
+            // Delay background sync to allow Google Apps Script to finish writing to Google Sheets
+            setTimeout(() => fetchSession(false), 2000);
           } catch {
             showToast("Erreur réseau lors de la sauvegarde d'arbitrage.");
           }
