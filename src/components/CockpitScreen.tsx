@@ -407,6 +407,9 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
   const [showClosedCockpit, setShowClosedCockpit] = useState(false);
   // LOCKED: toggle between Variance Report and Cockpit arbitrage
   const [showLockedCockpit, setShowLockedCockpit] = useState(false);
+  // Track locally which N1 items have been arbitrated in this session
+  // (used to decouple closure check from stale GAS fetchSession response)
+  const [localArbitratedN1Ids, setLocalArbitratedN1Ids] = useState<Set<string>>(new Set());
 
   // Confetti Animation Particles
   const [confettis, setConfettis] = useState<ConfettiParticle[]>([]);
@@ -608,12 +611,16 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
     if (!sessionId) return;
 
     // Verify all N1 items are arbitrated before allowing closure
+    // Use combined server state + local tracked state (in case fetchSession returned stale data)
     const allN1 = data?.grille_hierarchique || [];
-    const unarbitratedN1 = allN1.filter((n1) => !n1.decision_finale);
+    const unarbitratedN1 = allN1.filter(
+      (n1) => !n1.decision_finale && !localArbitratedN1Ids.has(n1.item_id)
+    );
 
     if (unarbitratedN1.length > 0) {
+      const names = unarbitratedN1.map((n) => `• ${n.libelle.replace(/^\[.*?\]\s*/, "").replace(/^[-\d.]+\s*/, "").substring(0, 60)}`).join("\n");
       alert(
-        `⚠️ Clôture impossible :\n\n${unarbitratedN1.length} item(s) sur ${allN1.length} n'ont pas encore été arbitrés.\n\nVeuillez valider l'arbitrage de l'ensemble des items avant de procéder à la clôture afin de garantir un rapport complet.`
+        `⚠️ Clôture impossible :\n\n${unarbitratedN1.length} item(s) sur ${allN1.length} n'ont pas encore été arbitrés :\n\n${names}\n\nVeuillez valider l'arbitrage de l'ensemble des items avant de procéder à la clôture afin de garantir un rapport complet.`
       );
       showToast(`⚠️ ${unarbitratedN1.length} item(s) non arbitré(s) restant(s).`);
       return;
@@ -2150,6 +2157,12 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
             }
 
             console.log(`[Arbitrage] Batch OK: ${batchResult.count} items écrits dans Sheets`);
+            // Track N1 arbitration locally so closure check doesn't depend on stale fetchSession response
+            setLocalArbitratedN1Ids((prev) => {
+              const next = new Set(prev);
+              next.add(payload.n1Id);
+              return next;
+            });
             // Delay background sync to allow Google Apps Script to finish writing to Google Sheets
             setTimeout(() => fetchSession(false), 3000);
           } catch (err) {
