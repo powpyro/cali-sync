@@ -286,7 +286,13 @@ async function callGAS(
   action: string,
   payload: Record<string, unknown> = {}
 ): Promise<ApiResponse> {
-  const isPostAction = ["importer_grille_complete", "soumettre_evaluation", "sauvegarder_template", "enregistrer_decision_finale"].includes(action);
+  const isPostAction = [
+    "importer_grille_complete",
+    "soumettre_evaluation",
+    "sauvegarder_template",
+    "enregistrer_decision_finale",
+    "enregistrer_decisions_batch",  // ← CRITIQUE: payload complexe (array items), doit passer en POST
+  ].includes(action);
 
   const queryParams = new URLSearchParams({
     action,

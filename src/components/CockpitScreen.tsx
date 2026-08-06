@@ -2138,11 +2138,25 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
               };
             });
 
-            await enregistrerDecisionsBatch(sessionId, batchItems, "admin");
+            const batchResult = await enregistrerDecisionsBatch(sessionId, batchItems, "admin");
+
+            if (!batchResult?.success) {
+              // Rollback optimistic update if backend reports failure
+              console.error("[Arbitrage] Batch échoué:", batchResult?.message);
+              showToast(`⚠️ Erreur d'enregistrement : ${batchResult?.message || "Réponse invalide du serveur"}`);
+              // Force full re-fetch to restore true server state
+              fetchSession(true);
+              return;
+            }
+
+            console.log(`[Arbitrage] Batch OK: ${batchResult.count} items écrits dans Sheets`);
             // Delay background sync to allow Google Apps Script to finish writing to Google Sheets
-            setTimeout(() => fetchSession(false), 1500);
-          } catch {
-            showToast("Erreur réseau lors de la sauvegarde d'arbitrage.");
+            setTimeout(() => fetchSession(false), 3000);
+          } catch (err) {
+            console.error("[Arbitrage] Erreur réseau batch:", err);
+            showToast("⚠️ Erreur réseau lors de la sauvegarde d'arbitrage. Vérifiez votre connexion et réessayez.");
+            // Rollback optimistic update — force re-fetch
+            fetchSession(true);
           }
         }}
       />
