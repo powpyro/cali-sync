@@ -751,7 +751,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
             <div class="card" style="border-color: #f43f5e;">
               <h2 style="color: #f43f5e;">⚠️ Rapport PDF Indisponible</h2>
               <p style="color: #cbd5e1; margin-bottom: 12px;">${errMsg}</p>
-              <p style="font-size: 11px; color: #94a3b8;">Assurez-vous d'avoir copié <strong>Code_v15.gs</strong> dans Apps Script et d'avoir exécuté la fonction <code>autoriserGoogleDocsPermissions</code> une fois.</p>
+              <p style="font-size: 11px; color: #94a3b8;">Assurez-vous d'avoir copié <strong>Code_v16.gs</strong> dans Apps Script et d'avoir exécuté la fonction <code>autoriserGoogleDocsPermissions</code> une fois.</p>
             </div>
           `;
         }
