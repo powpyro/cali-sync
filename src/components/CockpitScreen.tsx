@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import {
   getSessionData,
-  enregistrerDecisionFinale,
+  enregistrerDecisionsBatch,
   cloturerSession,
   getRapportPdf,
   type SessionDataResponse,
@@ -2100,21 +2100,19 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
           setSelectedArbitrageNode(null);
 
           try {
-            await Promise.all(
-              requests.map((r) => {
-                const specificComment = payload.itemComments[r.itemId]?.trim();
-                const finalJustification = specificComment || payload.justification;
-                return enregistrerDecisionFinale(
-                  sessionId,
-                  r.itemId,
-                  r.decision,
-                  finalJustification,
-                  "admin"
-                );
-              })
-            );
+            const batchItems = requests.map((r) => {
+              const specificComment = payload.itemComments[r.itemId]?.trim();
+              const finalJustification = specificComment || payload.justification;
+              return {
+                itemId: r.itemId,
+                decision: r.decision,
+                justification: finalJustification,
+              };
+            });
+
+            await enregistrerDecisionsBatch(sessionId, batchItems, "admin");
             // Delay background sync to allow Google Apps Script to finish writing to Google Sheets
-            setTimeout(() => fetchSession(false), 2000);
+            setTimeout(() => fetchSession(false), 1500);
           } catch {
             showToast("Erreur réseau lors de la sauvegarde d'arbitrage.");
           }

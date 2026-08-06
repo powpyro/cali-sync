@@ -578,3 +578,20 @@ export async function getRapportPdf(sessionId: string): Promise<ApiResponse> {
     session_id: sessionId,
   });
 }
+
+export async function enregistrerDecisionsBatch(
+  sessionId: string,
+  items: Array<{ itemId: string; decision: "Oui" | "Non" | "N.A."; justification: string }>,
+  animateurId: string
+): Promise<ApiResponse> {
+  return callGAS("enregistrer_decisions_batch", {
+    session_id: sessionId,
+    items: items.map((it) => ({
+      item_id: it.itemId,
+      decision: it.decision,
+      justification: it.justification,
+    })),
+    animateur_id: animateurId,
+  });
+}
+
