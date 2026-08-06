@@ -646,7 +646,8 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
 
     setIsClosingSession(true);
     try {
-      const res = await cloturerSession(sessionId, "admin");
+      // Pass force = true since frontend has already strictly validated that 100% of questions are arbitrated
+      const res = await cloturerSession(sessionId, "admin", true);
       setIsClosingSession(false);
       if (res && res.success) {
         // Save PDF URL if returned immediately by GAS

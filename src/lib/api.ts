@@ -556,10 +556,11 @@ export async function enregistrerArbitrage(
   });
 }
 
-export async function cloturerSession(sessionId: string, animateurId: string): Promise<ApiResponse> {
+export async function cloturerSession(sessionId: string, animateurId: string, force = false): Promise<ApiResponse> {
   return callGAS("cloturer_session", {
     session_id: sessionId,
     animateur_id: animateurId,
+    force,
   });
 }
 
