@@ -608,23 +608,37 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
 
 
 
+  // Helper: Extract actual evaluable question nodes (children of category roots)
+  const getEvaluableQuestions = (grille: CockpitNode[] = []): CockpitNode[] => {
+    const items: CockpitNode[] = [];
+    grille.forEach((root) => {
+      if (root.type_noeud === "categorie" || (root.children && root.children.length > 0)) {
+        root.children?.forEach((child) => items.push(child));
+      } else {
+        items.push(root);
+      }
+    });
+    return items;
+  };
+
   // Close Session
   const handleCloseSessionClick = async () => {
     if (!sessionId) return;
 
-    // Verify all N1 items are arbitrated before allowing closure
-    // Use combined server state + local tracked state (in case fetchSession returned stale data)
-    const allN1 = data?.grille_hierarchique || [];
-    const unarbitratedN1 = allN1.filter(
-      (n1) => !n1.decision_finale && !localArbitratedN1Ids.has(n1.item_id)
+    // Verify all evaluable questions (N2 nodes) are arbitrated before allowing closure
+    const allQuestions = getEvaluableQuestions(data?.grille_hierarchique || []);
+    const unarbitratedQuestions = allQuestions.filter(
+      (q) => !q.decision_finale && !localArbitratedN1Ids.has(q.item_id)
     );
 
-    if (unarbitratedN1.length > 0) {
-      const names = unarbitratedN1.map((n) => `• ${n.libelle.replace(/^\[.*?\]\s*/, "").replace(/^[-\d.]+\s*/, "").substring(0, 60)}`).join("\n");
+    if (unarbitratedQuestions.length > 0) {
+      const names = unarbitratedQuestions
+        .map((q) => `• ${q.libelle.replace(/^\[.*?\]\s*/, "").replace(/^[-\d.]+\s*/, "").substring(0, 60)}`)
+        .join("\n");
       alert(
-        `⚠️ Clôture impossible :\n\n${unarbitratedN1.length} item(s) sur ${allN1.length} n'ont pas encore été arbitrés :\n\n${names}\n\nVeuillez valider l'arbitrage de l'ensemble des items avant de procéder à la clôture afin de garantir un rapport complet.`
+        `⚠️ Clôture impossible :\n\n${unarbitratedQuestions.length} item(s) sur ${allQuestions.length} n'ont pas encore été arbitrés :\n\n${names}\n\nVeuillez valider l'arbitrage de l'ensemble des items avant de procéder à la clôture afin de garantir un rapport complet.`
       );
-      showToast(`⚠️ ${unarbitratedN1.length} item(s) non arbitré(s) restant(s).`);
+      showToast(`⚠️ ${unarbitratedQuestions.length} item(s) non arbitré(s) restant(s).`);
       return;
     }
 
@@ -1057,6 +1071,12 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
 
   // Hierarchical Grid extraction
   const n1Roots = data?.grille_hierarchique || [];
+  const allEvaluableQuestions = getEvaluableQuestions(n1Roots);
+  const allQuestionsArbitrated =
+    allEvaluableQuestions.length > 0 &&
+    allEvaluableQuestions.every(
+      (q) => !!q.decision_finale || localArbitratedN1Ids.has(q.item_id)
+    );
   const currentN1 = n1Roots[activeN1Index] || null;
   const rawN2List = currentN1?.children || [];
   const currentN2List = rawN2List.filter((n2) => nodeMatchesFilter(n2, filterMode));
@@ -1668,7 +1688,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                   SOUMISSIONS CLOSES — ARBITRAGE EN COURS
                 </div>
               )}
-              {n1Roots.length > 0 && n1Roots.every((n) => !!n.decision_finale) && !isReadOnly && (
+              {allQuestionsArbitrated && !isReadOnly && (
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-black uppercase tracking-wider">
                   <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
                   100% ARBITRÉ — PRÊT POUR CLÔTURE
@@ -1743,12 +1763,12 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                 onClick={handleCloseSessionClick}
                 disabled={isClosingSession}
                 className={`px-4 py-2.5 font-extrabold text-xs rounded-2xl transition-all shadow-lg flex items-center gap-2 cursor-pointer disabled:opacity-50 ${
-                  n1Roots.length > 0 && n1Roots.every((n) => !!n.decision_finale)
+                  allQuestionsArbitrated
                     ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30 ring-2 ring-rose-400/80 animate-pulse"
                     : "bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
                 }`}
                 title={
-                  n1Roots.length > 0 && n1Roots.every((n) => !!n.decision_finale)
+                  allQuestionsArbitrated
                     ? "Tous les items sont arbitrés — Prêt pour la clôture !"
                     : "Il reste des items à arbitrer avant la clôture"
                 }
@@ -1758,7 +1778,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                 ) : (
                   <Lock className="w-4 h-4" />
                 )}
-                Clôturer Session {n1Roots.length > 0 && n1Roots.every((n) => !!n.decision_finale) && "✅"}
+                Clôturer Session {allQuestionsArbitrated && "✅"}
               </button>
             )}
           </div>
