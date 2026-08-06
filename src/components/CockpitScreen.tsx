@@ -1238,7 +1238,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                     </div>
                   </div>
                 </div>
-              ) : isReadOnly ? null : totalVotes === 0 && !node.gauge?.critere ? (
+              ) : isReadOnly || isSubItem ? null : totalVotes === 0 && !node.gauge?.critere ? (
                 <button
                   type="button"
                   disabled
