@@ -606,7 +606,20 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
   // Close Session
   const handleCloseSessionClick = async () => {
     if (!sessionId) return;
-    if (!window.confirm("Êtes-vous sûr de vouloir clôturer définitivement cette session de calibrage ?")) return;
+
+    // Verify all N1 items are arbitrated before allowing closure
+    const allN1 = data?.grille_hierarchique || [];
+    const unarbitratedN1 = allN1.filter((n1) => !n1.decision_finale);
+
+    if (unarbitratedN1.length > 0) {
+      alert(
+        `⚠️ Clôture impossible :\n\n${unarbitratedN1.length} item(s) sur ${allN1.length} n'ont pas encore été arbitrés.\n\nVeuillez valider l'arbitrage de l'ensemble des items avant de procéder à la clôture afin de garantir un rapport complet.`
+      );
+      showToast(`⚠️ ${unarbitratedN1.length} item(s) non arbitré(s) restant(s).`);
+      return;
+    }
+
+    if (!window.confirm("Êtes-vous sûr de vouloir clôturer définitivement cette session de calibrage ? Tous les items ont été arbitrés avec succès.")) return;
 
     setIsClosingSession(true);
     try {
