@@ -325,7 +325,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <div class="card" style="border-color: #f43f5e;">
               <h2 style="color: #f43f5e;">⚠️ Rapport PDF Indisponible</h2>
               <p style="color: #cbd5e1; margin-bottom: 12px;">${errMsg}</p>
-              <p style="font-size: 11px; color: #94a3b8;">Veuillez vous assurer d'avoir copié le code de <strong>Code_v12.gs</strong> dans votre projet Google Apps Script.</p>
+              <p style="font-size: 11px; color: #94a3b8;">Veuillez vous assurer d'avoir copié le code de <strong>Code_v13.gs</strong> dans Apps Script et exécuté la fonction <code>autoriserGoogleDocsPermissions</code> une fois.</p>
             </div>
           `;
         }
