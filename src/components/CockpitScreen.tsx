@@ -3,11 +3,13 @@ import {
   getSessionData,
   enregistrerDecisionFinale,
   cloturerSession,
+  getRapportPdf,
   type SessionDataResponse,
   type CockpitNode,
   type CockpitVote,
 } from "../lib/api";
 import { ArbitrageDrawer } from "./cockpit/ArbitrageDrawer";
+import { VarianceReport } from "./cockpit/VarianceReport";
 import {
   Clock,
   CheckCircle2,
@@ -39,6 +41,9 @@ import {
   EyeOff,
   Layers,
   CheckCircle,
+  FileText,
+  Download,
+  ExternalLink,
 } from "lucide-react";
 
 export interface ImputedSubItemInfo {
@@ -397,6 +402,11 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
 
   // Session closure state
   const [isClosingSession, setIsClosingSession] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [showClosedCockpit, setShowClosedCockpit] = useState(false);
+  // LOCKED: toggle between Variance Report and Cockpit arbitrage
+  const [showLockedCockpit, setShowLockedCockpit] = useState(false);
 
   // Confetti Animation Particles
   const [confettis, setConfettis] = useState<ConfettiParticle[]>([]);
@@ -603,14 +613,36 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
       const res = await cloturerSession(sessionId, "admin");
       setIsClosingSession(false);
       if (res && res.success) {
-        showToast("Session clôturée avec succès.");
-        fetchSession();
+        // Save PDF URL if returned immediately by GAS
+        if ((res as any).pdf_url) setPdfUrl((res as any).pdf_url);
+        showToast("✅ Session clôturée avec succès. Chargement du rapport...");
+        // Delay fetch to let GAS finish writing CLOSED status
+        setTimeout(() => fetchSession(false), 1800);
       } else {
         showToast(res?.message || "Erreur lors de la clôture.");
       }
     } catch {
       setIsClosingSession(false);
       showToast("Erreur réseau.");
+    }
+  };
+
+  // Fetch PDF URL separately if not returned on cloture
+  const handleFetchPdf = async () => {
+    if (!sessionId) return;
+    setPdfLoading(true);
+    try {
+      const res = await getRapportPdf(sessionId);
+      if (res && res.success && (res as any).pdf_url) {
+        setPdfUrl((res as any).pdf_url);
+        window.open((res as any).pdf_url, "_blank");
+      } else {
+        showToast("Rapport PDF en cours de génération, veuillez réessayer dans quelques instants.");
+      }
+    } catch {
+      showToast("Erreur lors de la récupération du rapport PDF.");
+    } finally {
+      setPdfLoading(false);
     }
   };
 
@@ -761,6 +793,217 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
           <button onClick={() => fetchSession(true)} disabled={loading} className="px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white font-extrabold text-sm rounded-xl transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 mx-auto">
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Actualiser
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── ÉCRAN LOCKED : RAPPORT DE VARIANCES POST-SOUMISSIONS ─────────────────
+  if (sessionStatut === "LOCKED" && !showLockedCockpit) {
+    return (
+      <div className="max-w-5xl mx-auto space-y-6 font-sans pb-16">
+        {onBack && (
+          <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm font-bold cursor-pointer">
+            <ArrowLeft className="w-4 h-4" /> Retour au menu
+          </button>
+        )}
+
+        {/* Status banner */}
+        <div className="flex items-center justify-between flex-wrap gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+          <div className="flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            <div>
+              <div className="text-xs font-black text-amber-300 uppercase tracking-wider">
+                Soumissions Closes — Arbitrage disponible
+              </div>
+              <div className="text-sm font-black text-white">{data?.nom_session}</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fetchSession(false)}
+              disabled={loading}
+              className="px-4 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+              Actualiser
+            </button>
+            <button
+              onClick={() => setShowLockedCockpit(true)}
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black transition-all cursor-pointer flex items-center gap-2 shadow-lg shadow-indigo-600/20"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              Cockpit Arbitrage →
+            </button>
+          </div>
+        </div>
+
+        {/* Variance Report */}
+        <VarianceReport
+          grille={data?.grille_hierarchique || []}
+          nomSession={data?.nom_session}
+          onOpenCockpit={() => setShowLockedCockpit(true)}
+        />
+      </div>
+    );
+  }
+
+  // ── ÉCRAN DÉDIÉ : SESSION CLÔTURÉE ──────────────────────────────────────────
+  if (sessionStatut === "CLOSED" && !showClosedCockpit) {
+    // Compute summary stats from the grille
+    const allN1 = data?.grille_hierarchique || [];
+    let totalItems = 0;
+    let arbitratedItems = 0;
+    let conformeItems = 0;
+    let imputeItems = 0;
+    const walkNodes = (nodes: CockpitNode[]) => {
+      nodes.forEach((n) => {
+        if (n.niveau !== 1) {
+          totalItems++;
+          if (n.decision_finale) {
+            arbitratedItems++;
+            if (n.decision_finale.decision === "Oui") conformeItems++;
+            if (n.decision_finale.decision === "Non") imputeItems++;
+          }
+        }
+        if (n.children && n.children.length > 0) walkNodes(n.children);
+      });
+    };
+    walkNodes(allN1);
+    const tauxConformite = totalItems > 0 ? Math.round((conformeItems / totalItems) * 100) : null;
+
+    return (
+      <div className="max-w-4xl mx-auto space-y-6 font-sans pb-16">
+        {onBack && (
+          <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm font-bold cursor-pointer">
+            <ArrowLeft className="w-4 h-4" /> Retour au menu
+          </button>
+        )}
+
+        {/* CLOSED Header Card */}
+        <div className="glass-card rounded-3xl overflow-hidden border border-slate-700/50 shadow-2xl">
+          {/* Top gradient banner */}
+          <div className="h-2 bg-gradient-to-r from-slate-600 via-indigo-600 to-purple-600" />
+
+          <div className="p-8 space-y-6">
+            {/* Session badge + title */}
+            <div className="flex items-start justify-between flex-wrap gap-4">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-700/80 border border-slate-600 text-slate-300 text-xs font-black uppercase tracking-wider">
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                  Session Archivée — Clôturée
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                  {data?.nom_session || "Session de calibrage"}
+                </h1>
+                {data?.nom_conseiller && (
+                  <p className="text-slate-400 text-sm font-medium">
+                    Conseiller évalué : <span className="text-white font-bold">{data.nom_conseiller}</span>
+                  </p>
+                )}
+              </div>
+              <div className="text-right space-y-1">
+                {data?.heure_fin && (
+                  <div className="text-xs text-slate-400 font-medium">
+                    Clôturée le {new Date(data.heure_fin).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Summary Stats Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 text-center space-y-1">
+                <div className="text-2xl font-black text-white">{totalItems}</div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Items Total</div>
+              </div>
+              <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-center space-y-1">
+                <div className="text-2xl font-black text-indigo-300">{arbitratedItems}</div>
+                <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Arbitrés</div>
+              </div>
+              <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-center space-y-1">
+                <div className="text-2xl font-black text-emerald-300">{conformeItems}</div>
+                <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Conformes</div>
+              </div>
+              <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-center space-y-1">
+                <div className="text-2xl font-black text-rose-300">{imputeItems}</div>
+                <div className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Imputés</div>
+              </div>
+            </div>
+
+            {/* Taux de conformité bar */}
+            {tauxConformite !== null && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold">
+                  <span className="text-slate-400 uppercase tracking-wider">Taux de conformité global</span>
+                  <span className={`font-black text-base ${tauxConformite >= 70 ? "text-emerald-400" : tauxConformite >= 50 ? "text-amber-400" : "text-rose-400"}`}>
+                    {tauxConformite}%
+                  </span>
+                </div>
+                <div className="h-3 rounded-full bg-slate-800 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-1000 ${tauxConformite >= 70 ? "bg-emerald-500" : tauxConformite >= 50 ? "bg-amber-500" : "bg-rose-500"}`}
+                    style={{ width: `${tauxConformite}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Evaluators count */}
+            {(data?.evaluateurs_soumis?.length ?? 0) > 0 && (
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-slate-300 text-sm">
+                <Users className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+                <span className="font-medium"><span className="font-black text-white">{data!.evaluateurs_soumis!.length}</span> évaluateur(s) ont participé à cette session</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Action Buttons Card */}
+        <div className="glass-card rounded-3xl p-6 border border-slate-700/50 space-y-4">
+          <h2 className="text-sm font-black text-slate-300 uppercase tracking-wider flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-indigo-400" />
+            Actions disponibles
+          </h2>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {/* PDF Download */}
+            <button
+              onClick={() => pdfUrl ? window.open(pdfUrl, "_blank") : handleFetchPdf()}
+              disabled={pdfLoading}
+              className="flex items-center gap-3 p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 hover:border-indigo-400 hover:bg-indigo-500/20 transition-all cursor-pointer disabled:opacity-50 group"
+            >
+              {pdfLoading ? (
+                <RefreshCw className="w-6 h-6 text-indigo-400 animate-spin flex-shrink-0" />
+              ) : (
+                <FileText className="w-6 h-6 text-indigo-400 flex-shrink-0 group-hover:scale-110 transition-transform" />
+              )}
+              <div className="text-left">
+                <div className="text-sm font-black text-white">
+                  {pdfUrl ? "Ouvrir le Rapport PDF" : pdfLoading ? "Génération en cours..." : "Télécharger le Rapport PDF"}
+                </div>
+                <div className="text-[11px] text-slate-400 font-medium">
+                  Rapport complet du calibrage avec les arbitrages
+                </div>
+              </div>
+              {pdfUrl && <ExternalLink className="w-4 h-4 text-indigo-400 ml-auto flex-shrink-0" />}
+              {!pdfUrl && !pdfLoading && <Download className="w-4 h-4 text-indigo-400 ml-auto flex-shrink-0" />}
+            </button>
+
+            {/* Read-only Cockpit */}
+            <button
+              onClick={() => setShowClosedCockpit(true)}
+              className="flex items-center gap-3 p-4 rounded-2xl bg-slate-800/60 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 transition-all cursor-pointer group"
+            >
+              <Eye className="w-6 h-6 text-slate-400 flex-shrink-0 group-hover:scale-110 transition-transform" />
+              <div className="text-left">
+                <div className="text-sm font-black text-white">Consulter le Cockpit</div>
+                <div className="text-[11px] text-slate-400 font-medium">
+                  Lecture seule — tous les arbitrages validés
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-400 ml-auto flex-shrink-0" />
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -1381,7 +1624,29 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
               <span className="font-black text-xl text-white">{evaluators.length}</span>
             </div>
 
-            {!isReadOnly && (
+            {isReadOnly && (
+              <button
+                type="button"
+                onClick={() => setShowClosedCockpit(false)}
+                className="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-extrabold text-xs rounded-2xl transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Retour au résumé
+              </button>
+            )}
+
+            {sessionStatut === "LOCKED" && (
+              <button
+                type="button"
+                onClick={() => setShowLockedCockpit(false)}
+                className="px-4 py-2.5 bg-amber-600/30 hover:bg-amber-600/40 border border-amber-500/30 text-amber-200 font-extrabold text-xs rounded-2xl transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Rapport de Variances
+              </button>
+            )}
+
+            {!isReadOnly && sessionStatut !== "LOCKED" && (
               <button
                 type="button"
                 onClick={handleCloseSessionClick}
@@ -1398,6 +1663,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
             )}
           </div>
         </div>
+
 
         {/* Audio Player Bar */}
         {data?.url_audio && (
@@ -1740,25 +2006,17 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
           // 1. Record N1 Item decision
           requests.push({ itemId: payload.n1Id, decision: payload.n1Decision });
 
-          if (payload.n1Decision === "Non" && payload.n2Id) {
-            // Target N2 selected gets "Non", other N2 motifs get "Oui"
+          if (payload.n1Decision === "Non") {
             const n2Children = selectedArbitrageNode.children || [];
             n2Children.forEach((n2) => {
-              if (n2.item_id === payload.n2Id) {
-                requests.push({ itemId: n2.item_id, decision: "Non" });
+              const isN2Imputed = payload.selectedN2Ids.includes(n2.item_id);
+              requests.push({ itemId: n2.item_id, decision: isN2Imputed ? "Non" : "Oui" });
 
-                // Target N3 precision selected
-                if (payload.n3Id && n2.children) {
-                  n2.children.forEach((n3) => {
-                    if (n3.item_id === payload.n3Id) {
-                      requests.push({ itemId: n3.item_id, decision: "Non" });
-                    } else {
-                      requests.push({ itemId: n3.item_id, decision: "Oui" });
-                    }
-                  });
-                }
-              } else {
-                requests.push({ itemId: n2.item_id, decision: "Oui" });
+              if (n2.children && n2.children.length > 0) {
+                n2.children.forEach((n3) => {
+                  const isN3Imputed = isN2Imputed && payload.selectedN3Ids.includes(n3.item_id);
+                  requests.push({ itemId: n3.item_id, decision: isN3Imputed ? "Non" : "Oui" });
+                });
               }
             });
           } else if (payload.n1Decision === "Oui" || payload.n1Decision === "N.A.") {
@@ -1776,18 +2034,20 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
 
           try {
             await Promise.all(
-              requests.map((r) =>
-                enregistrerDecisionFinale(
+              requests.map((r) => {
+                const specificComment = payload.itemComments[r.itemId]?.trim();
+                const finalJustification = specificComment || payload.justification;
+                return enregistrerDecisionFinale(
                   sessionId,
                   r.itemId,
                   r.decision,
-                  payload.justification,
+                  finalJustification,
                   "admin"
-                )
-              )
+                );
+              })
             );
             showToast(
-              `Arbitrage de consensus enregistré (${requests.length} niveau(x) mis à jour) !`
+              `Arbitrage multi-imputations enregistré (${requests.length} niveau(x) mis à jour) !`
             );
             setSelectedArbitrageNode(null);
             fetchSession();

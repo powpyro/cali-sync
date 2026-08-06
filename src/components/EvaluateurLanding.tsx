@@ -141,8 +141,9 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
             s.animateur_id?.toLowerCase() === identifiant.toLowerCase();
       return isMySession;
     }
-    // Normal evaluators see all OPEN sessions
-    return s.statut === "OPEN";
+    // Normal evaluators see OPEN sessions OR sessions they already submitted to (for consultation)
+    const alreadySubmitted = s.evaluateurs_soumis?.includes(identifiant);
+    return s.statut === "OPEN" || alreadySubmitted;
   });
 
   const handleSessionClick = (session: SessionInfo) => {
@@ -150,8 +151,6 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
       // Direct access to Cockpit for the Gauge's own session
       onSelectSession(session.session_id, true);
     } else {
-      const alreadySubmitted = session.evaluateurs_soumis?.includes(identifiant);
-      if (alreadySubmitted) return;
       onSelectSession(session.session_id, false);
     }
   };
@@ -605,15 +604,27 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
                       </button>
                     )}
                   </div>
+                ) : !alreadySubmitted ? (
+                  <button
+                    onClick={() => handleSessionClick(session)}
+                    className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-sm rounded-xl transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <ArrowRight className="w-4.5 h-4.5" /> 🟢 Commencer l'évaluation
+                  </button>
+                ) : session.statut === "OPEN" ? (
+                  <button
+                    onClick={() => handleSessionClick(session)}
+                    className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs rounded-xl transition-all shadow-md shadow-amber-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4" /> ✏️ Modifier mon évaluation (Avant Clôture)
+                  </button>
                 ) : (
-                  !alreadySubmitted && (
-                    <button
-                      onClick={() => handleSessionClick(session)}
-                      className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-sm rounded-xl transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <ArrowRight className="w-4.5 h-4.5" /> 🟢 Commencer l'évaluation
-                    </button>
-                  )
+                  <button
+                    onClick={() => handleSessionClick(session)}
+                    className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" /> 👁️ Consulter mon évaluation (Lecture seule)
+                  </button>
                 )}
               </div>
             );

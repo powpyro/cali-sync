@@ -6,16 +6,16 @@ import {
   RefreshCw,
   CornerDownRight,
   Flame,
+  MessageSquare,
 } from "lucide-react";
 import type { CockpitNode } from "../../lib/api";
 
 export interface ArbitrageChainPayload {
   n1Id: string;
   n1Decision: "Oui" | "Non" | "N.A.";
-  n2Id?: string;
-  n2Decision?: "Oui" | "Non" | "N.A.";
-  n3Id?: string;
-  n3Decision?: "Oui" | "Non" | "N.A.";
+  selectedN2Ids: string[];
+  selectedN3Ids: string[];
+  itemComments: Record<string, string>;
   justification: string;
 }
 
@@ -33,14 +33,14 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
   onSave,
 }) => {
   const [decisionN1, setDecisionN1] = useState<"Oui" | "Non" | "N.A.">("Oui");
-  const [selectedN2Id, setSelectedN2Id] = useState<string | null>(null);
-  const [selectedN3Id, setSelectedN3Id] = useState<string | null>(null);
+  const [selectedN2Ids, setSelectedN2Ids] = useState<string[]>([]);
+  const [selectedN3Ids, setSelectedN3Ids] = useState<string[]>([]);
+  const [itemComments, setItemComments] = useState<Record<string, string>>({});
   const [justification, setJustification] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (node) {
-      // Set default N1 decision
       const defaultDec =
         (node.decision_finale?.decision as any) ||
         (node.gauge?.critere as any) ||
@@ -48,56 +48,86 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
       setDecisionN1(defaultDec);
       setJustification(node.decision_finale?.justification || "");
 
-      // Pre-select first child N2 if exists
       const n2Children = node.children || [];
-      if (n2Children.length > 0) {
-        // Try to find N2 with Non votes or existing decision
-        const imputedN2 = n2Children.find(
-          (c) =>
-            c.decision_finale?.decision === "Non" ||
-            (c.votes_par_critere?.Non && c.votes_par_critere.Non.length > 0)
-        );
-        const targetN2 = imputedN2 || n2Children[0];
-        setSelectedN2Id(targetN2.item_id);
+      const preselectedN2: string[] = [];
+      const preselectedN3: string[] = [];
+      const preComments: Record<string, string> = {};
 
-        // Pre-select N3 under targetN2
-        const n3Children = targetN2.children || [];
-        if (n3Children.length > 0) {
-          const imputedN3 = n3Children.find(
-            (c) =>
-              c.decision_finale?.decision === "Non" ||
-              (c.votes_par_critere?.Non && c.votes_par_critere.Non.length > 0)
-          );
-          setSelectedN3Id((imputedN3 || n3Children[0]).item_id);
-        } else {
-          setSelectedN3Id(null);
-        }
-      } else {
-        setSelectedN2Id(null);
-        setSelectedN3Id(null);
+      if (node.decision_finale?.justification) {
+        preComments[node.item_id] = node.decision_finale.justification;
       }
+
+      n2Children.forEach((c) => {
+        const isImputedN2 =
+          c.decision_finale?.decision === "Non" ||
+          (c.votes_par_critere?.Non && c.votes_par_critere.Non.length > 0);
+        if (isImputedN2) {
+          preselectedN2.push(c.item_id);
+          if (c.decision_finale?.justification) {
+            preComments[c.item_id] = c.decision_finale.justification;
+          }
+        }
+
+        if (c.children) {
+          c.children.forEach((n3) => {
+            const isImputedN3 =
+              n3.decision_finale?.decision === "Non" ||
+              (n3.votes_par_critere?.Non && n3.votes_par_critere.Non.length > 0);
+            if (isImputedN3) {
+              preselectedN3.push(n3.item_id);
+              if (n3.decision_finale?.justification) {
+                preComments[n3.item_id] = n3.decision_finale.justification;
+              }
+            }
+          });
+        }
+      });
+
+      // Fallback: if no N2 was pre-imputed but N2 children exist, select first N2 by default
+      if (preselectedN2.length === 0 && n2Children.length > 0) {
+        preselectedN2.push(n2Children[0].item_id);
+        if (n2Children[0].children && n2Children[0].children.length > 0) {
+          preselectedN3.push(n2Children[0].children[0].item_id);
+        }
+      }
+
+      setSelectedN2Ids(preselectedN2);
+      setSelectedN3Ids(preselectedN3);
+      setItemComments(preComments);
     }
   }, [node]);
 
   if (!isOpen || !node) return null;
 
   const n2Children = node.children || [];
-  const selectedN2Node = n2Children.find((c) => c.item_id === selectedN2Id) || null;
-  const n3Children = selectedN2Node?.children || [];
+  const activeN2Nodes = n2Children.filter((c) => selectedN2Ids.includes(c.item_id));
 
-  const handleN2Select = (n2Item: CockpitNode) => {
-    setSelectedN2Id(n2Item.item_id);
-    const children = n2Item.children || [];
-    if (children.length > 0) {
-      const imputedN3 = children.find(
-        (c) =>
-          c.decision_finale?.decision === "Non" ||
-          (c.votes_par_critere?.Non && c.votes_par_critere.Non.length > 0)
-      );
-      setSelectedN3Id((imputedN3 || children[0]).item_id);
-    } else {
-      setSelectedN3Id(null);
-    }
+  const toggleN2Select = (n2Id: string) => {
+    setSelectedN2Ids((prev) => {
+      if (prev.includes(n2Id)) {
+        // Unselecting N2: also clear its N3 children
+        const n2Node = n2Children.find((c) => c.item_id === n2Id);
+        if (n2Node?.children) {
+          const n3ChildIds = n2Node.children.map((child) => child.item_id);
+          setSelectedN3Ids((prevN3) => prevN3.filter((id) => !n3ChildIds.includes(id)));
+        }
+        return prev.filter((id) => id !== n2Id);
+      } else {
+        // Selecting N2: auto-select first N3 child if available
+        const n2Node = n2Children.find((c) => c.item_id === n2Id);
+        if (n2Node?.children && n2Node.children.length > 0) {
+          const firstN3Id = n2Node.children[0].item_id;
+          setSelectedN3Ids((prevN3) => (prevN3.includes(firstN3Id) ? prevN3 : [...prevN3, firstN3Id]));
+        }
+        return [...prev, n2Id];
+      }
+    });
+  };
+
+  const toggleN3Select = (n3Id: string) => {
+    setSelectedN3Ids((prev) =>
+      prev.includes(n3Id) ? prev.filter((id) => id !== n3Id) : [...prev, n3Id]
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -107,10 +137,9 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
     const payload: ArbitrageChainPayload = {
       n1Id: node.item_id,
       n1Decision: decisionN1,
-      n2Id: decisionN1 === "Non" && selectedN2Id ? selectedN2Id : undefined,
-      n2Decision: decisionN1 === "Non" && selectedN2Id ? "Non" : undefined,
-      n3Id: decisionN1 === "Non" && selectedN3Id ? selectedN3Id : undefined,
-      n3Decision: decisionN1 === "Non" && selectedN3Id ? "Non" : undefined,
+      selectedN2Ids: decisionN1 === "Non" ? selectedN2Ids : [],
+      selectedN3Ids: decisionN1 === "Non" ? selectedN3Ids : [],
+      itemComments: decisionN1 === "Non" ? itemComments : {},
       justification,
     };
 
@@ -138,7 +167,7 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
             </div>
             <div>
               <div className="text-[10px] font-black uppercase tracking-wider text-amber-400">
-                Arbitrage de Consensus Guidé
+                Arbitrage Multi-Imputations Simultanées
               </div>
               <h3 className="text-base font-extrabold text-white leading-tight">
                 Évaluation de Groupe en Live
@@ -205,56 +234,93 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
               </div>
             </div>
 
-            {/* STEP 2: MOTIF SELECTION N2 (Conditional if N1 = "Non" and has N2 children) */}
+            {/* STEP 2: MOTIFS SELECTION N2 (Multi-Select Checkboxes with specific comments) */}
             {decisionN1 === "Non" && n2Children.length > 0 && (
               <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/40 space-y-3 animate-fade-in">
-                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-300">
-                  <Flame className="w-4 h-4 text-amber-400" />
-                  Étape 2 : Sélectionner le Motif d'Écart (Sous-Item N2) :
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-300">
+                    <Flame className="w-4 h-4 text-amber-400" />
+                    Étape 2 : Cocher les Motifs d'Écart (Sous-Items N2) :
+                  </div>
+                  <span className="text-[10px] font-extrabold text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded-md border border-amber-500/30">
+                    {selectedN2Ids.length} sélectionné(s)
+                  </span>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {n2Children.map((n2) => {
-                    const isSelected = selectedN2Id === n2.item_id;
+                    const isSelected = selectedN2Ids.includes(n2.item_id);
                     const votesNonGauge = n2.gauge?.critere === "Non";
                     const votesNonCohorte = n2.votes_par_critere?.Non?.length || 0;
 
                     return (
                       <div
                         key={n2.item_id}
-                        onClick={() => handleN2Select(n2)}
-                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                        className={`p-3.5 rounded-2xl border transition-all space-y-3 ${
                           isSelected
                             ? "bg-amber-500/20 border-amber-400 text-white shadow-md shadow-amber-500/10"
                             : "bg-slate-950/80 border-slate-800 text-slate-300 hover:border-slate-700"
                         }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="radio"
-                            name="n2-motif"
-                            checked={isSelected}
-                            onChange={() => handleN2Select(n2)}
-                            className="w-4 h-4 text-amber-500 bg-slate-900 border-slate-700 focus:ring-amber-500 cursor-pointer"
-                          />
-                          <span className="text-xs font-bold leading-tight">
-                            {cleanLibelle(n2.libelle)}
-                          </span>
+                        <div
+                          onClick={() => toggleN2Select(n2.item_id)}
+                          className="flex items-center justify-between gap-3 cursor-pointer"
+                        >
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => e.stopPropagation()}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleN2Select(n2.item_id);
+                              }}
+                              className="w-4 h-4 rounded text-amber-500 bg-slate-900 border-slate-700 focus:ring-amber-500 cursor-pointer"
+                            />
+                            <span className="text-xs font-bold leading-tight">
+                              {cleanLibelle(n2.libelle)}
+                            </span>
+                          </div>
+
+                          {/* Votes Indicator Badges */}
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {votesNonGauge && (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                Gauge: Non
+                              </span>
+                            )}
+                            {votesNonCohorte > 0 && (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                                {votesNonCohorte} vote(s) Non
+                              </span>
+                            )}
+                          </div>
                         </div>
 
-                        {/* Votes Indicator Badges */}
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          {votesNonGauge && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                              Gauge: Non
-                            </span>
-                          )}
-                          {votesNonCohorte > 0 && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                              {votesNonCohorte} vote(s) Non
-                            </span>
-                          )}
-                        </div>
+                        {/* SPECIFIC COMMENT FIELD FOR THIS N2 MOTIF */}
+                        {isSelected && (
+                          <div
+                            className="pt-2 border-t border-amber-500/30 space-y-1.5 animate-fade-in"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <label className="text-[11px] font-extrabold text-amber-300 flex items-center gap-1">
+                              <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+                              Commentaire spécifique au motif :
+                            </label>
+                            <textarea
+                              value={itemComments[n2.item_id] || ""}
+                              onChange={(e) =>
+                                setItemComments((prev) => ({
+                                  ...prev,
+                                  [n2.item_id]: e.target.value,
+                                }))
+                              }
+                              placeholder={`Consigner la justification spécifique pour "${cleanLibelle(n2.libelle)}"...`}
+                              rows={2}
+                              className="w-full p-3 bg-slate-950/90 border border-amber-500/30 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-all resize-none"
+                            />
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -262,72 +328,118 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
               </div>
             )}
 
-            {/* STEP 3: PRECISION SELECTION N3 (Conditional if selected N2 has N3 children) */}
-            {decisionN1 === "Non" && selectedN2Node && n3Children.length > 0 && (
-              <div className="p-4 rounded-2xl bg-purple-950/40 border border-purple-500/40 space-y-3 animate-fade-in">
-                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-purple-300">
-                  <CornerDownRight className="w-4 h-4 text-purple-400" />
-                  Étape 3 : Précision Comportementale Terminale (N3) :
-                </div>
+            {/* STEP 3: PRECISION SELECTION N3 (Multi-Select Checkboxes with specific comments) */}
+            {decisionN1 === "Non" && activeN2Nodes.length > 0 && (
+              <div className="space-y-4 animate-fade-in">
+                {activeN2Nodes.map((n2Node) => {
+                  const n3Children = n2Node.children || [];
+                  if (n3Children.length === 0) return null;
 
-                <div className="space-y-2">
-                  {n3Children.map((n3) => {
-                    const isSelected = selectedN3Id === n3.item_id;
-                    const votesNonGauge = n3.gauge?.critere === "Non";
-                    const votesNonCohorte = n3.votes_par_critere?.Non?.length || 0;
-
-                    return (
-                      <div
-                        key={n3.item_id}
-                        onClick={() => setSelectedN3Id(n3.item_id)}
-                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                          isSelected
-                            ? "bg-purple-500/20 border-purple-400 text-white shadow-md shadow-purple-500/10"
-                            : "bg-slate-950/80 border-slate-800 text-slate-300 hover:border-slate-700"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="radio"
-                            name="n3-precision"
-                            checked={isSelected}
-                            onChange={() => setSelectedN3Id(n3.item_id)}
-                            className="w-4 h-4 text-purple-500 bg-slate-900 border-slate-700 focus:ring-purple-500 cursor-pointer"
-                          />
-                          <span className="text-xs font-bold leading-tight">
-                            {cleanLibelle(n3.libelle)}
-                          </span>
-                        </div>
-
-                        {/* Votes Indicator Badges */}
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          {votesNonGauge && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                              Gauge: Non
-                            </span>
-                          )}
-                          {votesNonCohorte > 0 && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                              {votesNonCohorte} vote(s) Non
-                            </span>
-                          )}
+                  return (
+                    <div
+                      key={n2Node.item_id}
+                      className="p-4 rounded-2xl bg-purple-950/40 border border-purple-500/40 space-y-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-purple-300">
+                          <CornerDownRight className="w-4 h-4 text-purple-400" />
+                          Précisions N3 sous : <span className="text-white font-extrabold">{cleanLibelle(n2Node.libelle)}</span>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+
+                      <div className="space-y-3">
+                        {n3Children.map((n3) => {
+                          const isSelected = selectedN3Ids.includes(n3.item_id);
+                          const votesNonGauge = n3.gauge?.critere === "Non";
+                          const votesNonCohorte = n3.votes_par_critere?.Non?.length || 0;
+
+                          return (
+                            <div
+                              key={n3.item_id}
+                              className={`p-3.5 rounded-2xl border transition-all space-y-3 ${
+                                isSelected
+                                  ? "bg-purple-500/20 border-purple-400 text-white shadow-md shadow-purple-500/10"
+                                  : "bg-slate-950/80 border-slate-800 text-slate-300 hover:border-slate-700"
+                              }`}
+                            >
+                              <div
+                                onClick={() => toggleN3Select(n3.item_id)}
+                                className="flex items-center justify-between gap-3 cursor-pointer"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => e.stopPropagation()}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleN3Select(n3.item_id);
+                                    }}
+                                    className="w-4 h-4 rounded text-purple-500 bg-slate-900 border-slate-700 focus:ring-purple-500 cursor-pointer"
+                                  />
+                                  <span className="text-xs font-bold leading-tight">
+                                    {cleanLibelle(n3.libelle)}
+                                  </span>
+                                </div>
+
+                                {/* Votes Indicator Badges */}
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  {votesNonGauge && (
+                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                      Gauge: Non
+                                    </span>
+                                  )}
+                                  {votesNonCohorte > 0 && (
+                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                                      {votesNonCohorte} vote(s) Non
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* SPECIFIC COMMENT FIELD FOR THIS N3 PRECISION */}
+                              {isSelected && (
+                                <div
+                                  className="pt-2 border-t border-purple-500/30 space-y-1.5 animate-fade-in"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <label className="text-[11px] font-extrabold text-purple-300 flex items-center gap-1">
+                                    <MessageSquare className="w-3.5 h-3.5 text-purple-400" />
+                                    Commentaire spécifique à la précision :
+                                  </label>
+                                  <textarea
+                                    value={itemComments[n3.item_id] || ""}
+                                    onChange={(e) =>
+                                      setItemComments((prev) => ({
+                                        ...prev,
+                                        [n3.item_id]: e.target.value,
+                                      }))
+                                    }
+                                    placeholder={`Consigner la justification spécifique pour "${cleanLibelle(n3.libelle)}"...`}
+                                    rows={2}
+                                    className="w-full p-3 bg-slate-950/90 border border-purple-500/30 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-400 transition-all resize-none"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
-            {/* JUSTIFICATION */}
+            {/* SYNTHÈSE GLOBALE DE GROUPE */}
             <div className="space-y-2">
               <label className="text-xs font-black uppercase tracking-wider text-slate-300 block">
-                Consigne / Synthèse de la Décision de Groupe :
+                Synthèse Générale de la Décision de Groupe (Remarque globale) :
               </label>
               <textarea
                 value={justification}
                 onChange={(e) => setJustification(e.target.value)}
-                placeholder="Consigner les motifs ou remarques validées lors du débat de calibrage..."
+                placeholder="Consigner la synthèse globale validée lors du débat de calibrage..."
                 rows={3}
                 className="w-full p-4 bg-slate-950 border border-slate-800 rounded-2xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/60 transition-all resize-none"
               />

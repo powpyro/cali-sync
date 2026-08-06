@@ -70,8 +70,8 @@ export function App() {
       // Gauge done: back to gauge landing to see updated status
       setScreen("gauge_landing");
     } else {
-      // Normal evaluator: auto-redirect to Cockpit for debriefing
-      setScreen("cockpit_screen");
+      // Normal evaluator: back to evaluator landing (Cockpit access restricted)
+      setScreen("evaluateur_landing");
     }
   }, [isGaugeMode]);
 

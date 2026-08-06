@@ -572,3 +572,9 @@ export async function enregistrerDecisionFinale(
     animateur_id: animateurId,
   });
 }
+
+export async function getRapportPdf(sessionId: string): Promise<ApiResponse> {
+  return callGAS("get_rapport_pdf", {
+    session_id: sessionId,
+  });
+}
