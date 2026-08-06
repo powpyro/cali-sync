@@ -1,0 +1,895 @@
+import React, { useEffect, useState } from "react";
+import {
+  getSessionsActives,
+  validerPin,
+  listerTemplates,
+  proposerCalibrage,
+  getConfigTemplate,
+  type SessionInfo,
+  type Template,
+} from "../lib/api";
+import { HierarchicalEvaluationForm, type HierarchicalItem } from "./HierarchicalEvaluationForm";
+import {
+  Activity,
+  Clock,
+  CheckCircle2,
+  Users,
+  ArrowRight,
+  Loader2,
+  AlertCircle,
+  RefreshCw,
+  Inbox,
+  Lock,
+  Bookmark,
+  Shield,
+  ArrowLeft,
+  Plus,
+  Sparkles,
+  UserCheck,
+  FileText,
+  Music,
+} from "lucide-react";
+
+interface EvaluateurLandingProps {
+  identifiant: string;
+  nomComplet: string;
+  role: "evaluateur" | "gauge";
+  onSelectSession: (sessionId: string, isGauge: boolean) => void;
+  onBack: () => void;
+}
+
+export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
+  identifiant,
+  nomComplet,
+  role,
+  onSelectSession,
+  onBack,
+}) => {
+  const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Gauge PIN modal state
+  const [pinModalSession, setPinModalSession] = useState<string | null>(null);
+  const [showDirectPinModal, setShowDirectPinModal] = useState(false);
+  const [pin, setPin] = useState("");
+  const [pinError, setPinError] = useState(false);
+  const [pinLoading, setPinLoading] = useState(false);
+  const [pinShake, setPinShake] = useState(false);
+
+  // Proposal Modal State
+  const [showProposalModal, setShowProposalModal] = useState(false);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [propTitle, setPropTitle] = useState("");
+  const [propTemplate, setPropTemplate] = useState("");
+  const [propConseiller, setPropConseiller] = useState("");
+  const [propAudio, setPropAudio] = useState("");
+  const [propConsignes, setPropConsignes] = useState("");
+  const [propOpenDate, setPropOpenDate] = useState("");
+  const [propOpenTime, setPropOpenTime] = useState("");
+  const [propCloseDate, setPropCloseDate] = useState("");
+  const [propCloseTime, setPropCloseTime] = useState("");
+
+  const [proposalFeedback, setProposalFeedback] = useState<{ success: boolean; message: string } | null>(null);
+
+  // 2-Step Proposal: Dedicated Full-Page Gauge state
+  const [showProposalGaugePage, setShowProposalGaugePage] = useState(false);
+  const [proposalItems, setProposalItems] = useState<HierarchicalItem[]>([]);
+  const [fetchingConfigItems, setFetchingConfigItems] = useState(false);
+
+  // Countdown ticks
+  const [, setTick] = useState(0);
+
+  const fetchSessions = async () => {
+    setLoading(true);
+    setError(null);
+    const res = await getSessionsActives();
+    setLoading(false);
+
+    if (res && res.success && Array.isArray(res.sessions)) {
+      setSessions(res.sessions);
+    } else {
+      setSessions([]);
+      if (!res?.success) setError(res?.message || "Impossible de charger les sessions.");
+    }
+  };
+
+  const fetchTemplates = async () => {
+    const res = await listerTemplates();
+    if (res && res.success && Array.isArray(res.templates)) {
+      setTemplates(res.templates);
+      if (res.templates.length > 0 && !propTemplate) {
+        setPropTemplate(res.templates[0].template_id);
+      }
+    }
+  };
+
+  useEffect(() => {
+    fetchSessions();
+    fetchTemplates();
+    const interval = setInterval(fetchSessions, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const getCountdownSeconds = (session: SessionInfo): number => {
+    if (!session.heure_fin) return 0;
+    const fin = new Date(session.heure_fin).getTime();
+    const now = Date.now();
+    return Math.max(0, Math.floor((fin - now) / 1000));
+  };
+
+  const formatCountdown = (totalSecs: number): string => {
+    if (totalSecs <= 0) return "00:00";
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  };
+
+  const visibleSessions = (sessions || []).filter((s) => {
+    if (!s) return false;
+    if (role === "gauge") {
+      // Gauge / Animateur strictly sees only their own created/assigned sessions
+      const isMySession =
+        !s.gauge_id && !s.animateur_id
+          ? true // fallback for legacy sessions
+          : s.gauge_id?.toLowerCase() === identifiant.toLowerCase() ||
+            s.animateur_id?.toLowerCase() === identifiant.toLowerCase();
+      return isMySession;
+    }
+    // Normal evaluators see all OPEN sessions
+    return s.statut === "OPEN";
+  });
+
+  const handleSessionClick = (session: SessionInfo) => {
+    if (role === "gauge") {
+      // Direct access to Cockpit for the Gauge's own session
+      onSelectSession(session.session_id, true);
+    } else {
+      const alreadySubmitted = session.evaluateurs_soumis?.includes(identifiant);
+      if (alreadySubmitted) return;
+      onSelectSession(session.session_id, false);
+    }
+  };
+
+  const handlePinValidation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pin) return;
+
+    setPinLoading(true);
+    const res = await validerPin(pinModalSession, pin);
+    setPinLoading(false);
+
+    if (res.success) {
+      const targetSessionId = (res.session_id as string) || pinModalSession || "";
+      setPinModalSession(null);
+      setShowDirectPinModal(false);
+      setPin("");
+      onSelectSession(targetSessionId, role === "gauge");
+    } else {
+      setPinError(true);
+      setPinShake(true);
+      setPin("");
+      setTimeout(() => setPinShake(false), 400);
+    }
+  };
+
+  // Step 1 -> Step 2: Validate metadata and load full 4-level hierarchy for selected template
+  const handleProceedToGaugeStep = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!propTitle || !propTemplate || !propOpenDate || !propOpenTime || !propCloseDate || !propCloseTime) {
+      setProposalFeedback({ success: false, message: "Veuillez remplir les dates et heures d'ouverture et de fermeture." });
+      return;
+    }
+
+    const heureOuverture = `${propOpenDate}T${propOpenTime}:00`;
+    const heureFermeture = `${propCloseDate}T${propCloseTime}:00`;
+
+    const openTimeMs = new Date(heureOuverture).getTime();
+    const closeTimeMs = new Date(heureFermeture).getTime();
+
+    if (closeTimeMs <= openTimeMs) {
+      setProposalFeedback({ success: false, message: "L'heure de fermeture doit être postérieure à l'heure d'ouverture." });
+      return;
+    }
+
+    setFetchingConfigItems(true);
+    setProposalFeedback(null);
+
+    // Fetch full 4-level hierarchy from Admin_Config_Grille for the selected template
+    const configRes = await getConfigTemplate(propTemplate);
+    setFetchingConfigItems(false);
+
+    let itemsForGauge: HierarchicalItem[] = [];
+
+    if (configRes && configRes.success && Array.isArray(configRes.items) && configRes.items.length > 0) {
+      itemsForGauge = configRes.items.map((it: any) => ({
+        item_id: String(it.item_id),
+        parent_id: String(it.parent_id || ""),
+        niveau: Number(it.niveau) || 2,
+        type_noeud: it.type_noeud || "standard",
+        categorie_racine_fr: it.categorie_racine_fr || "Général",
+        libelle_fr: it.libelle_fr || it.item_libelle || "",
+        criticite: it.criticite === "Critical" ? "Critical" : "Standard",
+        est_terminal: it.est_terminal === true || String(it.est_terminal).toLowerCase() === "true" || String(it.est_terminal).toLowerCase() === "vrai",
+        commentaire_obligatoire: it.commentaire_obligatoire === true || String(it.commentaire_obligatoire).toLowerCase() === "true" || String(it.commentaire_obligatoire).toLowerCase() === "vrai",
+      }));
+    } else {
+      // Fallback to standard N2 mapping if template config has no N3/N4 items
+      const selectedTpl = templates.find((t) => t.template_id === propTemplate);
+      if (selectedTpl) {
+        itemsForGauge = selectedTpl.categories.flatMap((cat) =>
+          cat.items.map((it) => ({
+            item_id: it.item_id,
+            parent_id: "",
+            niveau: 2,
+            type_noeud: "standard",
+            categorie_racine_fr: cat.categorie,
+            libelle_fr: it.item_libelle,
+            criticite: it.criticite === "Critical" ? "Critical" : "Standard",
+            est_terminal: true,
+            commentaire_obligatoire: false,
+          }))
+        );
+      }
+    }
+
+    if (itemsForGauge.length === 0) {
+      setProposalFeedback({ success: false, message: "Aucun critère trouvé pour le template sélectionné." });
+      return;
+    }
+
+    setProposalItems(itemsForGauge);
+    setShowProposalModal(false);
+    setShowProposalGaugePage(true);
+  };
+
+  // Gauge Edition: Edit existing reference Gauge before session closure
+  const handleEditGauge = async (session: SessionInfo) => {
+    setPropTitle(session.nom_session);
+    setPropConseiller(session.nom_conseiller || "");
+    setPropAudio(session.url_audio || "");
+    setPropConsignes(session.consignes || "");
+
+    setFetchingConfigItems(true);
+    const configRes = await getConfigTemplate(session.template_id);
+    setFetchingConfigItems(false);
+
+    let itemsForGauge: HierarchicalItem[] = [];
+
+    if (configRes && configRes.success && Array.isArray(configRes.items) && configRes.items.length > 0) {
+      itemsForGauge = configRes.items.map((it: any) => ({
+        item_id: String(it.item_id),
+        parent_id: String(it.parent_id || ""),
+        niveau: Number(it.niveau) || 2,
+        type_noeud: it.type_noeud || "standard",
+        categorie_racine_fr: it.categorie_racine_fr || "Général",
+        libelle_fr: it.libelle_fr || it.item_libelle || "",
+        criticite: it.criticite === "Critical" ? "Critical" : "Standard",
+        est_terminal: it.est_terminal === true || String(it.est_terminal).toLowerCase() === "true",
+        commentaire_obligatoire: it.commentaire_obligatoire === true || String(it.commentaire_obligatoire).toLowerCase() === "true",
+      }));
+    } else {
+      const selectedTpl = templates.find((t) => t.template_id === session.template_id);
+      if (selectedTpl) {
+        itemsForGauge = selectedTpl.categories.flatMap((cat) =>
+          cat.items.map((it) => ({
+            item_id: it.item_id,
+            parent_id: "",
+            niveau: 2,
+            type_noeud: "standard",
+            categorie_racine_fr: cat.categorie,
+            libelle_fr: it.item_libelle,
+            criticite: it.criticite === "Critical" ? "Critical" : "Standard",
+            est_terminal: true,
+            commentaire_obligatoire: false,
+          }))
+        );
+      }
+    }
+
+    if (itemsForGauge.length > 0) {
+      setProposalItems(itemsForGauge);
+      setShowProposalGaugePage(true);
+    }
+  };
+
+  // Step 2: Final submission with full 4-level gauge payload
+  const handleFinalProposalSubmit = async (evaluatedItems: Array<{ item_id: string; categorie: string; item: string; statut: string; commentaire?: string }>) => {
+    const heureOuverture = `${propOpenDate}T${propOpenTime}:00`;
+    const heureFermeture = `${propCloseDate}T${propCloseTime}:00`;
+    const openTimeMs = new Date(heureOuverture).getTime();
+    const closeTimeMs = new Date(heureFermeture).getTime();
+    const durationMinutes = Math.max(5, Math.round((closeTimeMs - openTimeMs) / 60000));
+
+    const res = await proposerCalibrage({
+      evaluateur_id: identifiant,
+      nom_session: propTitle,
+      template_id: propTemplate,
+      heure_ouverture_proposee: heureOuverture,
+      heure_fermeture_proposee: heureFermeture,
+      duree_minutes: durationMinutes,
+      nom_conseiller: propConseiller,
+      consignes: propConsignes,
+      url_audio: propAudio,
+      items_gauge: evaluatedItems,
+    });
+
+    if (res.success) {
+      setTimeout(() => {
+        setShowProposalGaugePage(false);
+        setPropTitle("");
+        setPropConseiller("");
+        setPropAudio("");
+        setPropConsignes("");
+        fetchSessions();
+      }, 2000);
+      return { success: true, message: "Proposition transmise avec succès à l'Administrateur !" };
+    } else {
+      return { success: false, message: res.message || "Erreur lors de l'envoi de la proposition." };
+    }
+  };
+
+  if (showProposalGaugePage) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+        <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-6 py-4">
+          <div className="max-w-6xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  setShowProposalGaugePage(false);
+                  setShowProposalModal(true);
+                }}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors flex items-center gap-2 text-xs font-bold cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4" /> Modifier les infos du calibrage
+              </button>
+              <div>
+                <h1 className="text-base font-black text-white flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-teal-400" /> Évaluation Gauge de Référence
+                </h1>
+                <p className="text-xs text-slate-400">
+                  Session : <span className="text-teal-400 font-bold">{propTitle}</span>
+                  {propConseiller && <> • Conseiller : <span className="text-white font-medium">{propConseiller}</span></>}
+                </p>
+              </div>
+            </div>
+            <div className="text-xs px-3.5 py-1.5 rounded-xl bg-teal-500/10 border border-teal-500/30 text-teal-300 font-extrabold flex items-center gap-2">
+              <Sparkles className="w-3.5 h-3.5" />
+              Étape 2 / 2 — Grille Hiérarchique 4 Niveaux
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-6">
+          <HierarchicalEvaluationForm
+            items={proposalItems}
+            isGaugeMode={true}
+            callName={propConseiller}
+            audioUrl={propAudio}
+            onSubmitPayload={handleFinalProposalSubmit}
+            onComplete={() => {
+              setShowProposalGaugePage(false);
+              setPropTitle("");
+              setPropConseiller("");
+              setPropAudio("");
+              setPropConsignes("");
+              fetchSessions();
+            }}
+          />
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      {/* Header */}
+      <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 sm:px-8 py-4">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onBack}
+              className="p-2 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <div className="font-extrabold text-white text-base flex items-center gap-2">
+                {role === "gauge" ? (
+                  <>
+                    <Bookmark className="w-4 h-4 text-indigo-400" />
+                    Sessions en attente de Gauge
+                  </>
+                ) : (
+                  <>
+                    <Activity className="w-4 h-4 text-emerald-400" />
+                    Sessions de Calibrage Ouvertes
+                  </>
+                )}
+              </div>
+              <div className="text-xs text-slate-400 font-medium">
+                Connecté : <span className="text-emerald-400 font-bold">{nomComplet}</span> ({identifiant})
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {role === "gauge" && (
+              <button
+                onClick={() => {
+                  setPinModalSession(null);
+                  setPin("");
+                  setPinError(false);
+                  setShowDirectPinModal(true);
+                }}
+                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold rounded-xl transition-all shadow-md shadow-indigo-600/20 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Lock className="w-4 h-4 text-indigo-200" /> Saisir Code / PIN Cockpit
+              </button>
+            )}
+            <button
+              onClick={() => setShowProposalModal(true)}
+              className="px-3.5 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white text-xs font-extrabold rounded-xl transition-all shadow-md shadow-teal-600/20 flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> Proposer un Calibrage
+            </button>
+            <button
+              onClick={fetchSessions}
+              disabled={loading}
+              className="p-2 bg-slate-800 border border-slate-700 rounded-xl text-slate-300 font-bold hover:bg-slate-700 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              title="Actualiser"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 px-4 sm:px-8 py-8">
+        <div className="max-w-4xl mx-auto space-y-6">
+          {error && (
+            <div className="glass-card border-rose-500/30 p-5 rounded-2xl flex items-center gap-3 text-rose-300">
+              <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />
+              <span className="text-sm font-medium">{error}</span>
+            </div>
+          )}
+
+          {loading && sessions.length === 0 && (
+            <div className="glass-card p-16 rounded-2xl flex flex-col items-center justify-center space-y-4">
+              <Loader2 className="w-10 h-10 text-emerald-500 animate-spin" />
+              <p className="text-slate-400 text-sm font-medium">Chargement des sessions…</p>
+            </div>
+          )}
+
+          {!loading && visibleSessions.length === 0 && (
+            <div className="glass-card p-16 rounded-2xl flex flex-col items-center justify-center space-y-4 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center">
+                <Inbox className="w-8 h-8 text-slate-500" />
+              </div>
+              <div className="max-w-md space-y-2">
+                <h3 className="text-lg font-bold text-white">Aucune session ouverte actuellement</h3>
+                <p className="text-sm text-slate-400 leading-relaxed">
+                  Aucun calibrage n'est ouvert aux évaluateurs pour l'instant.
+                  <br />
+                  Vous pouvez <strong className="text-teal-400">proposer un calibrage</strong> ci-dessus ou revenir dès qu'une session sera ouverte !
+                </p>
+              </div>
+              <button
+                onClick={() => setShowProposalModal(true)}
+                className="mt-2 px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-extrabold text-xs rounded-xl transition-all shadow-md shadow-teal-600/20 flex items-center gap-2 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" /> Demander un calibrage
+              </button>
+            </div>
+          )}
+
+          {visibleSessions.map((session) => {
+            const countdownSec = getCountdownSeconds(session);
+            const alreadySubmitted = session.evaluateurs_soumis?.includes(identifiant);
+            const isUrgent = countdownSec > 0 && countdownSec <= 120;
+
+            return (
+              <div
+                key={session.session_id}
+                className={`glass-card rounded-2xl p-6 sm:p-8 space-y-5 transition-all ${
+                  alreadySubmitted
+                    ? "opacity-70 border-emerald-500/30"
+                    : isUrgent
+                    ? "border-rose-500/40 shadow-lg shadow-rose-500/5"
+                    : "hover:border-slate-600"
+                }`}
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-extrabold text-white">
+                        {session.nom_session || session.session_id}
+                      </h3>
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                          session.statut === "OPEN"
+                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                            : session.statut === "PENDING_GAUGE"
+                            ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/30"
+                            : "bg-slate-800 text-slate-400 border-slate-700"
+                        }`}
+                      >
+                        {session.statut === "OPEN"
+                          ? "En cours"
+                          : session.statut === "PENDING_GAUGE"
+                          ? "Attente Gauge"
+                          : session.statut}
+                      </span>
+
+                      {alreadySubmitted && (
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" /> Déjà soumis
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-400 font-medium">
+                      ID: {session.session_id}
+                    </div>
+                  </div>
+
+                  {session.statut === "OPEN" && countdownSec > 0 && (
+                    <div
+                      className={`flex items-center gap-2 px-5 py-3 rounded-2xl border ${
+                        isUrgent
+                          ? "bg-rose-500/10 border-rose-500/30 text-rose-400"
+                          : "bg-slate-900/60 border-slate-700 text-white"
+                      }`}
+                    >
+                      <Clock className={`w-5 h-5 ${isUrgent ? "text-rose-400 animate-pulse" : "text-slate-400"}`} />
+                      <span className={`font-black text-2xl tabular-nums tracking-tight ${isUrgent ? "text-rose-400" : ""}`}>
+                        {formatCountdown(countdownSec)}
+                      </span>
+                    </div>
+                  )}
+
+                  {session.statut === "PENDING_GAUGE" && (
+                    <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
+                      <Lock className="w-4 h-4 text-indigo-400" />
+                      <span className="text-xs font-bold text-indigo-300">Code PIN requis</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-6 text-sm">
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <Users className="w-4 h-4" />
+                    <span className="font-bold text-white">{session.nombre_evaluateurs_soumis}</span>
+                    <span className="text-xs">soumission(s)</span>
+                  </div>
+                  {session.duree_minutes && (
+                    <div className="flex items-center gap-2 text-slate-400">
+                      <Clock className="w-4 h-4" />
+                      <span className="text-xs">{session.duree_minutes} min</span>
+                    </div>
+                  )}
+                  {session.gauge_soumis && (
+                    <div className="flex items-center gap-1.5 text-emerald-400">
+                      <Shield className="w-3.5 h-3.5" />
+                      <span className="text-xs font-bold">Gauge ✓</span>
+                    </div>
+                  )}
+                </div>
+
+                {role === "gauge" ? (
+                  <div className="space-y-2 pt-2">
+                    <button
+                      onClick={() => onSelectSession(session.session_id, true)}
+                      className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-sm rounded-xl transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Sparkles className="w-4.5 h-4.5" /> 🚀 Accéder au Cockpit Live
+                    </button>
+                    {session.statut !== "CLOSED" && (
+                      <button
+                        onClick={() => handleEditGauge(session)}
+                        disabled={fetchingConfigItems}
+                        className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-indigo-300 border border-indigo-500/30 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {fetchingConfigItems ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <FileText className="w-4 h-4 text-indigo-400" />
+                        )}
+                        ✏️ Consulter / Modifier la Gauge de référence
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  !alreadySubmitted && (
+                    <button
+                      onClick={() => handleSessionClick(session)}
+                      className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-sm rounded-xl transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <ArrowRight className="w-4.5 h-4.5" /> 🟢 Commencer l'évaluation
+                    </button>
+                  )
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </main>
+
+      {/* ── Proposal Modal (Étape 1 : Saisie des informations de la session) ── */}
+      {showProposalModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 sm:p-8 w-full max-w-2xl shadow-2xl space-y-6 my-8">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-2 text-white font-black text-lg">
+                <Sparkles className="w-5 h-5 text-teal-400" /> Proposer un Calibrage — Étape 1 / 2
+              </div>
+              <button
+                onClick={() => setShowProposalModal(false)}
+                className="text-slate-400 hover:text-white font-bold text-sm cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleProceedToGaugeStep} className="space-y-4">
+              {proposalFeedback && (
+                <div
+                  className={`p-4 rounded-xl flex items-center gap-3 text-xs font-semibold ${
+                    proposalFeedback.success
+                      ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
+                      : "bg-rose-500/10 border border-rose-500/30 text-rose-400"
+                  }`}
+                >
+                  {proposalFeedback.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                  )}
+                  <span>{proposalFeedback.message}</span>
+                </div>
+              )}
+
+              {/* Titre & Template */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
+                    Titre du calibrage proposé <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={propTitle}
+                    onChange={(e) => setPropTitle(e.target.value)}
+                    placeholder="ex: Calibrage Équipe Vente N1"
+                    className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 transition-colors text-xs"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
+                    Template de grille <span className="text-rose-400">*</span>
+                  </label>
+                  <select
+                    value={propTemplate}
+                    onChange={(e) => setPropTemplate(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-teal-500 transition-colors text-xs"
+                    required
+                  >
+                    {templates.map((t) => (
+                      <option key={t.template_id} value={t.template_id}>
+                        {t.nom}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Infos complémentaires : Conseiller & Audio */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2 flex items-center gap-1.5">
+                    <UserCheck className="w-3.5 h-3.5 text-teal-400" />
+                    Nom du Conseiller / Représentant
+                  </label>
+                  <input
+                    type="text"
+                    value={propConseiller}
+                    onChange={(e) => setPropConseiller(e.target.value)}
+                    placeholder="ex: Paul Martin (Conseiller Vente)"
+                    className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 transition-colors text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2 flex items-center gap-1.5">
+                    <Music className="w-3.5 h-3.5 text-teal-400" />
+                    Lien / URL Audio de l'enregistrement
+                  </label>
+                  <input
+                    type="url"
+                    value={propAudio}
+                    onChange={(e) => setPropAudio(e.target.value)}
+                    placeholder="https://exemple.com/appel.mp3"
+                    className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 transition-colors text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Date & Heure Ouverture et Fermeture */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-slate-800/40 border border-slate-800 rounded-2xl">
+                <div className="space-y-3">
+                  <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" /> Date & Heure d'Ouverture
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      value={propOpenDate}
+                      onChange={(e) => setPropOpenDate(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500 text-xs"
+                      required
+                    />
+                    <input
+                      type="time"
+                      value={propOpenTime}
+                      onChange={(e) => setPropOpenTime(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500 text-xs"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="text-xs font-bold text-rose-400 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" /> Date & Heure de Fermeture (Fin)
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      value={propCloseDate}
+                      onChange={(e) => setPropCloseDate(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-rose-500 text-xs"
+                      required
+                    />
+                    <input
+                      type="time"
+                      value={propCloseTime}
+                      onChange={(e) => setPropCloseTime(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-rose-500 text-xs"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-slate-400" />
+                  Notes / Consignes complémentaires (facultatif)
+                </label>
+                <textarea
+                  rows={2}
+                  value={propConsignes}
+                  onChange={(e) => setPropConsignes(e.target.value)}
+                  placeholder="ex: Porter une attention particulière sur la vérification d'identité (DPA)."
+                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 transition-colors text-xs"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowProposalModal(false)}
+                  className="px-5 py-3 bg-slate-800 border border-slate-700 text-slate-300 font-bold text-xs rounded-xl hover:bg-slate-700 cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={fetchingConfigItems}
+                  className="flex-1 py-3 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-teal-600/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {fetchingConfigItems ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <span>Étape 2 : Évaluation Gauge de Référence</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* ── Gauge PIN Modal (Direct or Specific Session) ────────────────────── */}
+      {(pinModalSession || showDirectPinModal) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div
+            className={`bg-slate-900 border border-slate-700 rounded-2xl p-8 w-full max-w-sm shadow-2xl space-y-6 ${pinShake ? "animate-shake" : ""}`}
+          >
+            <div className="text-center space-y-2">
+              <div className="mx-auto w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center">
+                <Lock className="w-7 h-7 text-indigo-400" />
+              </div>
+              <h2 className="text-xl font-extrabold text-white">Code PIN de Session</h2>
+              <p className="text-sm text-slate-400">
+                {pinModalSession ? (
+                  <>
+                    Saisissez le PIN fourni par l'administrateur pour la session
+                    <br />
+                    <span className="text-indigo-400 font-bold">{pinModalSession}</span>
+                  </>
+                ) : (
+                  <>Saisissez le code PIN transmis par l'administrateur pour ouvrir directement votre session d'évaluation Gauge.</>
+                )}
+              </p>
+            </div>
+
+            <form onSubmit={handlePinValidation} className="space-y-4">
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={pin}
+                onChange={(e) => {
+                  setPin(e.target.value.replace(/\D/g, ""));
+                  setPinError(false);
+                }}
+                placeholder="••••••"
+                autoFocus
+                className={`w-full text-center text-3xl font-black tracking-[0.5em] px-4 py-3 rounded-xl bg-slate-800 border transition-all focus:outline-none ${
+                  pinError
+                    ? "border-rose-500 text-rose-400"
+                    : "border-slate-600 text-white focus:border-indigo-500"
+                }`}
+              />
+
+              {pinError && (
+                <p className="text-xs text-rose-400 font-semibold text-center">
+                  Code PIN incorrect ou aucune session trouvée. Vérifiez auprès de l'admin.
+                </p>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPinModalSession(null);
+                    setShowDirectPinModal(false);
+                    setPin("");
+                  }}
+                  className="px-5 py-3 bg-slate-800 border border-slate-700 text-slate-300 font-bold text-xs rounded-xl hover:bg-slate-700 cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={pinLoading || pin.length < 4}
+                  className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {pinLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Lock className="w-4 h-4" /> Accéder à l'Évaluation Gauge
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default EvaluateurLanding;
