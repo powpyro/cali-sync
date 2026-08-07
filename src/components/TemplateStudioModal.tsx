@@ -199,7 +199,31 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
     );
   };
 
-  const categories = items.filter((it) => it.niveau === 1);
+  const explicitCategories = items.filter((it) => it.niveau === 1);
+
+  let displayCategories: { item_id: string; libelle: string; isExplicit: boolean }[] = [];
+
+  if (explicitCategories.length > 0) {
+    displayCategories = explicitCategories.map((c) => ({
+      item_id: c.item_id,
+      libelle: c.libelle,
+      isExplicit: true,
+    }));
+  } else {
+    const catSet = new Set<string>();
+    items.forEach((it) => {
+      const catName = it.categorie_racine_fr || "Général";
+      catSet.add(catName);
+    });
+    if (catSet.size === 0 && items.length > 0) {
+      catSet.add("Général");
+    }
+    displayCategories = Array.from(catSet).map((catName) => ({
+      item_id: `cat_v_${catName.replace(/[^a-zA-Z0-9]/g, "_")}`,
+      libelle: catName,
+      isExplicit: false,
+    }));
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto">
@@ -321,7 +345,7 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
             </div>
           ) : viewMode === "editor" ? (
             <div className="space-y-6">
-              {categories.length === 0 ? (
+              {displayCategories.length === 0 ? (
                 <div className="glass-card p-12 text-center rounded-2xl space-y-4 border border-slate-800">
                   <FileSpreadsheet className="w-10 h-10 text-slate-500 mx-auto" />
                   <p className="text-slate-400 text-xs font-medium">Aucune catégorie dans ce template.</p>
@@ -333,8 +357,12 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
                   </button>
                 </div>
               ) : (
-                categories.map((cat) => {
-                  const n2Items = items.filter((it) => it.parent_id === cat.item_id || (it.niveau === 2 && it.categorie_racine_fr === cat.libelle));
+                displayCategories.map((cat) => {
+                  const n2Items = items.filter(
+                    (it) =>
+                      it.niveau === 2 &&
+                      (it.parent_id === cat.item_id || (it.categorie_racine_fr || "Général") === cat.libelle)
+                  );
 
                   return (
                     <div key={cat.item_id} className="glass-card rounded-2xl border border-slate-800 p-5 space-y-4">
@@ -554,8 +582,12 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
                 </span>
               </div>
 
-              {categories.map((cat) => {
-                const n2Items = items.filter((it) => it.parent_id === cat.item_id || (it.niveau === 2 && it.categorie_racine_fr === cat.libelle));
+              {displayCategories.map((cat) => {
+                const n2Items = items.filter(
+                  (it) =>
+                    it.niveau === 2 &&
+                    (it.parent_id === cat.item_id || (it.categorie_racine_fr || "Général") === cat.libelle)
+                );
 
                 return (
                   <div key={cat.item_id} className="glass-card rounded-2xl border border-slate-800 p-6 space-y-4">
