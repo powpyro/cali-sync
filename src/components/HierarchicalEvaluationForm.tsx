@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef } from "react";
 import { postCalibration } from "../lib/api";
+import { CountdownTimer } from "./CountdownTimer";
 import {
   Check,
   CheckCircle2,
@@ -44,6 +45,7 @@ export interface HierarchicalEvaluationFormProps {
   isGaugeMode?: boolean;
   callName?: string;
   audioUrl?: string;
+  heureFin?: string;
   onSubmitPayload?: (items: Array<{ item_id: string; categorie: string; item: string; statut: string; commentaire?: string }>) => Promise<{ success: boolean; message?: string }>;
   onComplete?: () => void;
 }
@@ -117,11 +119,12 @@ const CommentField: React.FC<{
   onChange: (v: string) => void;
   audioRef: React.MutableRefObject<HTMLAudioElement | null>;
   placeholder?: string;
-}> = ({ itemId, value, onChange, audioRef, placeholder }) => {
+  disabled?: boolean;
+}> = ({ itemId, value, onChange, audioRef, placeholder, disabled = false }) => {
   const [bumping, setBumping] = useState(false);
 
   const insertTimestamp = () => {
-    if (!audioRef.current) return;
+    if (!audioRef.current || disabled) return;
     const cur = audioRef.current.currentTime || 0;
     const ts = `[${String(Math.floor(cur / 60)).padStart(2, "0")}:${String(Math.floor(cur % 60)).padStart(2, "0")}] `;
     setBumping(true);
@@ -134,15 +137,18 @@ const CommentField: React.FC<{
   return (
     <div className="space-y-2 pt-2 border-t border-rose-200/60">
       <div className="flex items-center justify-between text-xs">
-        <label className={`font-bold flex items-center gap-1.5 ${empty ? "text-rose-600 animate-pulse" : "text-slate-700"}`}>
+        <label className={`font-bold flex items-center gap-1.5 ${empty && !disabled ? "text-rose-600 animate-pulse" : "text-slate-700"}`}>
           <MessageSquare className="w-3.5 h-3.5" />
           Commentaire obligatoire {empty && "*"}
         </label>
         <button
           type="button"
           onClick={insertTimestamp}
+          disabled={disabled}
           style={{ transform: bumping ? "scale(0.92)" : "scale(1)" }}
-          className="transition-transform px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+          className={`transition-transform px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-300 text-slate-700 text-[11px] font-bold flex items-center gap-1 ${
+            disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-200 cursor-pointer"
+          }`}
         >
           <Clock className="w-3 h-3 text-slate-500" />
           Insérer minutage
@@ -153,11 +159,14 @@ const CommentField: React.FC<{
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={2}
+        disabled={disabled}
         placeholder={placeholder ?? "Décrivez l'écart constaté et la justification..."}
-        className={`w-full p-3 rounded-xl text-xs bg-white text-slate-900 border transition-all focus:outline-none ${
-          empty
-            ? "border-rose-400 ring-2 ring-rose-400/20 focus:ring-rose-500"
-            : "border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+        className={`w-full p-3 rounded-xl text-xs text-slate-900 border transition-all focus:outline-none ${
+          disabled
+            ? "bg-slate-50 border-slate-200 cursor-not-allowed text-slate-500"
+            : empty
+            ? "bg-white border-rose-400 ring-2 ring-rose-400/20 focus:ring-rose-500"
+            : "bg-white border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
         }`}
       />
     </div>
@@ -176,9 +185,13 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
   isGaugeMode = false,
   callName = "Appel Client #8492 - Réclamation Facturation",
   audioUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+  heureFin,
   onSubmitPayload,
   onComplete,
 }) => {
+  const [timeIsUp, setTimeIsUp] = useState(false);
+  const isFormDisabled = sessionLocked || timeIsUp;
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTimeFormatted, setCurrentTimeFormatted] = useState("00:00");
@@ -231,6 +244,7 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
   };
 
   const handleAnswer = (itemId: string, choice: PillChoice) => {
+    if (isFormDisabled) return;
     setSpringing({ id: itemId, choice });
     setTimeout(() => setSpringing(null), 200);
     setLastInteracted(itemId);
@@ -254,6 +268,7 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
   };
 
   const toggleSubItem = (itemId: string, isTerminalOrLeaf: boolean) => {
+    if (isFormDisabled) return;
     setSelectedSubs((prev) => {
       const next = new Set(prev);
       if (next.has(itemId)) {
@@ -271,6 +286,7 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
   };
 
   const toggleSubSubItem = (itemId: string) => {
+    if (isFormDisabled) return;
     setSelectedSubs((prev) => {
       const next = new Set(prev);
       next.has(itemId) ? next.delete(itemId) : next.add(itemId);
@@ -355,8 +371,8 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
   };
 
   const handleSubmit = async () => {
-    if (sessionLocked) {
-      triggerToast("Session verrouillée — soumission impossible.");
+    if (isFormDisabled) {
+      triggerToast(timeIsUp ? "Date limite dépassée — soumission impossible." : "Session verrouillée — soumission impossible.");
       setIsShakingSubmit(true);
       setTimeout(() => setIsShakingSubmit(false), 400);
       return;
@@ -493,6 +509,15 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
               <span className="text-xs font-mono font-bold text-slate-700 min-w-[42px]">{currentTimeFormatted}</span>
             </div>
           </div>
+          {heureFin && (
+            <div className="w-full flex justify-end mt-2">
+              <CountdownTimer
+                closingDateStr={heureFin}
+                onTimeout={() => setTimeIsUp(true)}
+                warningThresholdMinutes={60}
+              />
+            </div>
+          )}
         </div>
       </header>
 
@@ -686,6 +711,7 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
                                           onChange={(v) => setComments((p) => ({ ...p, [sub.item.item_id]: v }))}
                                           audioRef={audioRef}
                                           placeholder="Justification ou précision obligatoire de l'écart..."
+                                          disabled={isFormDisabled}
                                         />
                                       </div>
                                     )}
@@ -732,6 +758,7 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
                                                       onChange={(v) => setComments((p) => ({ ...p, [ss.item.item_id]: v }))}
                                                       audioRef={audioRef}
                                                       placeholder="Justification ou précision obligatoire de l'écart..."
+                                                      disabled={isFormDisabled}
                                                     />
                                                   </div>
                                                 )}
@@ -785,11 +812,11 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={!isFormValid || isSubmitting || sessionLocked}
+                disabled={!isFormValid || isSubmitting || isFormDisabled}
                 className={`px-6 py-3 rounded-xl font-extrabold text-sm flex items-center gap-2 transition-all cursor-pointer ${
                   isShakingSubmit ? "animate-shake" : ""
                 } ${
-                  isFormValid && !sessionLocked
+                  isFormValid && !isFormDisabled
                     ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/25 active:scale-95"
                     : "bg-slate-200 text-slate-400 border border-slate-300 opacity-60 cursor-not-allowed"
                 }`}

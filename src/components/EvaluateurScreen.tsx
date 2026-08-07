@@ -164,6 +164,7 @@ export const EvaluateurScreen: React.FC<EvaluateurScreenProps> = ({
       isGaugeMode={isGaugeMode}
       callName={sessionInfo ? `${sessionInfo.nom_session}${sessionInfo.nom_conseiller ? ` — Conseiller : ${sessionInfo.nom_conseiller}` : ""}` : callName}
       audioUrl={sessionInfo?.url_audio || audioUrl}
+      heureFin={sessionInfo?.heure_fin}
       onComplete={onComplete}
     />
   );
