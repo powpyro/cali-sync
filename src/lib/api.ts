@@ -640,6 +640,13 @@ export async function dupliquerTemplate(templateId: string, nouveauNom: string):
   });
 }
 
+export async function creerVersionAnglaiseGenii(templateId: string, nouveauNom?: string): Promise<ApiResponse> {
+  return callGAS("creer_version_anglaise_genii", {
+    template_id: templateId,
+    nouveau_nom: nouveauNom || "Grille GENII (English Original)",
+  });
+}
+
 export async function sauvegarderGrilleComplete(
   templateId: string,
   nomTemplate: string,

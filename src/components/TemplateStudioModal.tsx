@@ -13,9 +13,10 @@ import {
   FileSpreadsheet,
   HelpCircle,
   ShieldAlert,
-  ChevronRight
+  ChevronRight,
+  Globe
 } from "lucide-react";
-import { getConfigTemplate, dupliquerTemplate, sauvegarderGrilleComplete, type Template } from "../lib/api";
+import { getConfigTemplate, dupliquerTemplate, creerVersionAnglaiseGenii, sauvegarderGrilleComplete, type Template } from "../lib/api";
 
 export interface FlatGridItem {
   item_id: string;
@@ -201,6 +202,27 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
       }
     } catch (e) {
       setFeedback({ success: false, message: "Erreur lors de la duplication." });
+    } finally {
+      setDuplicating(false);
+    }
+  };
+
+  const handleCreateEnglishVersion = async () => {
+    if (!window.confirm(`Créer la version anglaise originale du template "${templateName}" ?`)) return;
+    setDuplicating(true);
+    try {
+      const res = await creerVersionAnglaiseGenii(template.template_id, `${templateName} (English Original)`);
+      if (res.success) {
+        setFeedback({ success: true, message: "Template Anglais Original créé avec succès !" });
+        setTimeout(() => {
+          onSaved();
+          onClose();
+        }, 1200);
+      } else {
+        setFeedback({ success: false, message: res.message || "Erreur lors de la création de la version anglaise." });
+      }
+    } catch (e) {
+      setFeedback({ success: false, message: "Erreur lors de la création de la version anglaise." });
     } finally {
       setDuplicating(false);
     }
@@ -395,7 +417,17 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
                 />
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCreateEnglishVersion}
+                  disabled={duplicating || loading}
+                  className="px-3.5 py-2.5 bg-indigo-950/80 hover:bg-indigo-900/80 border border-indigo-500/40 text-indigo-200 font-bold text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  title="Créer une version originale en anglais"
+                >
+                  {duplicating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Globe className="w-4 h-4 text-indigo-400" />}
+                  🌐 Version Anglaise (English Original)
+                </button>
                 <button
                   type="button"
                   onClick={handleDuplicate}

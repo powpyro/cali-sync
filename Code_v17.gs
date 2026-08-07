@@ -197,6 +197,7 @@ function traiterRequete(e) {
   if (action === "forcer_ouverture") return jsonResponse(handleForcerOuverture(ss, req.session_id));
   if (action === "sauvegarder_template") return jsonResponse(handleSauvegarderTemplate(ss, req));
   if (action === "dupliquer_template") return jsonResponse(handleDupliquerTemplate(ss, req));
+  if (action === "creer_version_anglaise_genii") return jsonResponse(handleCreerVersionAnglaiseGenii(ss, req));
   if (action === "sauvegarder_grille_complete") return jsonResponse(handleSauvegarderGrilleComplete(ss, req));
   if (action === "supprimer_template") return jsonResponse(handleSupprimerTemplate(ss, req.template_id));
   if (action === "importer_grille_complete") return jsonResponse(handleImporterGrilleComplete(ss, req));
@@ -1007,6 +1008,115 @@ function handleDupliquerTemplate(ss, payload) {
   return {
     success: true,
     message: "Template dupliqué avec succès !",
+    new_template_id: nouveauTplId,
+    nom: nouveauNom
+  };
+}
+
+// HANDLER — Créer la version anglaise originale à partir d'un template source sans traduction
+function handleCreerVersionAnglaiseGenii(ss, payload) {
+  var tplIdOriginal = payload.template_id || "TPL_QTO_CUSTOM";
+  var nouveauNom = payload.nouveau_nom || "Grille GENII (English Original)";
+  var nouveauTplId = "TPL_GENII_EN_" + String(Math.floor(10000 + Math.random() * 90000));
+
+  function extractEnglishLabel(rawLabel) {
+    if (!rawLabel) return "";
+    var str = String(rawLabel).trim();
+    if (str.indexOf(",") !== -1) {
+      var parts = str.split(",");
+      if (parts.length > 1 && parts[1].trim().length > 0) {
+        return parts[1].trim();
+      }
+      return parts[0].trim();
+    }
+    return str;
+  }
+
+  // 1. Dupliquer dans Templates_Grilles avec libellé Anglais
+  var tplSheet = ss.getSheetByName("Templates_Grilles");
+  var idMapping = {};
+  if (tplSheet) {
+    var tplData = tplSheet.getDataRange().getValues();
+    var newTplRows = [];
+    for (var i = 1; i < tplData.length; i++) {
+      if (String(tplData[i][0]).trim() === String(tplIdOriginal).trim()) {
+        var oldItemId = String(tplData[i][3]).trim();
+        var newItemId = "item_en_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+        idMapping[oldItemId] = newItemId;
+        
+        var origLabel = tplData[i][4];
+        var enLabel = extractEnglishLabel(origLabel);
+
+        newTplRows.push([
+          nouveauTplId,
+          nouveauNom,
+          tplData[i][2],
+          newItemId,
+          enLabel,
+          tplData[i][5],
+          tplData[i][6]
+        ]);
+      }
+    }
+    if (newTplRows.length > 0) {
+      var startRow = tplSheet.getLastRow() + 1;
+      tplSheet.getRange(startRow, 1, newTplRows.length, 7).setValues(newTplRows);
+    }
+  }
+
+  // 2. Dupliquer dans Admin_Config_Grille avec libellé Anglais
+  var cfgSheet = ss.getSheetByName("Admin_Config_Grille");
+  if (cfgSheet) {
+    var cfgData = cfgSheet.getDataRange().getValues();
+    var cfgIdMapping = {};
+    for (var c = 1; c < cfgData.length; c++) {
+      if (String(cfgData[c][0]).trim() === String(tplIdOriginal).trim()) {
+        var oldId = String(cfgData[c][1]).trim();
+        var newId = idMapping[oldId] || ("cfg_en_" + Date.now() + "_" + Math.floor(Math.random() * 10000));
+        cfgIdMapping[oldId] = newId;
+      }
+    }
+
+    var newCfgRows = [];
+    for (var d = 1; d < cfgData.length; d++) {
+      if (String(cfgData[d][0]).trim() === String(tplIdOriginal).trim()) {
+        var oldItem = String(cfgData[d][1]).trim();
+        var oldParent = String(cfgData[d][3] || "").trim();
+        var newItem = cfgIdMapping[oldItem] || oldItem;
+        var newParent = oldParent ? (cfgIdMapping[oldParent] || oldParent) : "";
+
+        var rawCfgLib = cfgData[d][6];
+        var enCfgLib = extractEnglishLabel(rawCfgLib);
+
+        var rowConfig = [
+          nouveauTplId,
+          newItem,
+          cfgData[d][2],
+          newParent,
+          cfgData[d][4],
+          cfgData[d][5],
+          enCfgLib
+        ];
+        if (cfgData[d].length > 7) rowConfig.push(cfgData[d][7]);
+        if (cfgData[d].length > 8) rowConfig.push(cfgData[d][8]);
+        if (cfgData[d].length > 9) rowConfig.push(cfgData[d][9]);
+        if (cfgData[d].length > 10) rowConfig.push(cfgData[d][10]);
+
+        while (rowConfig.length < 11) rowConfig.push("");
+
+        newCfgRows.push(rowConfig);
+      }
+    }
+
+    if (newCfgRows.length > 0) {
+      var startRowCfg = cfgSheet.getLastRow() + 1;
+      cfgSheet.getRange(startRowCfg, 1, newCfgRows.length, 11).setValues(newCfgRows);
+    }
+  }
+
+  return {
+    success: true,
+    message: "Template Anglais Original créé avec succès !",
     new_template_id: nouveauTplId,
     nom: nouveauNom
   };
