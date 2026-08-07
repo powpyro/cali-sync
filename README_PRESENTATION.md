@@ -1,81 +1,65 @@
 # 🚀 Cali-Sync — Documentation de Présentation
 
 ## 📌 Executive Summary
-**Cali-Sync** est une plateforme SaaS de nouvelle génération dédiée à la **calibration qualité**, au **contrôle de conformité** et à l'**alignement des évaluations** au sein des centres de relation client et directions qualité.
+**Cali-Sync** est une plateforme SaaS de nouvelle génération conçue spécifiquement pour **optimiser et automatiser le processus de calibration qualité**, en complément des outils de gestion d'évaluations existants (tels que l'application **Genii**).
 
-Conçu pour remplacer les tableurs Excel manuels et les processus déclaratifs fragmentés, **Cali-Sync** centralise le flux d'évaluation, synchronise l'écoute audio en direct, calcule instantanément la divergence entre les évaluations et offre une console de projection live (**Cockpit**) pour arbitrer les écarts en temps réel.
+En lieu et place des sessions de calibrage traditionnelles — où l'on déroule une grille vide item par item en débattant au fur et à mesure —, **Cali-Sync** permet aux évaluateurs d'évaluer l'appel au préalable, calcule automatiquement les réelles divergences vis-à-vis de l'évaluation étalon (**Gauge**), projette un **Cockpit Live** axé uniquement sur les points d'écart, et génère un **rapport PDF complet** dès la clôture de la session.
 
 ---
 
-## 🔍 1. Contexte & Enjeux Industriels
+## 🔍 1. Contexte & Déroulement Actuel sur l'Application Genii
 
-Dans les centres de contacts (Service Client, Support Technique, Vente à Distance), la qualité de la relation client repose sur des **grilles d'évaluation** (telles que la grille GENII) comportant jusqu'à 181 critères précis.
-
-Pour garantir l'équité des évaluations et éliminer la subjectivité entre les différents managers ou évaluateurs qualité, les entreprises organisent des **sessions de calibration (ou de calibrage)** :
-1. Plusieurs évaluateurs écoutent **le même enregistrement d'appel**.
-2. Chaque évaluateur note l'appel indépendamment sur la grille de référence.
-3. Un évaluateur référent (**Évaluateur Gauge**) établit la note étalon.
-4. Une réunion de débriefing réunit l'équipe pour aligner les notations et arbitrer les écarts.
+Dans l'organisation actuelle avec l'application **Genii** :
+1. **Évaluation au fil de l'eau** : Les évaluateurs et responsables qualité effectuent leurs grilles d'audit régulières sur l'application Genii.
+2. **Absence de visibilité préalable** : Lors d'un calibrage, l'évaluateur n'a pas de vue consolidée ni de visibilité comparative sur son évaluation par rapport à ses pairs avant la réunion.
+3. **Déroulé linéaire pendant le débriefing** : La réunion de calibrage consiste aujourd'hui à ouvrir une **évaluation vide** et à la dérouler linéairement, item par item, en discutant et en cochant les réponses au fur et à mesure du débat.
+4. **Absence de rapport post-calibrage** : Aucun rapport d'arbitrage ou compte-rendu consolidé n'est généré automatiquement à la fin de la session de calibration sur Genii.
 
 ---
 
 ## ⚠️ 2. La Problématique Existante (Les Frustrations Métier)
 
-Sans un outil spécialisé comme **Cali-Sync**, le processus de calibration se heurte à des verrous majeurs :
-
-| Problème / Douleur Métier | Impact Opérationnel |
+| Limite du Flux Actuel (sur Genii) | Impact Opérationnel & Organisationnel |
 | :--- | :--- |
-| **Silos de données & Fichiers Excel** | Multiplicité des versions de fichiers Excel, erreurs de formules, ressaisies manuelles fastidieuses. |
-| **Perte de temps en réunion** | Les débriefings durent des heures à débattre d'items où tout le monde est d'accord, faute de lisibilité instantanée sur les réelles divergences. |
-| **Subjectivité & Dérive des critères** | Absence de vision comparative immédiate entre la réponse d'un évaluateur et la référence (Gauge). |
-| **Gestion audio complexe** | Difficulté à synchroniser l'écoute audio et le minutage précis des écarts ou fautes de conformité. |
-| **Absence de suivi temporel & Délais dépassés** | Évaluations rendues en retard, absence de verrouillage automatique après les dates limites (ex: 72h max). |
-| **Perte de données lors de la saisie** | Rafraîchissements de page ou déconnexions accidentelles provoquant la perte de grilles longues. |
+| **Passage en revue item par item** | Perte de temps considérable en réunion à repasser sur des dizaines d'items où tout le monde est d'accord. |
+| **Absence de pré-évaluation individuelle** | Impossible d'analyser les résultats des évaluateurs à l'avance pour cibler la préparation du débriefing. |
+| **Débat à chaud sur grille vide** | Risque d'influence mutuelle pendant la réunion plutôt qu'une confrontation objective des notations individuelles. |
+| **Aucune traçabilité post-calibrage** | Pas de synthèse ni de rapport PDF d'audit produit à la clôture de la session pour capitaliser sur les arbitrages. |
+| **Gestion audio déconnectée** | Écoute audio fragmentée sans synchronisation directe avec les commentaires et minutages d'écart. |
 
 ---
 
-## 🎯 3. Le But de l'Application & la Solution Cali-Sync
+## 🎯 3. Le But de Cali-Sync & La Solution Apportée
 
-**Cali-Sync** a été développé avec un objectif clair : **Digitaliser, automatiser et fluidifier 100% du cycle de calibration qualité.**
+**Cali-Sync** réinvente le calibrage en passant d'un débriefing linéaire passif à un **pilotage ciblé par les divergences**.
 
-### Les piliers de la solution :
-- **Vérité Unique** : Une base de données centralisée (Google Sheets + Apps Script + Frontend React PWA).
-- **Consensus Visuel Instantané** : Un écran de projection **Cockpit Live** qui isole automatiquement les items divergents et cache les items unanimes.
-- **Rigueur Opérationnelle** : Verrouillage automatique selon les délais, persistance des brouillons et traçabilité absolue.
+```
+[ Genii / Application Source ] ➔ [ Pré-Évaluation Individuelle Cali-Sync ] ➔ [ Cockpit Live (Uniquement les Écarts) ] ➔ [ Rapport PDF & Bilan ]
+```
 
----
-
-## 🛠️ 4. Matrice Fonctionnalités vs Problèmes Résolus
-
-| Problématique | Fonctionnalité Cali-Sync | Bénéfice Apporté |
-| :--- | :--- | :--- |
-| **Gestion des Grilles complexes (181 items N1..N4)** | **Formulaire d'Évaluation Hiérarchique 4 Niveaux** | Navigation fluide par catégories, boutons instantanés **Yes / No / N.A.**, champ de commentaire d'imputation obligatoire pour chaque écart. |
-| **Écoute Audio éclatée ou difficile** | **Lecteur Audio Intégré & Streaming Google Drive** | Player HTML5 intégré avec conversion directe des liens Google Drive, vitesse modifiable (1x à 2x), et insertion automatique du timestamp `[MM:SS]` dans les commentaires. |
-| **Débats interminables en débriefing** | **Cockpit Live & Showdown d'Arbitrage** | Projection en direct identifiant 100% d'accord unanime vs divergences. Arbitrage en 1 clic par l'animateur. |
-| **Perte de saisie en cas de coupure/retour** | **Persistance Locale des Brouillons (`localStorage`)** | Sauvegarde en temps réel. Cliquer sur "Retour" ou rafraîchir la page n'efface jamais le travail entamé. |
-| **Problème de sécurité / Accès non contrôlés** | **Authentification Dynamique & Gestion des Rôles** | Connexion épurée sans PIN hardcodé. Rôles dynamiques (*Admin*, *Animateur*, *Évaluateur*, *Gauge*) modifiables en 1 clic. |
-| **Absence de persistance après rafraîchissement** | **Persistance de Session Utilisateur** | La session reste active au rafraîchissement (`F5` / `Cmd+R`) avec un bouton **Déconnexion** explicite. |
-| **Création lourde de nouvelles grilles** | **Studio de Templates & Grille GENII** | Création, duplication en 0.2s, version anglaise 100% traduite, réordonnancement par flèches ⬆️/⬇️ et suppression de grilles. |
-| **Rapports et synthèse post-session** | **Génération PDF Automatique Google Drive & KPI Admin** | Rapport PDF d'audit exportable en 1 clic et tableau de bord KPI d'administration. |
+### Les 4 étapes clés du flux Cali-Sync :
+1. **Évaluation Individuelle Préalable** : Chaque évaluateur saisit sa grille sur Cali-Sync avant ou au début de la session, avec sauvegarde automatique en brouillon et lecteur audio intégré.
+2. **Jauge de Référence (Gauge)** : L'évaluateur référent ou la direction qualité valide l'évaluation étalon.
+3. **Cockpit Live (Projection des Divergences)** : L'animateur projette l'écran Cockpit qui **masque automatiquement les items 100% unanimes** et **met en lumière uniquement les divergences** à débattre.
+4. **Clôture & Rapport PDF Instantané** : Dès la fin du calibrage, un rapport d'audit PDF complet est généré et stocké automatiquement sur Google Drive.
 
 ---
 
-## 🎨 5. Ergonomie & Design System (Expérience Utilisateur Premium)
+## 🛠️ 4. Matrice Comparative : Genii vs Cali-Sync
 
-Cali-Sync intègre un **Design System modernisé** :
-- **Mode Sombre (Dark Mode) & Mode Clair High-Contrast** : Commutation instantanée avec persistance du choix.
-- **Micro-animations & Retours Visuels** : Boutons teintés, badges d'état couleur (Teal, Emerald, Rose, Amber), animations de confettis lors des arbitrages réussis.
-- **Responsive & Accessible** : Conçu pour fonctionner aussi bien sur ordinateurs de bureau, tablettes que sur écrans de projection en salle de réunion.
+| Étape du Processus | Processus Actuel (Genii) | Solution Cali-Sync | Bénéfice Immédiat |
+| :--- | :--- | :--- | :--- |
+| **Préparation** | Grille vide ouverte en réunion | Pré-évaluation individuelle réalisée avant la réunion avec sauvegarde brouillon (`localStorage`) | Évaluation objective sans influence mutuelle |
+| **Écoute Audio** | Lecteur externe ou séparé | **Lecteur Audio Intégré & Streaming Google Drive** (vitesse 1x..2x) avec insertion auto du minutage `[MM:SS]` dans les remarques | Minutage précis et écoute fluide pendant la notation |
+| **Déroulement de Réunion** | Discussion linéaire item par item (181 critères) | **Cockpit Live de Divergence** : Focus exclusif sur les items en désaccord | **Gain de temps de 50% à 70%** en réunion |
+| **Arbitrage** | Saisie manuelle à la volée pendant la réunion | Boutons d'arbitrage en 1 clic par l'animateur (**Yes / No / N.A.**) | Décision de consensus enregistrée en temps réel |
+| **Fin de Session** | Aucun rapport généré | **Génération automatique du Rapport PDF** dans Google Drive | Compte-rendu d'audit prêt à l'export immédiat |
+| **Droits & Accès** | Rôles fixes | **Gestion Dynamique des Rôles** (*Admin*, *Animateur*, *Évaluateur*, *Gauge*) et persistance de session | Flexibilité totale d'animation selon les sessions |
 
 ---
 
-## 📈 6. ROI & Valeur Ajoutée pour l'Entreprise
+## 🎨 5. Ergonomie & Expérience Utilisateur
 
-1. **Gain de Temps Débriefing : -50%**
-   Les réunions de calibration se concentrent uniquement sur les vraies divergences mises en évidence par le Cockpit.
-2. **Homogénéité de la Notation : +100%**
-   Élimination de la subjectivité grâce à la confrontation directe avec la jauge étalon.
-3. **Zéro Perte de Données**
-   Sauvegarde automatique locale et hébergement cloud sécurisé.
-4. **Prise en Main Immédiate**
-   Interface intuitive ne nécessitant aucune formation préalable pour les évaluateurs.
+- **Interface Moderne & Épurée** : Thème sombre / clair au choix, cartes visuelles à fort contraste.
+- **Zéro Perte de Données** : Saisie sécurisée avec persistance locale en cas de déconnexion ou rafraîchissement.
+- **Visualisation Clair/Obscur des Accord** : Les items d'accord unanime s'affichent avec un badge vert discret tandis que les divergences clignotent avec un indicateur d'imputation.
