@@ -21,6 +21,7 @@ import {
 import { TemplateStudioModal } from "./TemplateStudioModal";
 import {
   ShieldCheck,
+  Activity,
   Plus,
   CheckCircle2,
   AlertCircle,
@@ -486,6 +487,49 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <span className="text-sm font-medium">{actionFeedback.message}</span>
             </div>
           )}
+
+          {/* ── KPI Metric Cards Dashboard ── */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="glass-card p-4 rounded-2xl border border-slate-800 space-y-1">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-xs font-semibold uppercase tracking-wider">Sessions Total</span>
+                <Activity className="w-4 h-4 text-teal-400" />
+              </div>
+              <div className="text-2xl font-black text-white">{sessions.length}</div>
+              <p className="text-[11px] text-slate-500 font-medium">Historique complet</p>
+            </div>
+
+            <div className="glass-card p-4 rounded-2xl border border-slate-800 space-y-1">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-xs font-semibold uppercase tracking-wider">Sessions Actives</span>
+                <Clock className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div className="text-2xl font-black text-emerald-400">
+                {sessions.filter((s) => s.statut === "OPEN" || s.statut === "GAUGE_DONE" || s.statut === "PENDING_GAUGE").length}
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium">En cours d'évaluation</p>
+            </div>
+
+            <div className="glass-card p-4 rounded-2xl border border-slate-800 space-y-1">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-xs font-semibold uppercase tracking-wider">Demandes Attente</span>
+                <Inbox className="w-4 h-4 text-amber-400" />
+              </div>
+              <div className="text-2xl font-black text-amber-400">{demandes.length}</div>
+              <p className="text-[11px] text-slate-500 font-medium">À valider par l'admin</p>
+            </div>
+
+            <div className="glass-card p-4 rounded-2xl border border-slate-800 space-y-1">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-xs font-semibold uppercase tracking-wider">Évaluateurs & Templates</span>
+                <Users className="w-4 h-4 text-indigo-400" />
+              </div>
+              <div className="text-2xl font-black text-indigo-400">
+                {evaluateurs.length} <span className="text-xs font-normal text-slate-400">/ {templates.length} tpl</span>
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium">Profils & Grilles</p>
+            </div>
+          </div>
 
           {/* ── Section 0: Demandes de Calibrage en Attente ──────────────────── */}
           {demandes.length > 0 && (
