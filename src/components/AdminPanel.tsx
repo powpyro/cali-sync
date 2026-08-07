@@ -48,6 +48,7 @@ import {
   Music,
   RotateCcw,
   Trash2,
+  LogOut,
 } from "lucide-react";
 import { ThemeToggle } from "./ui/ThemeToggle";
 
@@ -467,6 +468,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
           <div className="flex items-center gap-2">
             <ThemeToggle />
+            <button
+              onClick={onBack}
+              className="px-4 py-2 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 text-sm font-bold rounded-xl transition-all shadow-md shadow-rose-600/20 flex items-center gap-2 cursor-pointer"
+              title="Se déconnecter"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Déconnexion</span>
+            </button>
             <button
               onClick={() => {
                 fetchSessions();

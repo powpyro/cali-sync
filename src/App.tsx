@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { LoginScreen, type LoginResult } from "./components/LoginScreen";
 import { EvaluateurLanding } from "./components/EvaluateurLanding";
 import { EvaluateurScreen } from "./components/EvaluateurScreen";
@@ -6,8 +6,6 @@ import { CockpitScreen } from "./components/CockpitScreen";
 import { AdminPanel } from "./components/AdminPanel";
 import { TemplateManager } from "./components/TemplateManager";
 import { RingDispute } from "./components/RingDispute";
-
-
 
 type AppScreen =
   | "login"
@@ -19,15 +17,58 @@ type AppScreen =
   | "template_manager"
   | "dispute_placeholder";
 
+const SESSION_STORAGE_KEY = "CALISYNC_USER_SESSION";
+
+interface StoredSessionData {
+  user: LoginResult;
+  screen: AppScreen;
+  activeSessionId: string | null;
+  isGaugeMode: boolean;
+  readOnlySubmission: boolean;
+}
+
 export function App() {
+  const getInitialState = (): StoredSessionData | null => {
+    try {
+      const saved = localStorage.getItem(SESSION_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.user && parsed.screen) {
+          return parsed;
+        }
+      }
+    } catch {
+      // Fallback
+    }
+    return null;
+  };
+
+  const [initialState] = useState<StoredSessionData | null>(getInitialState);
+
   // Auth state
-  const [screen, setScreen] = useState<AppScreen>("login");
-  const [user, setUser] = useState<LoginResult | null>(null);
+  const [screen, setScreen] = useState<AppScreen>(initialState?.screen || "login");
+  const [user, setUser] = useState<LoginResult | null>(initialState?.user || null);
 
   // Session context
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [isGaugeMode, setIsGaugeMode] = useState(false);
-  const [readOnlySubmission, setReadOnlySubmission] = useState(false);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(initialState?.activeSessionId || null);
+  const [isGaugeMode, setIsGaugeMode] = useState<boolean>(initialState?.isGaugeMode || false);
+  const [readOnlySubmission, setReadOnlySubmission] = useState<boolean>(initialState?.readOnlySubmission || false);
+
+  // Persist session state into localStorage
+  useEffect(() => {
+    if (user && screen !== "login") {
+      const sessionData: StoredSessionData = {
+        user,
+        screen,
+        activeSessionId,
+        isGaugeMode,
+        readOnlySubmission,
+      };
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
+    } else {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+    }
+  }, [user, screen, activeSessionId, isGaugeMode, readOnlySubmission]);
 
   // ── Login Handler ───────────────────────────────────────────────────────────
   const handleLogin = useCallback((result: LoginResult) => {
@@ -50,8 +91,9 @@ export function App() {
     }
   }, []);
 
-  // ── Back to role selection / Login ─────────────────────────────────────────
+  // ── Back to role selection / Logout ─────────────────────────────────────────
   const handleBackToLogin = useCallback(() => {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
     setUser(null);
     setScreen("login");
     setActiveSessionId(null);

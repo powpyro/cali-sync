@@ -32,6 +32,7 @@ import {
   UserCheck,
   FileText,
   Music,
+  LogOut,
 } from "lucide-react";
 
 interface EvaluateurLandingProps {
@@ -498,6 +499,14 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
               <Plus className="w-4 h-4" /> Proposer un Calibrage
             </button>
             <ThemeToggle />
+            <button
+              onClick={onBack}
+              className="px-3.5 py-2 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 text-xs font-extrabold rounded-xl transition-all shadow-md shadow-rose-600/20 flex items-center gap-1.5 cursor-pointer"
+              title="Se déconnecter de l'application"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Déconnexion</span>
+            </button>
             <button
               onClick={handleRefreshAll}
               disabled={loading}
