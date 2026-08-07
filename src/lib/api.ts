@@ -240,6 +240,7 @@ export interface SessionDataResponse {
   template_id?: string;
   nom_conseiller?: string;
   grille_hierarchique?: CockpitNode[];
+  is_read_only?: boolean;
 }
 
 // ── Templates ─────────────────────────────────────────────────────────────────

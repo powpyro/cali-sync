@@ -138,6 +138,7 @@ export interface CockpitScreenProps {
   onSeekAudio?: (seconds: number) => void;
   onBack?: () => void;
   initialSecondsLeft?: number;
+  readOnly?: boolean;
 }
 
 interface ConfettiParticle {
@@ -300,11 +301,14 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
   onSeekAudio,
   onBack,
   initialSecondsLeft = 180,
+  readOnly = false,
 }) => {
   // Session Data State
   const [data, setData] = useState<SessionDataResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const effectiveReadOnly = readOnly || data?.is_read_only === true;
 
   // Evaluators Waiting Room State
   const [evaluators, setEvaluators] = useState<EvaluatorUser[]>([]);
@@ -603,6 +607,10 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
 
   // Open Arbitrage Drawer for a given node
   const openArbitrageModal = (node: CockpitNode) => {
+    if (effectiveReadOnly) {
+      showToast("🔒 Mode lecture seule — Arbitrage indisponible.");
+      return;
+    }
     setSelectedArbitrageNode(node);
   };
 
@@ -624,6 +632,10 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
   // Close Session
   const handleCloseSessionClick = async () => {
     if (!sessionId) return;
+    if (effectiveReadOnly) {
+      showToast("🔒 Mode lecture seule — Clôture impossible.");
+      return;
+    }
 
     // Verify all evaluable questions (N2 nodes) are arbitrated before allowing closure
     const allQuestions = getEvaluableQuestions(data?.grille_hierarchique || []);
@@ -667,6 +679,10 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
   // Reset Arbitrages in Cockpit
   const handleResetArbitragesInCockpit = async () => {
     if (!sessionId) return;
+    if (effectiveReadOnly) {
+      showToast("🔒 Mode lecture seule — Réinitialisation impossible.");
+      return;
+    }
     if (
       !window.confirm(
         "Êtes-vous sûr de vouloir réinitialiser TOUS les arbitrages enregistrés pour cette session ?\n\nTous les arbitrages actuels seront effacés pour vous permettre de tout recommencer."
@@ -774,7 +790,9 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
   };
 
   const sessionStatut = data?.statut;
-  const isReadOnly = sessionStatut === "CLOSED";
+  const isClosed = sessionStatut === "CLOSED";
+  const isLiveReadOnly = effectiveReadOnly && sessionStatut !== "CLOSED";
+  const isReadOnly = isClosed || isLiveReadOnly;
 
   // ── LOADING SPLASHSCREEN ──────────────────────────────────────────────────
   if (loading && !data) {
@@ -1795,9 +1813,14 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                 </span>
               )}
             </h1>
-            {isReadOnly && (
+            {isClosed && (
               <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-400 text-xs font-bold">
                 👁️ MODE LECTURE SEULE — Session archivée. Aucune modification possible.
+              </div>
+            )}
+            {isLiveReadOnly && (
+              <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold animate-pulse">
+                🔒 MODE LECTURE SEULE EN LIVE — Arbitrage disponible après la clôture.
               </div>
             )}
           </div>
@@ -1809,7 +1832,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
               <span className="font-black text-xl text-white">{evaluators.length}</span>
             </div>
 
-            {isReadOnly && (
+            {isClosed && (
               <button
                 type="button"
                 onClick={() => setShowClosedCockpit(false)}

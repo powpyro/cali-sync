@@ -35,6 +35,7 @@ interface EvaluateurLandingProps {
   nomComplet: string;
   role: "evaluateur" | "gauge";
   onSelectSession: (sessionId: string, isGauge: boolean) => void;
+  onOpenCockpit?: (sessionId: string) => void;
   onBack: () => void;
 }
 
@@ -43,6 +44,7 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
   nomComplet,
   role,
   onSelectSession,
+  onOpenCockpit,
   onBack,
 }) => {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
@@ -587,25 +589,36 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
 
                 {role === "gauge" ? (
                   <div className="space-y-2 pt-2">
-                    <button
-                      onClick={() => onSelectSession(session.session_id, true)}
-                      className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-sm rounded-xl transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <Sparkles className="w-4.5 h-4.5" /> 🚀 Accéder au Cockpit Live
-                    </button>
-                    {session.statut !== "CLOSED" && (
+                    {!session.gauge_soumis ? (
                       <button
-                        onClick={() => handleEditGauge(session)}
-                        disabled={fetchingConfigItems}
-                        className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-indigo-300 border border-indigo-500/30 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                        onClick={() => onSelectSession(session.session_id, true)}
+                        className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-sm rounded-xl transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 cursor-pointer"
                       >
-                        {fetchingConfigItems ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <FileText className="w-4 h-4 text-indigo-400" />
-                        )}
-                        ✏️ Consulter / Modifier la Gauge de référence
+                        <FileText className="w-4.5 h-4.5" /> ✏️ Remplir l'évaluation Gauge
                       </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => onOpenCockpit?.(session.session_id)}
+                          className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-sm rounded-xl transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <Sparkles className="w-4.5 h-4.5" /> 🚀 Accéder au Cockpit Live
+                        </button>
+                        {session.statut !== "CLOSED" && (
+                          <button
+                            onClick={() => handleEditGauge(session)}
+                            disabled={fetchingConfigItems}
+                            className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-indigo-300 border border-indigo-500/30 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                          >
+                            {fetchingConfigItems ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <FileText className="w-4 h-4 text-indigo-400" />
+                            )}
+                            ✏️ Consulter / Modifier la Gauge de référence
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 ) : !alreadySubmitted ? (

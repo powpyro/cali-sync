@@ -67,8 +67,8 @@ export function App() {
   // ── Evaluation complete ─────────────────────────────────────────────────────
   const handleEvaluationComplete = useCallback(() => {
     if (isGaugeMode) {
-      // Gauge done: back to gauge landing to see updated status
-      setScreen("gauge_landing");
+      // Gauge done: open the Cockpit Live immediately (in read-only mode if not closed yet)
+      setScreen("cockpit_screen");
     } else {
       // Normal evaluator: back to evaluator landing (Cockpit access restricted)
       setScreen("evaluateur_landing");
@@ -99,6 +99,7 @@ export function App() {
           nomComplet={user.nomComplet}
           role="evaluateur"
           onSelectSession={handleSelectSession}
+          onOpenCockpit={handleOpenCockpitFromAdmin}
           onBack={handleBackToLogin}
         />
       )}
@@ -110,6 +111,7 @@ export function App() {
           nomComplet={user.nomComplet}
           role="gauge"
           onSelectSession={handleSelectSession}
+          onOpenCockpit={handleOpenCockpitFromAdmin}
           onBack={handleBackToLogin}
         />
       )}
@@ -129,7 +131,11 @@ export function App() {
         <div className="p-4 sm:p-8">
           <CockpitScreen
             sessionId={activeSessionId || undefined}
-            onBack={() => setScreen(user?.role === "admin" ? "admin_panel" : "evaluateur_landing")}
+            onBack={() => {
+              if (user?.role === "admin") setScreen("admin_panel");
+              else if (user?.role === "gauge") setScreen("gauge_landing");
+              else setScreen("evaluateur_landing");
+            }}
             onSeekAudio={(sec) => console.log("Audio seek:", sec)}
           />
         </div>
