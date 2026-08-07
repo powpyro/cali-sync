@@ -17,6 +17,7 @@ import {
   type ProfilEvaluateur,
   type DemandeCalibrageInfo,
 } from "../lib/api";
+import { TemplateStudioModal } from "./TemplateStudioModal";
 import {
   ShieldCheck,
   Plus,
@@ -92,6 +93,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [apiConnectionError, setApiConnectionError] = useState<string | null>(null);
   const [editableApiUrl, setEditableApiUrl] = useState(getApiUrl());
+  const [studioTemplate, setStudioTemplate] = useState<Template | null>(null);
 
   // ── Data Fetching ───────────────────────────────────────────────────────────
   const fetchSessions = async () => {
@@ -925,15 +927,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               {templates.map((t) => (
                 <div
                   key={t.template_id}
-                  className="p-4 rounded-xl bg-slate-900/50 border border-slate-800 space-y-2"
+                  className="p-4 rounded-xl bg-slate-900/50 border border-slate-800 space-y-3"
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-white text-sm">{t.nom}</span>
-                    <span className="text-xs text-slate-500">{t.template_id}</span>
+                    <span className="text-xs text-slate-500 font-mono">{t.template_id}</span>
                   </div>
                   <div className="text-xs text-slate-400">
                     {t.categories.length} catégorie(s) •{" "}
                     {t.categories.reduce((acc, c) => acc + c.items.length, 0)} items
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setStudioTemplate(t)}
+                      className="w-full py-2 px-3 bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      ✏️ Éditer avec le Studio
+                    </button>
                   </div>
                 </div>
               ))}
@@ -978,6 +990,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </section>
         </div>
       </main>
+
+      {studioTemplate && (
+        <TemplateStudioModal
+          template={studioTemplate}
+          onClose={() => setStudioTemplate(null)}
+          onSaved={() => fetchTemplates()}
+        />
+      )}
     </div>
   );
 };

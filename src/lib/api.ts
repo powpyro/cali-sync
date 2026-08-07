@@ -633,3 +633,22 @@ export async function reinitialiserArbitrages(sessionId: string): Promise<ApiRes
   });
 }
 
+export async function dupliquerTemplate(templateId: string, nouveauNom: string): Promise<ApiResponse> {
+  return callGAS("dupliquer_template", {
+    template_id: templateId,
+    nouveau_nom: nouveauNom,
+  });
+}
+
+export async function sauvegarderGrilleComplete(
+  templateId: string,
+  nomTemplate: string,
+  items: Array<any>
+): Promise<ApiResponse> {
+  return callGAS("sauvegarder_grille_complete", {
+    template_id: templateId,
+    nom: nomTemplate,
+    items: items,
+  });
+}
+
