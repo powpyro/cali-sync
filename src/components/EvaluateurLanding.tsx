@@ -65,8 +65,6 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
   const [propConseiller, setPropConseiller] = useState("");
   const [propAudio, setPropAudio] = useState("");
   const [propConsignes, setPropConsignes] = useState("");
-  const [propOpenDate, setPropOpenDate] = useState("");
-  const [propOpenTime, setPropOpenTime] = useState("");
   const [propCloseDate, setPropCloseDate] = useState("");
   const [propCloseTime, setPropCloseTime] = useState("");
 
@@ -180,19 +178,24 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
   // Step 1 -> Step 2: Validate metadata and load full 4-level hierarchy for selected template
   const handleProceedToGaugeStep = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!propTitle || !propTemplate || !propOpenDate || !propOpenTime || !propCloseDate || !propCloseTime) {
-      setProposalFeedback({ success: false, message: "Veuillez remplir les dates et heures d'ouverture et de fermeture." });
+    if (!propTitle || !propTemplate || !propCloseDate || !propCloseTime) {
+      setProposalFeedback({ success: false, message: "Veuillez remplir le titre, le template et la date/heure de clôture." });
       return;
     }
 
-    const heureOuverture = `${propOpenDate}T${propOpenTime}:00`;
+    const now = new Date();
     const heureFermeture = `${propCloseDate}T${propCloseTime}:00`;
 
-    const openTimeMs = new Date(heureOuverture).getTime();
+    const nowMs = now.getTime();
     const closeTimeMs = new Date(heureFermeture).getTime();
 
-    if (closeTimeMs <= openTimeMs) {
-      setProposalFeedback({ success: false, message: "L'heure de fermeture doit être postérieure à l'heure d'ouverture." });
+    if (closeTimeMs <= nowMs) {
+      setProposalFeedback({ success: false, message: "La date et l'heure de clôture doivent être dans le futur." });
+      return;
+    }
+
+    if (closeTimeMs - nowMs > 72 * 60 * 60 * 1000) {
+      setProposalFeedback({ success: false, message: "La date et l'heure de clôture ne doivent pas dépasser 72 heures à partir de maintenant." });
       return;
     }
 
@@ -299,11 +302,12 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
 
   // Step 2: Final submission with full 4-level gauge payload
   const handleFinalProposalSubmit = async (evaluatedItems: Array<{ item_id: string; categorie: string; item: string; statut: string; commentaire?: string }>) => {
-    const heureOuverture = `${propOpenDate}T${propOpenTime}:00`;
+    const now = new Date();
+    const heureOuverture = now.toISOString();
     const heureFermeture = `${propCloseDate}T${propCloseTime}:00`;
-    const openTimeMs = new Date(heureOuverture).getTime();
+    const nowMs = now.getTime();
     const closeTimeMs = new Date(heureFermeture).getTime();
-    const durationMinutes = Math.max(5, Math.round((closeTimeMs - openTimeMs) / 60000));
+    const durationMinutes = Math.max(5, Math.round((closeTimeMs - nowMs) / 60000));
 
     const res = await proposerCalibrage({
       evaluateur_id: identifiant,
@@ -732,51 +736,35 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
                 </div>
               </div>
 
-              {/* Date & Heure Ouverture et Fermeture */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-slate-800/40 border border-slate-800 rounded-2xl">
-                <div className="space-y-3">
-                  <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5" /> Date & Heure d'Ouverture
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="date"
-                      value={propOpenDate}
-                      onChange={(e) => setPropOpenDate(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500 text-xs"
-                      required
-                    />
-                    <input
-                      type="time"
-                      value={propOpenTime}
-                      onChange={(e) => setPropOpenTime(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500 text-xs"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-3">
+              {/* Date & Heure de Fermeture uniquement */}
+              <div className="p-4 bg-slate-800/40 border border-slate-800 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
                   <div className="text-xs font-bold text-rose-400 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5" /> Date & Heure de Fermeture (Fin)
+                    <Clock className="w-3.5 h-3.5" /> Date & Heure de Fermeture (Clôture)
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="date"
-                      value={propCloseDate}
-                      onChange={(e) => setPropCloseDate(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-rose-500 text-xs"
-                      required
-                    />
-                    <input
-                      type="time"
-                      value={propCloseTime}
-                      onChange={(e) => setPropCloseTime(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-rose-500 text-xs"
-                      required
-                    />
-                  </div>
+                  <span className="px-2 py-0.5 text-[10px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-full flex items-center gap-1">
+                    ⏱ Max 72h de délai
+                  </span>
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    type="date"
+                    value={propCloseDate}
+                    onChange={(e) => setPropCloseDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-rose-500 text-xs"
+                    required
+                  />
+                  <input
+                    type="time"
+                    value={propCloseTime}
+                    onChange={(e) => setPropCloseTime(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-rose-500 text-xs"
+                    required
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  La session débutera dès validation par l'Administrateur et se fermera à l'heure indiquée.
+                </p>
               </div>
 
               <div>

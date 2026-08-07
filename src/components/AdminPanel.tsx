@@ -81,8 +81,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newSessionConseiller, setNewSessionConseiller] = useState("");
   const [newSessionConsignes, setNewSessionConsignes] = useState("");
 
-  const [newSessionOpenDate, setNewSessionOpenDate] = useState("");
-  const [newSessionOpenTime, setNewSessionOpenTime] = useState("");
   const [newSessionCloseDate, setNewSessionCloseDate] = useState("");
   const [newSessionCloseTime, setNewSessionCloseTime] = useState("");
 
@@ -159,19 +157,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // ── Create Session Handler ──────────────────────────────────────────────────
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newSessionName || !newSessionTemplate || !newSessionOpenDate || !newSessionOpenTime || !newSessionCloseDate || !newSessionCloseTime) {
-      setActionFeedback({ success: false, message: "Veuillez remplir les dates et heures d'ouverture et de fermeture." });
+    if (!newSessionName || !newSessionTemplate || !newSessionCloseDate || !newSessionCloseTime) {
+      setActionFeedback({ success: false, message: "Veuillez remplir le nom de la session, le template et la date/heure de clôture." });
       return;
     }
 
-    const heureOuverture = `${newSessionOpenDate}T${newSessionOpenTime}:00`;
+    const now = new Date();
+    const heureOuverture = now.toISOString();
     const heureFermeture = `${newSessionCloseDate}T${newSessionCloseTime}:00`;
 
-    const openMs = new Date(heureOuverture).getTime();
+    const nowMs = now.getTime();
     const closeMs = new Date(heureFermeture).getTime();
 
-    if (closeMs <= openMs) {
-      setActionFeedback({ success: false, message: "L'heure de fermeture doit être postérieure à l'heure d'ouverture." });
+    if (closeMs <= nowMs) {
+      setActionFeedback({ success: false, message: "La date et l'heure de clôture doivent être dans le futur." });
+      return;
+    }
+
+    if (closeMs - nowMs > 72 * 60 * 60 * 1000) {
+      setActionFeedback({ success: false, message: "La date et l'heure de clôture ne doivent pas dépasser 72 heures à partir de maintenant." });
       return;
     }
 
@@ -664,35 +668,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
                 </div>
 
-                {/* Date & Heure d'Ouverture et Date & Heure de Fermeture */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-slate-900/60 border border-slate-800 rounded-2xl">
+                {/* Date & Heure de Fermeture uniquement */}
+                <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl">
                   <div className="space-y-3">
-                    <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5" /> Date & Heure d'Ouverture
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-bold text-rose-400 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5" /> Date & Heure de Fermeture (Clôture)
+                      </div>
+                      <span className="px-2 py-0.5 text-[10px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-full flex items-center gap-1">
+                        ⏱ Max 72h de délai
+                      </span>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="date"
-                        value={newSessionOpenDate}
-                        onChange={(e) => setNewSessionOpenDate(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500 text-xs"
-                        required
-                      />
-                      <input
-                        type="time"
-                        value={newSessionOpenTime}
-                        onChange={(e) => setNewSessionOpenTime(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500 text-xs"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="text-xs font-bold text-rose-400 flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5" /> Date & Heure de Fermeture (Fin)
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <input
                         type="date"
                         value={newSessionCloseDate}
@@ -708,6 +695,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         required
                       />
                     </div>
+                    <p className="text-[10px] text-slate-400">
+                      La session sera active dès sa création et se verrouillera automatiquement à l'heure indiquée.
+                    </p>
                   </div>
                 </div>
 
