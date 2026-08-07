@@ -4,7 +4,10 @@
 
 @layer base {
   body {
-    @apply bg-slate-950 text-slate-100 antialiased selection:bg-teal-500 selection:text-white min-h-screen font-sans;
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    @apply antialiased selection:bg-teal-500 selection:text-white min-h-screen font-sans;
+    transition: background-color 250ms ease, color 250ms ease;
   }
 }
 
