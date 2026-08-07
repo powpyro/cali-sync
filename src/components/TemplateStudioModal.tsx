@@ -34,6 +34,66 @@ interface TemplateStudioModalProps {
   onSaved: () => void;
 }
 
+const ItemRuleControls: React.FC<{
+  item: FlatGridItem;
+  updateItem: (id: string, updates: Partial<FlatGridItem>) => void;
+}> = ({ item, updateItem }) => {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-900/80 text-[11px]">
+      {/* Criticité */}
+      <div className="flex items-center justify-between bg-slate-900/80 px-2.5 py-1.5 rounded-lg border border-slate-800">
+        <span className="font-semibold text-slate-400 flex items-center gap-1">
+          <ShieldAlert className="w-3 h-3 text-amber-400" /> Criticité
+        </span>
+        <select
+          value={item.criticite}
+          onChange={(e) => updateItem(item.item_id, { criticite: e.target.value as any })}
+          className={`px-1.5 py-0.5 rounded font-extrabold text-[10px] border focus:outline-none cursor-pointer ${
+            item.criticite === "Critical"
+              ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+              : "bg-slate-800 text-slate-300 border-slate-700"
+          }`}
+        >
+          <option value="Standard">Standard</option>
+          <option value="Critical">Critical (KO)</option>
+        </select>
+      </div>
+
+      {/* Clôture Terminale sur Oui */}
+      <div className="flex items-center justify-between bg-slate-900/80 px-2.5 py-1.5 rounded-lg border border-slate-800">
+        <span className="font-semibold text-slate-400 flex items-center gap-1" title="Si VRAI, cocher 'Oui' clôture l'item sans sous-questions">
+          <HelpCircle className="w-3 h-3 text-teal-400" /> Clôture "Oui" (Terminal)
+        </span>
+        <label className="relative inline-flex items-center cursor-pointer">
+          <input
+            type="checkbox"
+            checked={item.est_terminal}
+            onChange={(e) => updateItem(item.item_id, { est_terminal: e.target.checked })}
+            className="sr-only peer"
+          />
+          <div className="w-7 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-teal-600"></div>
+        </label>
+      </div>
+
+      {/* Commentaire Obligatoire sur Non */}
+      <div className="flex items-center justify-between bg-slate-900/80 px-2.5 py-1.5 rounded-lg border border-slate-800">
+        <span className="font-semibold text-slate-400 flex items-center gap-1" title="Si VRAI, cocher 'Non' oblige à saisir un commentaire">
+          💬 Com. Obligatoire sur "Non"
+        </span>
+        <label className="relative inline-flex items-center cursor-pointer">
+          <input
+            type="checkbox"
+            checked={item.commentaire_obligatoire}
+            onChange={(e) => updateItem(item.item_id, { commentaire_obligatoire: e.target.checked })}
+            className="sr-only peer"
+          />
+          <div className="w-7 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-indigo-600"></div>
+        </label>
+      </div>
+    </div>
+  );
+};
+
 export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
   template,
   onClose,
@@ -63,17 +123,36 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
     try {
       const res = await getConfigTemplate(template.template_id);
       if (res && res.success && Array.isArray(res.items)) {
-        const mapped: FlatGridItem[] = res.items.map((it: any) => ({
-          item_id: it.item_id || `item_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-          niveau: parseInt(it.niveau, 10) || 2,
-          parent_id: it.parent_id || "",
-          est_terminal: it.est_terminal === true || String(it.est_terminal).toUpperCase() === "VRAI",
-          commentaire_obligatoire:
-            it.commentaire_obligatoire === true || String(it.commentaire_obligatoire).toUpperCase() === "VRAI",
-          libelle: it.libelle_fr || it.libelle || "",
-          criticite: it.criticite === "Critical" ? "Critical" : "Standard",
-          categorie_racine_fr: it.categorie_racine_fr || "Général",
-        }));
+        const mapped: FlatGridItem[] = res.items.map((it: any) => {
+          let rawLib = String(it.libelle_fr || it.libelle || "").trim();
+          let criticite: "Standard" | "Critical" = it.criticite === "Critical" ? "Critical" : "Standard";
+          let estTerminal = it.est_terminal === true || String(it.est_terminal).toUpperCase() === "VRAI";
+          let commOblig = it.commentaire_obligatoire === true || String(it.commentaire_obligatoire).toUpperCase() === "VRAI";
+
+          // If rawLib contains CSV text (e.g., "Title,EnglishTitle,Critical,VRAI,VRAI..."), parse out clean title & rules
+          if (rawLib.includes(",")) {
+            const parts = rawLib.split(",");
+            rawLib = parts[0].trim();
+            if (/critical/i.test(it.libelle_fr || it.libelle || "")) {
+              criticite = "Critical";
+            }
+            if (/vrai/i.test(it.libelle_fr || it.libelle || "")) {
+              estTerminal = true;
+              commOblig = true;
+            }
+          }
+
+          return {
+            item_id: it.item_id || `item_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+            niveau: parseInt(it.niveau, 10) || 2,
+            parent_id: it.parent_id || "",
+            est_terminal: estTerminal,
+            commentaire_obligatoire: commOblig,
+            libelle: rawLib,
+            criticite: criticite,
+            categorie_racine_fr: it.categorie_racine_fr || "Général",
+          };
+        });
         setItems(mapped);
       } else {
         setItems([
@@ -169,9 +248,9 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
       item_id: newId,
       niveau,
       parent_id: parentId,
-      est_terminal: niveau === 2,
+      est_terminal: niveau >= 2,
       commentaire_obligatoire: true,
-      libelle: niveau === 1 ? "Nouvelle Catégorie" : niveau === 2 ? "Nouvel Item d'Évaluation" : "Nouveau sous-critère d'écart",
+      libelle: niveau === 1 ? "Nouvelle Catégorie" : niveau === 2 ? "Nouvel Item d'Évaluation" : niveau === 3 ? "Nouveau sous-critère N3" : "Nouvelle précision N4",
       criticite: "Standard",
       categorie_racine_fr: categorieName,
     };
@@ -442,56 +521,10 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
                                 </div>
                               </div>
 
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-900 text-xs">
-                                <div className="flex items-center justify-between bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
-                                  <span className="font-semibold text-slate-400 flex items-center gap-1">
-                                    <ShieldAlert className="w-3.5 h-3.5 text-amber-400" /> Criticité
-                                  </span>
-                                  <select
-                                    value={n2.criticite}
-                                    onChange={(e) => updateItem(n2.item_id, { criticite: e.target.value as any })}
-                                    className={`px-2 py-1 rounded-lg font-bold text-[11px] border focus:outline-none ${
-                                      n2.criticite === "Critical"
-                                        ? "bg-rose-500/10 text-rose-300 border-rose-500/30"
-                                        : "bg-slate-800 text-slate-300 border-slate-700"
-                                    }`}
-                                  >
-                                    <option value="Standard">Standard</option>
-                                    <option value="Critical">Critical (KO)</option>
-                                  </select>
-                                </div>
+                              {/* Rule Controls for N2 */}
+                              <ItemRuleControls item={n2} updateItem={updateItem} />
 
-                                <div className="flex items-center justify-between bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
-                                  <span className="font-semibold text-slate-400 flex items-center gap-1" title="Si VRAI, cocher 'Oui' clôture l'item sans sous-questions">
-                                    <HelpCircle className="w-3.5 h-3.5 text-teal-400" /> Clôture "Oui" (Terminal)
-                                  </span>
-                                  <label className="relative inline-flex items-center cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={n2.est_terminal}
-                                      onChange={(e) => updateItem(n2.item_id, { est_terminal: e.target.checked })}
-                                      className="sr-only peer"
-                                    />
-                                    <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-teal-600"></div>
-                                  </label>
-                                </div>
-
-                                <div className="flex items-center justify-between bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
-                                  <span className="font-semibold text-slate-400 flex items-center gap-1" title="Si VRAI, cocher 'Non' oblige à saisir un commentaire">
-                                    💬 Com. Obligatoire sur "Non"
-                                  </span>
-                                  <label className="relative inline-flex items-center cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={n2.commentaire_obligatoire}
-                                      onChange={(e) => updateItem(n2.item_id, { commentaire_obligatoire: e.target.checked })}
-                                      className="sr-only peer"
-                                    />
-                                    <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                                  </label>
-                                </div>
-                              </div>
-
+                              {/* Sub-items (Niveau 3) */}
                               {n3Items.length > 0 && (
                                 <div className="space-y-3 pl-3 sm:pl-6 border-l-2 border-slate-800 mt-3 pt-3">
                                   <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
@@ -503,7 +536,7 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
                                     const n4Items = items.filter((it) => it.parent_id === n3.item_id);
 
                                     return (
-                                      <div key={n3.item_id} className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 space-y-2">
+                                      <div key={n3.item_id} className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 space-y-3">
                                         <div className="flex items-start justify-between gap-2">
                                           <div className="flex items-start gap-2 flex-1">
                                             <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/30 text-[9px] font-black uppercase mt-1">
@@ -521,40 +554,50 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
                                             <button
                                               type="button"
                                               onClick={() => addItem(4, n3.item_id, cat.libelle)}
-                                              className="px-2 py-1 bg-slate-800 text-purple-300 text-[10px] font-bold rounded-lg border border-purple-500/30 hover:bg-slate-700"
+                                              className="px-2 py-1 bg-slate-800 text-purple-300 text-[10px] font-bold rounded-lg border border-purple-500/30 hover:bg-slate-700 cursor-pointer"
                                             >
                                               + N4
                                             </button>
                                             <button
                                               type="button"
                                               onClick={() => deleteItem(n3.item_id)}
-                                              className="p-1 text-slate-500 hover:text-rose-400 rounded"
+                                              className="p-1 text-slate-500 hover:text-rose-400 rounded cursor-pointer"
                                             >
                                               <Trash2 className="w-3.5 h-3.5" />
                                             </button>
                                           </div>
                                         </div>
 
+                                        {/* Rule Controls for N3 */}
+                                        <ItemRuleControls item={n3} updateItem={updateItem} />
+
+                                        {/* N4 Details */}
                                         {n4Items.length > 0 && (
-                                          <div className="space-y-2 pl-4 border-l border-purple-500/20 pt-2">
+                                          <div className="space-y-3 pl-4 border-l-2 border-purple-500/20 pt-2">
                                             {n4Items.map((n4) => (
-                                              <div key={n4.item_id} className="flex items-center justify-between gap-2">
-                                                <span className="px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20 text-[9px] font-black">
-                                                  N4 Précision
-                                                </span>
-                                                <input
-                                                  type="text"
-                                                  value={n4.libelle}
-                                                  onChange={(e) => updateItem(n4.item_id, { libelle: e.target.value })}
-                                                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-1.5 font-medium text-white text-[11px] focus:outline-none focus:border-rose-500"
-                                                />
-                                                <button
-                                                  type="button"
-                                                  onClick={() => deleteItem(n4.item_id)}
-                                                  className="p-1 text-slate-500 hover:text-rose-400"
-                                                >
-                                                  <Trash2 className="w-3 h-3" />
-                                                </button>
+                                              <div key={n4.item_id} className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 space-y-2">
+                                                <div className="flex items-center justify-between gap-2">
+                                                  <span className="px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20 text-[9px] font-black">
+                                                    N4 Précision
+                                                  </span>
+                                                  <input
+                                                    type="text"
+                                                    value={n4.libelle}
+                                                    onChange={(e) => updateItem(n4.item_id, { libelle: e.target.value })}
+                                                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 font-medium text-white text-xs focus:outline-none focus:border-rose-500"
+                                                    placeholder="Libellé de la précision N4..."
+                                                  />
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => deleteItem(n4.item_id)}
+                                                    className="p-1 text-slate-500 hover:text-rose-400 cursor-pointer"
+                                                  >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                  </button>
+                                                </div>
+
+                                                {/* Rule Controls for N4 */}
+                                                <ItemRuleControls item={n4} updateItem={updateItem} />
                                               </div>
                                             ))}
                                           </div>
