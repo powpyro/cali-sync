@@ -1019,17 +1019,80 @@ function handleCreerVersionAnglaiseGenii(ss, payload) {
   var nouveauNom = payload.nouveau_nom || "Grille GENII (English Original)";
   var nouveauTplId = "TPL_GENII_EN_" + String(Math.floor(10000 + Math.random() * 90000));
 
+  var FR_EN_DICT = {
+    "Point de vue client": "Customer Perspective",
+    "Souci relatif au conseiller": "Advisor Related Issue",
+    "Souci relatif à l'outil / système": "System / Tool Related Issue",
+    "Souci relatif a l'outil / système": "System / Tool Related Issue",
+    "Souci relatif au processus / procédure": "Process / Procedure Related Issue",
+    "Relationnel & Accueil": "Relationship & Greeting",
+    "Traitement & Résolution": "Processing & Resolution",
+    "Communication & Posture": "Communication & Demeanor",
+    "Clôture de l'appel": "Call Closure",
+    "Résolution au premier contact ?": "First Contact Resolution (FCR)?",
+    "Écoute active & Empathie": "Active Listening & Empathy",
+    "Inexactitude / Information fournie incomplète": "Inaccuracy / Incomplete information provided",
+    "Inexactitude / Information fournie incompĺète": "Inaccuracy / Incomplete information provided",
+    "Na pas transféré lappel pour résolution du problème": "Failed to transfer call for problem resolution",
+    "N'a pas transféré l'appel pour résolution du problème": "Failed to transfer call for problem resolution",
+    "Appel transféré au mauvais département / segment": "Call transferred to wrong department / segment",
+    "Na pas remonté la requête pour résolution du problème": "Failed to escalate query for problem resolution",
+    "N'a pas remonté la requête pour résolution du problème": "Failed to escalate query for problem resolution",
+    "Remontée non nécessaire": "Unnecessary escalation",
+    "A cessé de réagir / répondre": "Stopped responding / interacting",
+    "Déconnecté / Interaction délaissée": "Disconnected / Abandoned interaction",
+    "Absence de salutation": "Lack of greeting",
+    "Vérification d'identité non conforme": "Non-compliant identity verification",
+    "Erreur de saisie dans le dossier": "Data entry error in customer file",
+    "Temps d'attente excessif sans reprise": "Excessive hold time without check-in",
+    "Langage inapproprié ou ton agacé": "Inappropriate language or annoyed tone",
+    "Délai de traitement non respecté": "Processing deadline not met",
+    "Consignes non appliquées": "Instructions not applied"
+  };
+
   function extractEnglishLabel(rawLabel) {
     if (!rawLabel) return "";
     var str = String(rawLabel).trim();
+
+    // 1. Si CSV, vérifier la 2e colonne
     if (str.indexOf(",") !== -1) {
       var parts = str.split(",");
       if (parts.length > 1 && parts[1].trim().length > 0) {
-        return parts[1].trim();
+        var p1 = parts[1].trim();
+        if (!/^(inexactitude|souci|appel|remontée|a cessé|déconnecté|na pas|n'a pas)/i.test(p1)) {
+          return p1;
+        }
       }
-      return parts[0].trim();
+      str = parts[0].trim();
     }
-    return str;
+
+    // 2. Dictionnaire exact ou insensible à la casse
+    if (FR_EN_DICT[str]) return FR_EN_DICT[str];
+    var lower = str.toLowerCase();
+    for (var key in FR_EN_DICT) {
+      if (key.toLowerCase() === lower) return FR_EN_DICT[key];
+    }
+
+    // 3. Remplacement de motifs récurrents
+    var res = str;
+    res = res.replace(/Souci relatif au conseiller/gi, "Advisor Related Issue");
+    res = res.replace(/Souci relatif (à|a) l'outil \/ système/gi, "System / Tool Related Issue");
+    res = res.replace(/Souci relatif au processus/gi, "Process Related Issue");
+    res = res.replace(/Point de vue client/gi, "Customer Perspective");
+    res = res.replace(/N'est pas parvenu à/gi, "Failed to");
+    res = res.replace(/Na pas parvenu à/gi, "Failed to");
+    res = res.replace(/N'a pas/gi, "Failed to");
+    res = res.replace(/Na pas/gi, "Failed to");
+    res = res.replace(/Inexactitude \/ Information fournie incomplète/gi, "Inaccuracy / Incomplete information provided");
+    res = res.replace(/Inexactitude \/ Information fournie incompĺète/gi, "Inaccuracy / Incomplete information provided");
+    res = res.replace(/Appel transféré au mauvais département/gi, "Call transferred to wrong department");
+    res = res.replace(/Remontée non nécessaire/gi, "Unnecessary escalation");
+    res = res.replace(/A cessé de réagir \/ répondre/gi, "Stopped responding / interacting");
+    res = res.replace(/Déconnecté \/ Interaction délaissée/gi, "Disconnected / Abandoned interaction");
+    res = res.replace(/transféré lappel/gi, "transferred call");
+    res = res.replace(/pour résolution du problème/gi, "for problem resolution");
+
+    return res;
   }
 
   // 1. Dupliquer dans Templates_Grilles avec libellé Anglais
@@ -1064,7 +1127,7 @@ function handleCreerVersionAnglaiseGenii(ss, payload) {
     }
   }
 
-  // 2. Dupliquer dans Admin_Config_Grille avec libellé Anglais
+  // 2. Dupliquer dans Admin_Config_Grille avec libellé et catégories en Anglais
   var cfgSheet = ss.getSheetByName("Admin_Config_Grille");
   if (cfgSheet) {
     var cfgData = cfgSheet.getDataRange().getValues();
@@ -1100,7 +1163,10 @@ function handleCreerVersionAnglaiseGenii(ss, payload) {
         if (cfgData[d].length > 7) rowConfig.push(cfgData[d][7]);
         if (cfgData[d].length > 8) rowConfig.push(cfgData[d][8]);
         if (cfgData[d].length > 9) rowConfig.push(cfgData[d][9]);
-        if (cfgData[d].length > 10) rowConfig.push(cfgData[d][10]);
+        if (cfgData[d].length > 10) {
+          var rawCat = cfgData[d][10];
+          rowConfig.push(extractEnglishLabel(rawCat));
+        }
 
         while (rowConfig.length < 11) rowConfig.push("");
 
@@ -1116,7 +1182,7 @@ function handleCreerVersionAnglaiseGenii(ss, payload) {
 
   return {
     success: true,
-    message: "Template Anglais Original créé avec succès !",
+    message: "Template Anglais Original (100% Anglais) créé avec succès !",
     new_template_id: nouveauTplId,
     nom: nouveauNom
   };

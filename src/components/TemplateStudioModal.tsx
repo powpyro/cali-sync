@@ -95,6 +95,79 @@ const ItemRuleControls: React.FC<{
   );
 };
 
+const FR_EN_DICT: Record<string, string> = {
+  "Point de vue client": "Customer Perspective",
+  "Souci relatif au conseiller": "Advisor Related Issue",
+  "Souci relatif à l'outil / système": "System / Tool Related Issue",
+  "Souci relatif a l'outil / système": "System / Tool Related Issue",
+  "Souci relatif au processus / procédure": "Process / Procedure Related Issue",
+  "Relationnel & Accueil": "Relationship & Greeting",
+  "Traitement & Résolution": "Processing & Resolution",
+  "Communication & Posture": "Communication & Demeanor",
+  "Clôture de l'appel": "Call Closure",
+  "Résolution au premier contact ?": "First Contact Resolution (FCR)?",
+  "Écoute active & Empathie": "Active Listening & Empathy",
+  "Inexactitude / Information fournie incomplète": "Inaccuracy / Incomplete information provided",
+  "Inexactitude / Information fournie incompĺète": "Inaccuracy / Incomplete information provided",
+  "Na pas transféré lappel pour résolution du problème": "Failed to transfer call for problem resolution",
+  "N'a pas transféré l'appel pour résolution du problème": "Failed to transfer call for problem resolution",
+  "Appel transféré au mauvais département / segment": "Call transferred to wrong department / segment",
+  "Na pas remonté la requête pour résolution du problème": "Failed to escalate query for problem resolution",
+  "N'a pas remonté la requête pour résolution du problème": "Failed to escalate query for problem resolution",
+  "Remontée non nécessaire": "Unnecessary escalation",
+  "A cessé de réagir / répondre": "Stopped responding / interacting",
+  "Déconnecté / Interaction délaissée": "Disconnected / Abandoned interaction",
+  "Absence de salutation": "Lack of greeting",
+  "Vérification d'identité non conforme": "Non-compliant identity verification",
+  "Erreur de saisie dans le dossier": "Data entry error in customer file",
+  "Temps d'attente excessif sans reprise": "Excessive hold time without check-in",
+  "Langage inapproprié ou ton agacé": "Inappropriate language or annoyed tone",
+  "Délai de traitement non respecté": "Processing deadline not met",
+  "Consignes non appliquées": "Instructions not applied"
+};
+
+function translateToEnglish(str: string): string {
+  if (!str) return "";
+  let clean = str.trim();
+
+  if (clean.includes(",")) {
+    const parts = clean.split(",");
+    if (parts.length > 1 && parts[1].trim().length > 0) {
+      const p1 = parts[1].trim();
+      if (!/^(inexactitude|souci|appel|remontée|a cessé|déconnecté|na pas|n'a pas)/i.test(p1)) {
+        return p1;
+      }
+    }
+    clean = parts[0].trim();
+  }
+
+  if (FR_EN_DICT[clean]) return FR_EN_DICT[clean];
+  const lower = clean.toLowerCase();
+  for (const key in FR_EN_DICT) {
+    if (key.toLowerCase() === lower) return FR_EN_DICT[key];
+  }
+
+  let res = clean;
+  res = res.replace(/Souci relatif au conseiller/gi, "Advisor Related Issue");
+  res = res.replace(/Souci relatif (à|a) l'outil \/ système/gi, "System / Tool Related Issue");
+  res = res.replace(/Souci relatif au processus/gi, "Process Related Issue");
+  res = res.replace(/Point de vue client/gi, "Customer Perspective");
+  res = res.replace(/N'est pas parvenu à/gi, "Failed to");
+  res = res.replace(/Na pas parvenu à/gi, "Failed to");
+  res = res.replace(/N'a pas/gi, "Failed to");
+  res = res.replace(/Na pas/gi, "Failed to");
+  res = res.replace(/Inexactitude \/ Information fournie incomplète/gi, "Inaccuracy / Incomplete information provided");
+  res = res.replace(/Inexactitude \/ Information fournie incompĺète/gi, "Inaccuracy / Incomplete information provided");
+  res = res.replace(/Appel transféré au mauvais département/gi, "Call transferred to wrong department");
+  res = res.replace(/Remontée non nécessaire/gi, "Unnecessary escalation");
+  res = res.replace(/A cessé de réagir \/ répondre/gi, "Stopped responding / interacting");
+  res = res.replace(/Déconnecté \/ Interaction délaissée/gi, "Disconnected / Abandoned interaction");
+  res = res.replace(/transféré lappel/gi, "transferred call");
+  res = res.replace(/pour résolution du problème/gi, "for problem resolution");
+
+  return res;
+}
+
 export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
   template,
   onClose,
@@ -121,6 +194,7 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
   const loadConfig = async () => {
     setLoading(true);
     setFeedback(null);
+    const isEnglish = template.template_id.includes("_EN_") || template.nom.toLowerCase().includes("english");
     try {
       const res = await getConfigTemplate(template.template_id);
       if (res && res.success && Array.isArray(res.items)) {
@@ -130,8 +204,9 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
           let estTerminal = it.est_terminal === true || String(it.est_terminal).toUpperCase() === "VRAI";
           let commOblig = it.commentaire_obligatoire === true || String(it.commentaire_obligatoire).toUpperCase() === "VRAI";
 
-          // If rawLib contains CSV text (e.g., "Title,EnglishTitle,Critical,VRAI,VRAI..."), parse out clean title & rules
-          if (rawLib.includes(",")) {
+          if (isEnglish) {
+            rawLib = translateToEnglish(rawLib);
+          } else if (rawLib.includes(",")) {
             const parts = rawLib.split(",");
             rawLib = parts[0].trim();
             if (/critical/i.test(it.libelle_fr || it.libelle || "")) {
@@ -143,6 +218,11 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
             }
           }
 
+          let catName = it.categorie_racine_fr || "Général";
+          if (isEnglish) {
+            catName = translateToEnglish(catName);
+          }
+
           return {
             item_id: it.item_id || `item_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
             niveau: parseInt(it.niveau, 10) || 2,
@@ -151,7 +231,7 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
             commentaire_obligatoire: commOblig,
             libelle: rawLib,
             criticite: criticite,
-            categorie_racine_fr: it.categorie_racine_fr || "Général",
+            categorie_racine_fr: catName,
           };
         });
         setItems(mapped);
