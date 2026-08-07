@@ -1,6 +1,7 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo } from "react";
 import { postCalibration } from "../lib/api";
 import { CountdownTimer } from "./CountdownTimer";
+import { AudioPlayer } from "./AudioPlayer";
 import {
   Check,
   CheckCircle2,
@@ -12,9 +13,6 @@ import {
   Send,
   AlertTriangle,
   Bookmark,
-  Play,
-  Pause,
-  Volume2,
   ShieldCheck,
   Square,
   CheckSquare,
@@ -119,15 +117,15 @@ const CommentField: React.FC<{
   itemId: string;
   value: string;
   onChange: (v: string) => void;
-  audioRef: React.MutableRefObject<HTMLAudioElement | null>;
+  audioRef?: React.MutableRefObject<HTMLAudioElement | null>;
   placeholder?: string;
   disabled?: boolean;
 }> = ({ itemId, value, onChange, audioRef, placeholder, disabled = false }) => {
   const [bumping, setBumping] = useState(false);
 
   const insertTimestamp = () => {
-    if (!audioRef.current || disabled) return;
-    const cur = audioRef.current.currentTime || 0;
+    if (disabled) return;
+    const cur = audioRef?.current?.currentTime || 0;
     const ts = `[${String(Math.floor(cur / 60)).padStart(2, "0")}:${String(Math.floor(cur % 60)).padStart(2, "0")}] `;
     setBumping(true);
     setTimeout(() => setBumping(false), 150);
@@ -195,24 +193,6 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
 }) => {
   const [timeIsUp, setTimeIsUp] = useState(false);
   const isFormDisabled = sessionLocked || timeIsUp;
-
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTimeFormatted, setCurrentTimeFormatted] = useState("00:00");
-
-  const handleTimeUpdate = () => {
-    if (!audioRef.current) return;
-    const cur = audioRef.current.currentTime || 0;
-    setCurrentTimeFormatted(
-      `${String(Math.floor(cur / 60)).padStart(2, "0")}:${String(Math.floor(cur % 60)).padStart(2, "0")}`
-    );
-  };
-
-  const togglePlay = () => {
-    if (!audioRef.current) return;
-    if (isPlaying) { audioRef.current.pause(); setIsPlaying(false); }
-    else { audioRef.current.play(); setIsPlaying(true); }
-  };
 
   const tree = useMemo(() => buildTree(items), [items]);
 
@@ -529,26 +509,11 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
             </div>
           </div>
 
-          <div className="flex items-center gap-3 bg-slate-100 p-2 rounded-2xl border border-slate-200/80 w-full sm:w-auto">
-            <audio
-              ref={audioRef}
-              src={audioUrl}
-              onTimeUpdate={handleTimeUpdate}
-              onEnded={() => setIsPlaying(false)}
-              className="hidden"
-            />
-            <button
-              type="button"
-              onClick={togglePlay}
-              className="w-10 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-md transition-transform active:scale-95 cursor-pointer flex-shrink-0"
-            >
-              {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
-            </button>
-            <div className="flex items-center gap-2 pr-2">
-              <Volume2 className="w-4 h-4 text-slate-400" />
-              <span className="text-xs font-mono font-bold text-slate-700 min-w-[42px]">{currentTimeFormatted}</span>
+          {audioUrl && (
+            <div className="w-full sm:w-auto">
+              <AudioPlayer audioUrl={audioUrl} title={callName} compact={true} />
             </div>
-          </div>
+          )}
           {heureFin && (
             <div className="w-full flex justify-end mt-2">
               <CountdownTimer
@@ -749,7 +714,6 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
                                           itemId={sub.item.item_id}
                                           value={comments[sub.item.item_id] || ""}
                                           onChange={(v) => setComments((p) => ({ ...p, [sub.item.item_id]: v }))}
-                                          audioRef={audioRef}
                                           placeholder="Justification ou précision obligatoire de l'écart..."
                                           disabled={isFormDisabled}
                                         />
@@ -796,7 +760,6 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
                                                       itemId={ss.item.item_id}
                                                       value={comments[ss.item.item_id] || ""}
                                                       onChange={(v) => setComments((p) => ({ ...p, [ss.item.item_id]: v }))}
-                                                      audioRef={audioRef}
                                                       placeholder="Justification ou précision obligatoire de l'écart..."
                                                       disabled={isFormDisabled}
                                                     />

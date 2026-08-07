@@ -313,6 +313,7 @@ async function callGAS(
     "enregistrer_decision_finale",
     "enregistrer_decisions_batch",
     "modifier_role_evaluateur",
+    "upload_audio_drive",
   ].includes(action);
 
   const queryParams = new URLSearchParams({
@@ -671,6 +672,18 @@ export async function modifierRoleEvaluateur(
   return callGAS("modifier_role_evaluateur", {
     target_identifiant: targetIdentifiant,
     nouveau_role: nouveauRole,
+  });
+}
+
+export async function uploadAudioDrive(
+  base64Data: string,
+  fileName: string,
+  mimeType: string = "audio/mp3"
+): Promise<ApiResponse> {
+  return callGAS("upload_audio_drive", {
+    base64_data: base64Data,
+    file_name: fileName,
+    mime_type: mimeType,
   });
 }
 

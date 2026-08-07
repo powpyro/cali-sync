@@ -12,6 +12,7 @@ import {
   getRapportPdf,
   supprimerTemplate,
   modifierRoleEvaluateur,
+  uploadAudioDrive,
   getApiUrl,
   setApiUrl,
   type SessionInfo,
@@ -91,6 +92,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newSessionCloseTime, setNewSessionCloseTime] = useState("");
 
   const [newSessionAudio, setNewSessionAudio] = useState("");
+  const [audioUploading, setAudioUploading] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [createdPin, setCreatedPin] = useState<string | null>(null);
   const [createdSessionId, setCreatedSessionId] = useState<string | null>(null);
@@ -99,6 +101,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [apiConnectionError, setApiConnectionError] = useState<string | null>(null);
   const [editableApiUrl, setEditableApiUrl] = useState(getApiUrl());
   const [studioTemplate, setStudioTemplate] = useState<Template | null>(null);
+
+  const handleAudioFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("audio/") && !file.name.match(/\.(mp3|wav|m4a|ogg|aac|flac)$/i)) {
+      setActionFeedback({ success: false, message: "Format audio non supporté (utilisez MP3, WAV, M4A, OGG)." });
+      return;
+    }
+
+    setAudioUploading(true);
+    setActionFeedback({ success: true, message: "Téléversement de l'audio vers Google Drive en cours..." });
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const resultStr = reader.result as string;
+      const base64Data = resultStr.split(",")[1] || resultStr;
+      const res = await uploadAudioDrive(base64Data, file.name, file.type);
+      setAudioUploading(false);
+      if (res && res.success && (res as any).url_audio) {
+        setNewSessionAudio((res as any).url_audio);
+        setActionFeedback({ success: true, message: "Audio téléversé avec succès sur Google Drive !" });
+      } else {
+        setActionFeedback({ success: false, message: res?.message || "Erreur lors de l'upload audio vers Google Drive." });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // ── Data Fetching ───────────────────────────────────────────────────────────
   const fetchSessions = async () => {
@@ -686,17 +716,43 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2 flex items-center gap-1.5">
-                      <Music className="w-3.5 h-3.5 text-emerald-400" />
-                      Lien / URL Audio
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Music className="w-3.5 h-3.5 text-emerald-400" />
+                        Fichier Audio / Lien Google Drive
+                      </span>
+                      {audioUploading && (
+                        <span className="text-[11px] text-teal-400 font-bold animate-pulse flex items-center gap-1">
+                          <Loader2 className="w-3 h-3 animate-spin" /> Upload Drive...
+                        </span>
+                      )}
                     </label>
-                    <input
-                      type="url"
-                      value={newSessionAudio}
-                      onChange={(e) => setNewSessionAudio(e.target.value)}
-                      placeholder="https://exemple.com/appel-client.mp3"
-                      className="w-full px-4 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
-                    />
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <input
+                          type="url"
+                          value={newSessionAudio}
+                          onChange={(e) => setNewSessionAudio(e.target.value)}
+                          placeholder="Coller lien Google Drive ou URL .mp3"
+                          className="flex-1 px-4 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors text-xs"
+                        />
+                        <label className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0">
+                          📁 Importer
+                          <input
+                            type="file"
+                            accept="audio/*"
+                            onChange={handleAudioFileUpload}
+                            className="hidden"
+                            disabled={audioUploading}
+                          />
+                        </label>
+                      </div>
+                      {newSessionAudio && (
+                        <div className="text-[11px] text-emerald-400 font-medium truncate flex items-center gap-1">
+                          ✓ Audio prêt : <span className="font-mono text-slate-300 truncate">{newSessionAudio}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 

@@ -11,6 +11,7 @@ import {
 } from "../lib/api";
 import { ArbitrageDrawer } from "./cockpit/ArbitrageDrawer";
 import { VarianceReport } from "./cockpit/VarianceReport";
+import { AudioPlayer } from "./AudioPlayer";
 import {
   Clock,
   CheckCircle2,
@@ -1821,6 +1822,15 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
             {isLiveReadOnly && (
               <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold animate-pulse">
                 🔒 MODE LECTURE SEULE EN LIVE — Arbitrage disponible après la clôture.
+              </div>
+            )}
+
+            {data?.url_audio && (
+              <div className="mt-4">
+                <AudioPlayer
+                  audioUrl={data.url_audio}
+                  title={`Audio Calibrage — ${data.nom_session}${data.nom_conseiller ? ` (${data.nom_conseiller})` : ""}`}
+                />
               </div>
             )}
           </div>
