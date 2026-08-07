@@ -10,6 +10,7 @@ import {
   cloturerSession,
   reinitialiserArbitrages,
   getRapportPdf,
+  supprimerTemplate,
   getApiUrl,
   setApiUrl,
   type SessionInfo,
@@ -43,6 +44,7 @@ import {
   FileText,
   Music,
   RotateCcw,
+  Trash2,
 } from "lucide-react";
 
 interface AdminPanelProps {
@@ -251,6 +253,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       fetchSessions();
     } else {
       setActionFeedback({ success: false, message: res.message || "Erreur." });
+    }
+  };
+
+  const handleDeleteTemplate = async (templateId: string, templateNom: string) => {
+    if (
+      !window.confirm(
+        `Êtes-vous sûr de vouloir supprimer définitivement le template "${templateNom}" (${templateId}) ?\nCette action est irréversible.`
+      )
+    ) {
+      return;
+    }
+    setActionLoadingId(templateId);
+    try {
+      const res = await supprimerTemplate(templateId);
+      if (res.success) {
+        setActionFeedback({ success: true, message: `Template "${templateNom}" supprimé avec succès.` });
+        fetchTemplates();
+      } else {
+        setActionFeedback({ success: false, message: res.message || "Erreur lors de la suppression." });
+      }
+    } catch (e) {
+      setActionFeedback({ success: false, message: "Erreur lors de la suppression du template." });
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
@@ -942,9 +968,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <button
                       type="button"
                       onClick={() => setStudioTemplate(t)}
-                      className="w-full py-2 px-3 bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="flex-1 py-2 px-3 bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       ✏️ Éditer avec le Studio
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTemplate(t.template_id, t.nom)}
+                      disabled={actionLoadingId === t.template_id}
+                      className="py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      title="Supprimer définitivement ce template"
+                    >
+                      {actionLoadingId === t.template_id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                      Supprimer
                     </button>
                   </div>
                 </div>

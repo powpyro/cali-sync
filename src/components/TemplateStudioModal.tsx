@@ -18,7 +18,7 @@ import {
   ArrowUp,
   ArrowDown
 } from "lucide-react";
-import { getConfigTemplate, dupliquerTemplate, creerVersionAnglaiseGenii, sauvegarderGrilleComplete, type Template } from "../lib/api";
+import { getConfigTemplate, dupliquerTemplate, creerVersionAnglaiseGenii, sauvegarderGrilleComplete, supprimerTemplate, type Template } from "../lib/api";
 
 export interface FlatGridItem {
   item_id: string;
@@ -310,6 +310,33 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
     }
   };
 
+  const handleDeleteInModal = async () => {
+    if (
+      !window.confirm(
+        `Êtes-vous sûr de vouloir supprimer définitivement le template "${templateName}" (${template.template_id}) ?\nCette action est irréversible.`
+      )
+    ) {
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await supprimerTemplate(template.template_id);
+      if (res.success) {
+        setFeedback({ success: true, message: "Template supprimé avec succès !" });
+        setTimeout(() => {
+          onSaved();
+          onClose();
+        }, 1000);
+      } else {
+        setFeedback({ success: false, message: res.message || "Erreur de suppression." });
+      }
+    } catch (e) {
+      setFeedback({ success: false, message: "Erreur lors de la suppression." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!templateName.trim()) {
       setFeedback({ success: false, message: "Le nom du template ne peut pas être vide." });
@@ -554,6 +581,15 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
                 >
                   {duplicating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4 text-teal-400" />}
                   Dupliquer Template
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteInModal}
+                  disabled={saving || duplicating || loading}
+                  className="px-3.5 py-2.5 bg-rose-950/80 hover:bg-rose-900/80 border border-rose-500/40 text-rose-200 font-bold text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  title="Supprimer définitivement ce template"
+                >
+                  <Trash2 className="w-4 h-4 text-rose-400" /> Supprimer
                 </button>
                 <button
                   type="button"
