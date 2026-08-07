@@ -206,9 +206,9 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
               </label>
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { value: "Oui", label: "Conforme (Oui)", color: "emerald" },
-                  { value: "Non", label: "Imputé (Non)", color: "rose" },
-                  { value: "N.A.", label: "Non Appl. (N.A.)", color: "slate" },
+                  { value: "Oui", label: "Yes (Conforme)", color: "emerald" },
+                  { value: "Non", label: "No (Imputé)", color: "rose" },
+                  { value: "N.A.", label: "N.A. (Non Appl.)", color: "slate" },
                 ].map((opt) => {
                   const isSelected = decisionN1 === opt.value;
                   return (

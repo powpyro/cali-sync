@@ -582,14 +582,14 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
                     const pillConfig = [
                       {
                         choice: "Oui" as PillChoice,
-                        label: "Validé",
+                        label: "Yes",
                         icon: <Check className="w-3.5 h-3.5 stroke-[3]" />,
                         active: "bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20",
                         hover: "bg-white text-slate-600 border-slate-300 hover:border-emerald-500 hover:text-emerald-700",
                       },
                       {
                         choice: "Non" as PillChoice,
-                        label: "Imputé",
+                        label: "No",
                         icon: <AlertTriangle className="w-3.5 h-3.5" />,
                         active: "bg-rose-600 text-white border-rose-600 shadow-md shadow-rose-600/20",
                         hover: "bg-white text-slate-600 border-slate-300 hover:border-rose-500 hover:text-rose-700",
