@@ -951,7 +951,10 @@ function handleDupliquerTemplate(ss, payload) {
         ]);
       }
     }
-    newTplRows.forEach(function(row) { tplSheet.appendRow(row); });
+    if (newTplRows.length > 0) {
+      var startRow = tplSheet.getLastRow() + 1;
+      tplSheet.getRange(startRow, 1, newTplRows.length, 7).setValues(newTplRows);
+    }
   }
 
   // 2. Dupliquer dans Admin_Config_Grille
@@ -989,10 +992,16 @@ function handleDupliquerTemplate(ss, payload) {
         if (cfgData[d].length > 9) rowConfig.push(cfgData[d][9]);
         if (cfgData[d].length > 10) rowConfig.push(cfgData[d][10]);
 
+        while (rowConfig.length < 11) rowConfig.push("");
+
         newCfgRows.push(rowConfig);
       }
     }
-    newCfgRows.forEach(function(row) { cfgSheet.appendRow(row); });
+
+    if (newCfgRows.length > 0) {
+      var startRowCfg = cfgSheet.getLastRow() + 1;
+      cfgSheet.getRange(startRowCfg, 1, newCfgRows.length, 11).setValues(newCfgRows);
+    }
   }
 
   return {
