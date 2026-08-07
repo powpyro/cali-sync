@@ -181,6 +181,7 @@ export const EvaluateurScreen: React.FC<EvaluateurScreenProps> = ({
       initialAnswers={initialAnswers}
       initialComments={initialComments}
       onComplete={onComplete}
+      onBack={onComplete}
     />
   );
 };

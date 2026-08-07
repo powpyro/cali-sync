@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { postCalibration } from "../lib/api";
 import { CountdownTimer } from "./CountdownTimer";
 import { AudioPlayer } from "./AudioPlayer";
@@ -17,6 +17,7 @@ import {
   Square,
   CheckSquare,
   CornerDownRight,
+  ArrowLeft,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,6 +49,7 @@ export interface HierarchicalEvaluationFormProps {
   initialComments?: Record<string, string>;
   onSubmitPayload?: (items: Array<{ item_id: string; categorie: string; item: string; statut: string; commentaire?: string }>) => Promise<{ success: boolean; message?: string }>;
   onComplete?: () => void;
+  onBack?: () => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -190,6 +192,7 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
   initialComments,
   onSubmitPayload,
   onComplete,
+  onBack,
 }) => {
   const [timeIsUp, setTimeIsUp] = useState(false);
   const isFormDisabled = sessionLocked || timeIsUp;
@@ -202,6 +205,19 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
     return s;
   }, [tree]);
 
+  const draftStorageKey = `CALISYNC_DRAFT_EVAL_${sessionId}_${evaluateurId}`;
+
+  const savedDraft = useMemo(() => {
+    if (initialAnswers) return null;
+    try {
+      const saved = localStorage.getItem(draftStorageKey);
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // Fallback
+    }
+    return null;
+  }, [sessionId, evaluateurId, initialAnswers, draftStorageKey]);
+
   const [openCategories, setOpenCategories] = useState<Set<string>>(initCats);
   const [answers, setAnswers] = useState<Record<string, PillChoice>>(() => {
     if (initialAnswers) {
@@ -213,6 +229,7 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
       });
       return n2Answers;
     }
+    if (savedDraft?.answers) return savedDraft.answers;
     return {};
   });
 
@@ -225,6 +242,8 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
           s.add(itemId);
         }
       });
+    } else if (savedDraft?.selectedSubs) {
+      savedDraft.selectedSubs.forEach((id: string) => s.add(id));
     }
     return s;
   });
@@ -238,11 +257,38 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
           s.add(item.parent_id);
         }
       });
+    } else if (savedDraft?.selectedSubs) {
+      savedDraft.selectedSubs.forEach((itemId: string) => {
+        const item = items.find(i => i.item_id === itemId);
+        if (item && item.niveau === 4) {
+          s.add(item.parent_id);
+        }
+      });
     }
     return s;
   });
 
-  const [comments, setComments] = useState<Record<string, string>>(initialComments || {});
+  const [comments, setComments] = useState<Record<string, string>>(() => {
+    if (initialComments) return initialComments;
+    if (savedDraft?.comments) return savedDraft.comments;
+    return {};
+  });
+
+  // Auto-save draft changes to localStorage
+  useEffect(() => {
+    if (sessionLocked || initialAnswers) return;
+    const hasData = Object.keys(answers).length > 0 || Object.keys(comments).length > 0 || selectedSubs.size > 0;
+    if (hasData) {
+      localStorage.setItem(
+        draftStorageKey,
+        JSON.stringify({
+          answers,
+          comments,
+          selectedSubs: Array.from(selectedSubs),
+        })
+      );
+    }
+  }, [answers, comments, selectedSubs, sessionLocked, initialAnswers, draftStorageKey]);
   const [springing, setSpringing] = useState<{ id: string; choice: PillChoice } | null>(null);
   const [lastInteracted, setLastInteracted] = useState<string | null>(null);
   const [isShakingSubmit, setIsShakingSubmit] = useState(false);
@@ -416,6 +462,7 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
         const res = await onSubmitPayload(buildPayload());
         setIsSubmitting(false);
         if (res && res.success) {
+          localStorage.removeItem(draftStorageKey);
           setShowVictory(true);
           setTimeout(() => { setShowVictory(false); onComplete?.(); }, 2200);
         } else {
@@ -430,6 +477,7 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
         });
         setIsSubmitting(false);
         if (res.success) {
+          localStorage.removeItem(draftStorageKey);
           setShowVictory(true);
           setTimeout(() => { setShowVictory(false); onComplete?.(); }, 2200);
         } else {
@@ -485,6 +533,16 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm px-4 sm:px-8 py-3.5">
         <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
+            {onBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-all cursor-pointer flex items-center justify-center flex-shrink-0"
+                title="Retour au tableau de bord (Brouillon sauvegardé)"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            )}
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="font-extrabold text-base sm:text-lg text-slate-900 truncate max-w-xs sm:max-w-md">
