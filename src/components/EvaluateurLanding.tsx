@@ -12,6 +12,7 @@ import {
   type Template,
 } from "../lib/api";
 import { HierarchicalEvaluationForm, type HierarchicalItem } from "./HierarchicalEvaluationForm";
+import { ThemeToggle } from "./ui/ThemeToggle";
 import {
   Activity,
   Clock,
@@ -496,13 +497,14 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
             >
               <Plus className="w-4 h-4" /> Proposer un Calibrage
             </button>
+            <ThemeToggle />
             <button
               onClick={handleRefreshAll}
               disabled={loading}
-              className="p-2 bg-slate-800 border border-slate-700 rounded-xl text-slate-300 font-bold hover:bg-slate-700 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-              title="Actualiser"
+              className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white border border-slate-700 transition-colors cursor-pointer disabled:opacity-50"
+              title="Rafraîchir"
             >
-              <RefreshCw className={`w-4 h-4 ${loading || loadingHistory ? "animate-spin" : ""}`} />
+              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             </button>
           </div>
         </div>

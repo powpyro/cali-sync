@@ -14,6 +14,7 @@ import { Button } from "./ui/Button";
 import { Badge } from "./ui/Badge";
 import { Input } from "./ui/Input";
 import { Card } from "./ui/Card";
+import { ThemeToggle } from "./ui/ThemeToggle";
 
 export type LoginRole = "evaluateur" | "gauge" | "admin" | "cockpit";
 
@@ -98,6 +99,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12 relative overflow-hidden bg-slate-950">
+      <div className="absolute top-4 right-4 z-20">
+        <ThemeToggle />
+      </div>
       {/* Background ambient lighting */}
       <div className="absolute inset-0 -z-10">
         <div className="absolute top-1/4 -left-32 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl" />

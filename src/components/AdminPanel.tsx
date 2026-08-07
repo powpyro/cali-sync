@@ -46,6 +46,7 @@ import {
   RotateCcw,
   Trash2,
 } from "lucide-react";
+import { ThemeToggle } from "./ui/ThemeToggle";
 
 interface AdminPanelProps {
   identifiant: string;
@@ -432,17 +433,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={() => {
-              fetchSessions();
-              fetchDemandes();
-            }}
-            disabled={sessionsLoading}
-            className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-300 font-bold hover:bg-slate-700 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${sessionsLoading ? "animate-spin" : ""}`} />
-            Actualiser
-          </button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <button
+              onClick={() => {
+                fetchSessions();
+                fetchDemandes();
+              }}
+              disabled={sessionsLoading}
+              className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-300 font-bold hover:bg-slate-700 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${sessionsLoading ? "animate-spin" : ""}`} />
+              Actualiser
+            </button>
+          </div>
         </div>
       </header>
 
