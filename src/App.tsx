@@ -27,6 +27,7 @@ export function App() {
   // Session context
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isGaugeMode, setIsGaugeMode] = useState(false);
+  const [readOnlySubmission, setReadOnlySubmission] = useState(false);
 
   // ── Login Handler ───────────────────────────────────────────────────────────
   const handleLogin = useCallback((result: LoginResult) => {
@@ -55,12 +56,21 @@ export function App() {
     setScreen("login");
     setActiveSessionId(null);
     setIsGaugeMode(false);
+    setReadOnlySubmission(false);
   }, []);
 
   // ── Select session from landing ─────────────────────────────────────────────
   const handleSelectSession = useCallback((sessionId: string, gauge: boolean) => {
     setActiveSessionId(sessionId);
     setIsGaugeMode(gauge);
+    setReadOnlySubmission(false);
+    setScreen("evaluateur_screen");
+  }, []);
+
+  const handleOpenSubmissionView = useCallback((sessionId: string) => {
+    setActiveSessionId(sessionId);
+    setIsGaugeMode(false);
+    setReadOnlySubmission(true);
     setScreen("evaluateur_screen");
   }, []);
 
@@ -100,6 +110,7 @@ export function App() {
           role="evaluateur"
           onSelectSession={handleSelectSession}
           onOpenCockpit={handleOpenCockpitFromAdmin}
+          onOpenSubmission={handleOpenSubmissionView}
           onBack={handleBackToLogin}
         />
       )}
@@ -122,6 +133,7 @@ export function App() {
           sessionId={activeSessionId}
           evaluateurId={user.identifiant}
           isGaugeMode={isGaugeMode}
+          readOnlySubmission={readOnlySubmission}
           onComplete={handleEvaluationComplete}
         />
       )}

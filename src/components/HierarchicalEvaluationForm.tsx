@@ -46,6 +46,8 @@ export interface HierarchicalEvaluationFormProps {
   callName?: string;
   audioUrl?: string;
   heureFin?: string;
+  initialAnswers?: Record<string, string>;
+  initialComments?: Record<string, string>;
   onSubmitPayload?: (items: Array<{ item_id: string; categorie: string; item: string; statut: string; commentaire?: string }>) => Promise<{ success: boolean; message?: string }>;
   onComplete?: () => void;
 }
@@ -186,6 +188,8 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
   callName = "Appel Client #8492 - Réclamation Facturation",
   audioUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
   heureFin,
+  initialAnswers,
+  initialComments,
   onSubmitPayload,
   onComplete,
 }) => {
@@ -219,10 +223,46 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
   }, [tree]);
 
   const [openCategories, setOpenCategories] = useState<Set<string>>(initCats);
-  const [answers, setAnswers] = useState<Record<string, PillChoice>>({});
-  const [selectedSubs, setSelectedSubs] = useState<Set<string>>(new Set());
-  const [expandedN3, setExpandedN3] = useState<Set<string>>(new Set());
-  const [comments, setComments] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, PillChoice>>(() => {
+    if (initialAnswers) {
+      const n2Answers: Record<string, PillChoice> = {};
+      items.filter(i => i.niveau === 2).forEach(i => {
+        if (initialAnswers[i.item_id]) {
+          n2Answers[i.item_id] = initialAnswers[i.item_id] as PillChoice;
+        }
+      });
+      return n2Answers;
+    }
+    return {};
+  });
+
+  const [selectedSubs, setSelectedSubs] = useState<Set<string>>(() => {
+    const s = new Set<string>();
+    if (initialAnswers) {
+      Object.entries(initialAnswers).forEach(([itemId, status]) => {
+        const item = items.find(i => i.item_id === itemId);
+        if (item && (item.niveau === 3 || item.niveau === 4) && status === "Non") {
+          s.add(itemId);
+        }
+      });
+    }
+    return s;
+  });
+
+  const [expandedN3, setExpandedN3] = useState<Set<string>>(() => {
+    const s = new Set<string>();
+    if (initialAnswers) {
+      Object.entries(initialAnswers).forEach(([itemId, status]) => {
+        const item = items.find(i => i.item_id === itemId);
+        if (item && item.niveau === 4 && status === "Non") {
+          s.add(item.parent_id);
+        }
+      });
+    }
+    return s;
+  });
+
+  const [comments, setComments] = useState<Record<string, string>>(initialComments || {});
   const [springing, setSpringing] = useState<{ id: string; choice: PillChoice } | null>(null);
   const [lastInteracted, setLastInteracted] = useState<string | null>(null);
   const [isShakingSubmit, setIsShakingSubmit] = useState(false);

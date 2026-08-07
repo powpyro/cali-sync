@@ -4,6 +4,7 @@ import {
   getSessionsActives,
   getSessionData,
   listerToutesSessions,
+  getMaSoumission,
   type SessionInfo,
 } from "../lib/api";
 import {
@@ -19,6 +20,7 @@ export interface EvaluateurScreenProps {
   isGaugeMode?: boolean;
   callName?: string;
   audioUrl?: string;
+  readOnlySubmission?: boolean;
   onComplete?: () => void;
 }
 
@@ -29,12 +31,15 @@ export const EvaluateurScreen: React.FC<EvaluateurScreenProps> = ({
   isGaugeMode = false,
   callName,
   audioUrl,
+  readOnlySubmission = false,
   onComplete,
 }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
   const [items, setItems] = useState<HierarchicalItem[]>([]);
+  const [initialAnswers, setInitialAnswers] = useState<Record<string, string> | undefined>(undefined);
+  const [initialComments, setInitialComments] = useState<Record<string, string> | undefined>(undefined);
 
   const loadSessionAndGrid = async () => {
     setLoading(true);
@@ -118,6 +123,14 @@ export const EvaluateurScreen: React.FC<EvaluateurScreenProps> = ({
           { item_id: "item_clo_02", parent_id: "", niveau: 2, categorie_racine_fr: "Clôture & Outils", libelle_fr: "Prise de note complète dans le CRM / Outil métier", criticite: "Standard", est_terminal: true },
         ]);
       }
+
+      if (readOnlySubmission) {
+        const subRes = await getMaSoumission(sessionId, evaluateurId);
+        if (subRes && subRes.success) {
+          setInitialAnswers(subRes.answers);
+          setInitialComments(subRes.comments);
+        }
+      }
     } catch (err) {
       setError("Erreur lors du chargement de la grille d'évaluation.");
     } finally {
@@ -160,11 +173,13 @@ export const EvaluateurScreen: React.FC<EvaluateurScreenProps> = ({
       items={items}
       sessionId={sessionId}
       evaluateurId={evaluateurId}
-      sessionLocked={sessionLocked}
+      sessionLocked={sessionLocked || readOnlySubmission}
       isGaugeMode={isGaugeMode}
       callName={sessionInfo ? `${sessionInfo.nom_session}${sessionInfo.nom_conseiller ? ` — Conseiller : ${sessionInfo.nom_conseiller}` : ""}` : callName}
       audioUrl={sessionInfo?.url_audio || audioUrl}
       heureFin={sessionInfo?.heure_fin}
+      initialAnswers={initialAnswers}
+      initialComments={initialComments}
       onComplete={onComplete}
     />
   );

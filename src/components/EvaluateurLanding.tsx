@@ -1,10 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   getSessionsActives,
   validerPin,
   listerTemplates,
   proposerCalibrage,
   getConfigTemplate,
+  getMesSessions,
+  listerDemandesCalibrage,
+  getRapportPdf,
   type SessionInfo,
   type Template,
 } from "../lib/api";
@@ -36,6 +39,7 @@ interface EvaluateurLandingProps {
   role: "evaluateur" | "gauge";
   onSelectSession: (sessionId: string, isGauge: boolean) => void;
   onOpenCockpit?: (sessionId: string) => void;
+  onOpenSubmission?: (sessionId: string) => void;
   onBack: () => void;
 }
 
@@ -45,11 +49,38 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
   role,
   onSelectSession,
   onOpenCockpit,
+  onOpenSubmission,
   onBack,
 }) => {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Tab State
+  const [activeTab, setActiveTab] = useState<"actives" | "mes_sessions" | "mes_demandes">("actives");
+  const [mySessions, setMySessions] = useState<any[]>([]);
+  const [myDemands, setMyDemands] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const fetchHistory = useCallback(async () => {
+    setLoadingHistory(true);
+    try {
+      const [sessRes, demRes] = await Promise.all([
+        getMesSessions(identifiant),
+        listerDemandesCalibrage(identifiant)
+      ]);
+      if (sessRes.success) setMySessions(sessRes.sessions || []);
+      if (demRes.success) setMyDemands(demRes.demandes || []);
+    } catch (e) {
+      console.error("Error fetching history:", e);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, [identifiant]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
   // Gauge PIN modal state
   const [pinModalSession, setPinModalSession] = useState<string | null>(null);
@@ -91,6 +122,23 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
     } else {
       setSessions([]);
       if (!res?.success) setError(res?.message || "Impossible de charger les sessions.");
+    }
+  };
+
+  const handleRefreshAll = async () => {
+    await Promise.all([fetchSessions(), fetchHistory()]);
+  };
+
+  const handleDownloadPdf = async (sessId: string) => {
+    try {
+      const res = await getRapportPdf(sessId);
+      if (res && res.success && (res as any).pdf_url) {
+        window.open((res as any).pdf_url, "_blank");
+      } else {
+        alert("Le rapport PDF n'est pas encore disponible pour cette session.");
+      }
+    } catch (e) {
+      alert("Erreur lors de la récupération du rapport.");
     }
   };
 
@@ -148,10 +196,14 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
 
   const handleSessionClick = (session: SessionInfo) => {
     if (role === "gauge") {
-      // Direct access to Cockpit for the Gauge's own session
       onSelectSession(session.session_id, true);
     } else {
-      onSelectSession(session.session_id, false);
+      const alreadySubmitted = session.evaluateurs_soumis?.includes(identifiant);
+      if (alreadySubmitted && session.statut !== "OPEN") {
+        onOpenSubmission?.(session.session_id);
+      } else {
+        onSelectSession(session.session_id, false);
+      }
     }
   };
 
@@ -445,12 +497,12 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
               <Plus className="w-4 h-4" /> Proposer un Calibrage
             </button>
             <button
-              onClick={fetchSessions}
+              onClick={handleRefreshAll}
               disabled={loading}
               className="p-2 bg-slate-800 border border-slate-700 rounded-xl text-slate-300 font-bold hover:bg-slate-700 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
               title="Actualiser"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw className={`w-4 h-4 ${loading || loadingHistory ? "animate-spin" : ""}`} />
             </button>
           </div>
         </div>
@@ -465,187 +517,353 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
               <span className="text-sm font-medium">{error}</span>
             </div>
           )}
+          {/* TABS SYSTEM */}
+          <div className="flex border-b border-slate-800 gap-1 pb-px">
+            <button
+              onClick={() => setActiveTab("actives")}
+              className={`px-5 py-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-2 cursor-pointer ${
+                activeTab === "actives"
+                  ? "border-emerald-500 text-white font-extrabold"
+                  : "border-transparent text-slate-400 hover:text-white"
+              }`}
+            >
+              <Activity className="w-4.5 h-4.5" />
+              Sessions Actives ({visibleSessions.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("mes_sessions")}
+              className={`px-5 py-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-2 cursor-pointer ${
+                activeTab === "mes_sessions"
+                  ? "border-emerald-500 text-white font-extrabold"
+                  : "border-transparent text-slate-400 hover:text-white"
+              }`}
+            >
+              <CheckCircle2 className="w-4.5 h-4.5" />
+              Mes Sessions ({mySessions.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("mes_demandes")}
+              className={`px-5 py-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-2 cursor-pointer ${
+                activeTab === "mes_demandes"
+                  ? "border-emerald-500 text-white font-extrabold"
+                  : "border-transparent text-slate-400 hover:text-white"
+              }`}
+            >
+              <Inbox className="w-4.5 h-4.5" />
+              Mes Demandes ({myDemands.length})
+            </button>
+          </div>
 
-          {loading && sessions.length === 0 && (
-            <div className="glass-card p-16 rounded-2xl flex flex-col items-center justify-center space-y-4">
-              <Loader2 className="w-10 h-10 text-emerald-500 animate-spin" />
-              <p className="text-slate-400 text-sm font-medium">Chargement des sessions…</p>
-            </div>
-          )}
+          {/* TAB 1: SESSIONS ACTIVES */}
+          {activeTab === "actives" && (
+            <div className="space-y-6">
+              {loading && sessions.length === 0 && (
+                <div className="glass-card p-16 rounded-2xl flex flex-col items-center justify-center space-y-4">
+                  <Loader2 className="w-10 h-10 text-emerald-500 animate-spin" />
+                  <p className="text-slate-400 text-sm font-medium">Chargement des sessions…</p>
+                </div>
+              )}
 
-          {!loading && visibleSessions.length === 0 && (
-            <div className="glass-card p-16 rounded-2xl flex flex-col items-center justify-center space-y-4 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center">
-                <Inbox className="w-8 h-8 text-slate-500" />
-              </div>
-              <div className="max-w-md space-y-2">
-                <h3 className="text-lg font-bold text-white">Aucune session ouverte actuellement</h3>
-                <p className="text-sm text-slate-400 leading-relaxed">
-                  Aucun calibrage n'est ouvert aux évaluateurs pour l'instant.
-                  <br />
-                  Vous pouvez <strong className="text-teal-400">proposer un calibrage</strong> ci-dessus ou revenir dès qu'une session sera ouverte !
-                </p>
-              </div>
-              <button
-                onClick={() => setShowProposalModal(true)}
-                className="mt-2 px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-extrabold text-xs rounded-xl transition-all shadow-md shadow-teal-600/20 flex items-center gap-2 cursor-pointer"
-              >
-                <Plus className="w-4 h-4" /> Demander un calibrage
-              </button>
-            </div>
-          )}
+              {!loading && visibleSessions.length === 0 && (
+                <div className="glass-card p-16 rounded-2xl flex flex-col items-center justify-center space-y-4 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center">
+                    <Inbox className="w-8 h-8 text-slate-500" />
+                  </div>
+                  <div className="max-w-md space-y-2">
+                    <h3 className="text-lg font-bold text-white">Aucune session ouverte actuellement</h3>
+                    <p className="text-sm text-slate-400 leading-relaxed">
+                      Aucun calibrage n'est ouvert aux évaluateurs pour l'instant.
+                      <br />
+                      Vous pouvez <strong className="text-teal-400">proposer un calibrage</strong> ci-dessus ou revenir dès qu'une session sera ouverte !
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowProposalModal(true)}
+                    className="mt-2 px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-extrabold text-xs rounded-xl transition-all shadow-md shadow-teal-600/20 flex items-center gap-2 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" /> Demander un calibrage
+                  </button>
+                </div>
+              )}
 
-          {visibleSessions.map((session) => {
-            const countdownSec = getCountdownSeconds(session);
-            const alreadySubmitted = session.evaluateurs_soumis?.includes(identifiant);
-            const isUrgent = countdownSec > 0 && countdownSec <= 120;
+              {visibleSessions.map((session) => {
+                const countdownSec = getCountdownSeconds(session);
+                const alreadySubmitted = session.evaluateurs_soumis?.includes(identifiant);
+                const isUrgent = countdownSec > 0 && countdownSec <= 120;
 
-            return (
-              <div
-                key={session.session_id}
-                className={`glass-card rounded-2xl p-6 sm:p-8 space-y-5 transition-all ${
-                  alreadySubmitted
-                    ? "opacity-70 border-emerald-500/30"
-                    : isUrgent
-                    ? "border-rose-500/40 shadow-lg shadow-rose-500/5"
-                    : "hover:border-slate-600"
-                }`}
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-lg font-extrabold text-white">
-                        {session.nom_session || session.session_id}
-                      </h3>
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
-                          session.statut === "OPEN"
-                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                            : session.statut === "PENDING_GAUGE"
-                            ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/30"
-                            : "bg-slate-800 text-slate-400 border-slate-700"
-                        }`}
-                      >
-                        {session.statut === "OPEN"
-                          ? "En cours"
-                          : session.statut === "PENDING_GAUGE"
-                          ? "Attente Gauge"
-                          : session.statut}
-                      </span>
+                return (
+                  <div
+                    key={session.session_id}
+                    className={`glass-card rounded-2xl p-6 sm:p-8 space-y-5 transition-all ${
+                      alreadySubmitted
+                        ? "opacity-70 border-emerald-500/30"
+                        : isUrgent
+                        ? "border-rose-500/40 shadow-lg shadow-rose-500/5"
+                        : "hover:border-slate-600"
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg font-extrabold text-white">
+                            {session.nom_session || session.session_id}
+                          </h3>
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                              session.statut === "OPEN"
+                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                : session.statut === "PENDING_GAUGE"
+                                ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/30"
+                                : "bg-slate-800 text-slate-400 border-slate-700"
+                            }`}
+                          >
+                            {session.statut === "OPEN"
+                              ? "En cours"
+                              : session.statut === "PENDING_GAUGE"
+                              ? "Attente Gauge"
+                              : session.statut}
+                          </span>
 
-                      {alreadySubmitted && (
-                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3" /> Déjà soumis
-                        </span>
+                          {alreadySubmitted && (
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" /> Déjà soumis
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-400 font-medium">
+                          ID: {session.session_id}
+                        </div>
+                      </div>
+
+                      {session.statut === "OPEN" && countdownSec > 0 && (
+                        <div
+                          className={`flex items-center gap-2 px-5 py-3 rounded-2xl border ${
+                            isUrgent
+                              ? "bg-rose-500/10 border-rose-500/30 text-rose-400"
+                              : "bg-slate-900/60 border-slate-700 text-white"
+                          }`}
+                        >
+                          <Clock className={`w-5 h-5 ${isUrgent ? "text-rose-400 animate-pulse" : "text-slate-400"}`} />
+                          <span className={`font-black text-2xl tabular-nums tracking-tight ${isUrgent ? "text-rose-400" : ""}`}>
+                            {formatCountdown(countdownSec)}
+                          </span>
+                        </div>
+                      )}
+
+                      {session.statut === "PENDING_GAUGE" && (
+                        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
+                          <Lock className="w-4 h-4 text-indigo-400" />
+                          <span className="text-xs font-bold text-indigo-300">Code PIN requis</span>
+                        </div>
                       )}
                     </div>
-                    <div className="text-xs text-slate-400 font-medium">
-                      ID: {session.session_id}
-                    </div>
-                  </div>
 
-                  {session.statut === "OPEN" && countdownSec > 0 && (
-                    <div
-                      className={`flex items-center gap-2 px-5 py-3 rounded-2xl border ${
-                        isUrgent
-                          ? "bg-rose-500/10 border-rose-500/30 text-rose-400"
-                          : "bg-slate-900/60 border-slate-700 text-white"
-                      }`}
-                    >
-                      <Clock className={`w-5 h-5 ${isUrgent ? "text-rose-400 animate-pulse" : "text-slate-400"}`} />
-                      <span className={`font-black text-2xl tabular-nums tracking-tight ${isUrgent ? "text-rose-400" : ""}`}>
-                        {formatCountdown(countdownSec)}
-                      </span>
+                    <div className="flex items-center gap-6 text-sm">
+                      <div className="flex items-center gap-2 text-slate-400">
+                        <Users className="w-4 h-4" />
+                        <span className="font-bold text-white">{session.nombre_evaluateurs_soumis}</span>
+                        <span className="text-xs">soumission(s)</span>
+                      </div>
+                      {session.duree_minutes && (
+                        <div className="flex items-center gap-2 text-slate-400">
+                          <Clock className="w-4 h-4" />
+                          <span className="text-xs">{session.duree_minutes} min</span>
+                        </div>
+                      )}
+                      {session.gauge_soumis && (
+                        <div className="flex items-center gap-1.5 text-emerald-400">
+                          <Shield className="w-3.5 h-3.5" />
+                          <span className="text-xs font-bold">Gauge ✓</span>
+                        </div>
+                      )}
                     </div>
-                  )}
 
-                  {session.statut === "PENDING_GAUGE" && (
-                    <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
-                      <Lock className="w-4 h-4 text-indigo-400" />
-                      <span className="text-xs font-bold text-indigo-300">Code PIN requis</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-6 text-sm">
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <Users className="w-4 h-4" />
-                    <span className="font-bold text-white">{session.nombre_evaluateurs_soumis}</span>
-                    <span className="text-xs">soumission(s)</span>
-                  </div>
-                  {session.duree_minutes && (
-                    <div className="flex items-center gap-2 text-slate-400">
-                      <Clock className="w-4 h-4" />
-                      <span className="text-xs">{session.duree_minutes} min</span>
-                    </div>
-                  )}
-                  {session.gauge_soumis && (
-                    <div className="flex items-center gap-1.5 text-emerald-400">
-                      <Shield className="w-3.5 h-3.5" />
-                      <span className="text-xs font-bold">Gauge ✓</span>
-                    </div>
-                  )}
-                </div>
-
-                {role === "gauge" ? (
-                  <div className="space-y-2 pt-2">
-                    {!session.gauge_soumis ? (
+                    {role === "gauge" ? (
+                      <div className="space-y-2 pt-2">
+                        {!session.gauge_soumis ? (
+                          <button
+                            onClick={() => onSelectSession(session.session_id, true)}
+                            className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-sm rounded-xl transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                          >
+                            <FileText className="w-4.5 h-4.5" /> ✏️ Remplir l'évaluation Gauge
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => onOpenCockpit?.(session.session_id)}
+                              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-sm rounded-xl transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                            >
+                              <Sparkles className="w-4.5 h-4.5" /> 🚀 Accéder au Cockpit Live
+                            </button>
+                            {session.statut !== "CLOSED" && (
+                              <button
+                                onClick={() => handleEditGauge(session)}
+                                disabled={fetchingConfigItems}
+                                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-indigo-300 border border-indigo-500/30 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                              >
+                                {fetchingConfigItems ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <FileText className="w-4 h-4 text-indigo-400" />
+                                )}
+                                ✏️ Consulter / Modifier la Gauge de référence
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    ) : !alreadySubmitted ? (
                       <button
-                        onClick={() => onSelectSession(session.session_id, true)}
-                        className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-sm rounded-xl transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                        onClick={() => handleSessionClick(session)}
+                        className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-sm rounded-xl transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer"
                       >
-                        <FileText className="w-4.5 h-4.5" /> ✏️ Remplir l'évaluation Gauge
+                        <ArrowRight className="w-4.5 h-4.5" /> 🟢 Commencer l'évaluation
+                      </button>
+                    ) : session.statut === "OPEN" ? (
+                      <button
+                        onClick={() => handleSessionClick(session)}
+                        className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs rounded-xl transition-all shadow-md shadow-amber-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <FileText className="w-4 h-4" /> ✏️ Modifier mon évaluation (Avant Clôture)
                       </button>
                     ) : (
-                      <>
-                        <button
-                          onClick={() => onOpenCockpit?.(session.session_id)}
-                          className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-sm rounded-xl transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer"
-                        >
-                          <Sparkles className="w-4.5 h-4.5" /> 🚀 Accéder au Cockpit Live
-                        </button>
-                        {session.statut !== "CLOSED" && (
-                          <button
-                            onClick={() => handleEditGauge(session)}
-                            disabled={fetchingConfigItems}
-                            className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-indigo-300 border border-indigo-500/30 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                          >
-                            {fetchingConfigItems ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <FileText className="w-4 h-4 text-indigo-400" />
-                            )}
-                            ✏️ Consulter / Modifier la Gauge de référence
-                          </button>
-                        )}
-                      </>
+                      <button
+                        onClick={() => handleSessionClick(session)}
+                        className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" /> 👁️ Consulter mon évaluation (Lecture seule)
+                      </button>
                     )}
                   </div>
-                ) : !alreadySubmitted ? (
-                  <button
-                    onClick={() => handleSessionClick(session)}
-                    className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-sm rounded-xl transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <ArrowRight className="w-4.5 h-4.5" /> 🟢 Commencer l'évaluation
-                  </button>
-                ) : session.statut === "OPEN" ? (
-                  <button
-                    onClick={() => handleSessionClick(session)}
-                    className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs rounded-xl transition-all shadow-md shadow-amber-600/20 flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <FileText className="w-4 h-4" /> ✏️ Modifier mon évaluation (Avant Clôture)
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleSessionClick(session)}
-                    className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" /> 👁️ Consulter mon évaluation (Lecture seule)
-                  </button>
-                )}
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          )}
+
+          {/* TAB 2: MES SESSIONS */}
+          {activeTab === "mes_sessions" && (
+            <div className="space-y-4">
+              {loadingHistory && mySessions.length === 0 ? (
+                <div className="glass-card p-12 rounded-2xl flex flex-col items-center justify-center space-y-4">
+                  <Loader2 className="w-10 h-10 text-emerald-500 animate-spin" />
+                  <p className="text-slate-400 text-sm font-medium">Chargement de votre historique…</p>
+                </div>
+              ) : mySessions.length === 0 ? (
+                <div className="glass-card p-12 rounded-2xl text-center space-y-4">
+                  <Inbox className="w-12 h-12 text-slate-500 mx-auto" />
+                  <p className="text-slate-400 text-sm">Vous n'avez participé à aucune session de calibrage pour le moment.</p>
+                </div>
+              ) : (
+                mySessions.map((sess) => (
+                  <div key={sess.session_id} className="glass-card rounded-2xl p-6 border border-slate-800 space-y-4 hover:border-slate-700 transition-all">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-extrabold text-white">{sess.nom_session}</h3>
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                            sess.statut === "CLOSED" ? "bg-slate-800 text-slate-400 border border-slate-700" :
+                            sess.statut === "LOCKED" ? "bg-amber-500/10 text-amber-300 border border-amber-500/20" :
+                            "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
+                          }`}>
+                            {sess.statut === "CLOSED" ? "Clôturée" : sess.statut === "LOCKED" ? "Arbitrage" : "En cours"}
+                          </span>
+                        </div>
+                        {sess.nom_conseiller && (
+                          <p className="text-xs text-slate-400 mt-1">Conseiller : <span className="text-slate-200">{sess.nom_conseiller}</span></p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {sess.roles.map((r: string) => (
+                          <span key={r} className={`px-2.5 py-1 rounded-lg text-xs font-extrabold border ${
+                            r === "Animateur" ? "bg-indigo-500/10 text-indigo-300 border-indigo-500/20" :
+                            r === "Gauge" ? "bg-purple-500/10 text-purple-300 border-purple-500/20" :
+                            "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
+                          }`}>
+                            {r}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-2 pt-2 border-t border-slate-900">
+                      {sess.roles.some((r: string) => r === "Animateur" || r === "Gauge") && (
+                        <button
+                          onClick={() => onOpenCockpit?.(sess.session_id)}
+                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-indigo-600/10"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" /> 📊 Cockpit Live
+                        </button>
+                      )}
+                      {sess.roles.includes("Évaluateur") && (
+                        <button
+                          onClick={() => onOpenSubmission?.(sess.session_id)}
+                          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
+                        >
+                          <UserCheck className="w-3.5 h-3.5 text-emerald-400" /> 👁️ Consulter ma soumission
+                        </button>
+                      )}
+                      {sess.statut === "CLOSED" && (
+                        <button
+                          onClick={() => handleDownloadPdf(sess.session_id)}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-emerald-600/10"
+                        >
+                          <FileText className="w-3.5 h-3.5" /> 📄 Rapport PDF
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: MES DEMANDES */}
+          {activeTab === "mes_demandes" && (
+            <div className="space-y-4">
+              {loadingHistory && myDemands.length === 0 ? (
+                <div className="glass-card p-12 rounded-2xl flex flex-col items-center justify-center space-y-4">
+                  <Loader2 className="w-10 h-10 text-emerald-500 animate-spin" />
+                  <p className="text-slate-400 text-sm font-medium">Chargement de vos demandes…</p>
+                </div>
+              ) : myDemands.length === 0 ? (
+                <div className="glass-card p-12 rounded-2xl text-center space-y-4">
+                  <Inbox className="w-12 h-12 text-slate-500 mx-auto" />
+                  <p className="text-slate-400 text-sm">Vous n'avez proposé aucune demande de calibrage.</p>
+                </div>
+              ) : (
+                myDemands.map((dem) => (
+                  <div key={dem.demande_id} className="glass-card rounded-2xl p-6 border border-slate-800 space-y-4 hover:border-slate-700 transition-all">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-extrabold text-white">{dem.nom_session}</h3>
+                          <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${
+                            dem.statut === "PENDING_APPROVAL" ? "bg-amber-500/10 text-amber-300 border-amber-500/20" :
+                            dem.statut === "APPROVED" ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20" :
+                            "bg-rose-500/10 text-rose-300 border-rose-500/20"
+                          }`}>
+                            {dem.statut === "PENDING_APPROVAL" ? "En attente" : dem.statut === "APPROVED" ? "Approuvée" : "Rejetée"}
+                          </span>
+                        </div>
+                        {dem.nom_conseiller && (
+                          <p className="text-xs text-slate-400 mt-1">Conseiller : <span className="text-slate-200">{dem.nom_conseiller}</span></p>
+                        )}
+                        {dem.date_demande && (
+                          <p className="text-[10px] text-slate-500 mt-1">Demandée le : {new Date(dem.date_demande).toLocaleString()}</p>
+                        )}
+                      </div>
+
+                      <div className="text-xs text-slate-400 bg-slate-900 border border-slate-800 px-3.5 py-2 rounded-xl space-y-0.5">
+                        <p>Template : <span className="text-white font-bold">{dem.template_id}</span></p>
+                        <p>Durée : <span className="text-white font-bold">{dem.duree_minutes} mins</span></p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
       </main>
 

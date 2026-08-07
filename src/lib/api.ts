@@ -407,8 +407,16 @@ export async function proposerCalibrage(payload: {
   return callGAS("proposer_calibrage", payload as unknown as Record<string, unknown>);
 }
 
-export async function listerDemandesCalibrage(): Promise<DemandesListResponse> {
-  return callGAS("lister_demandes_calibrage") as unknown as Promise<DemandesListResponse>;
+export async function listerDemandesCalibrage(evaluateurId?: string): Promise<DemandesListResponse> {
+  return callGAS("lister_demandes_calibrage", evaluateurId ? { evaluateur_id: evaluateurId } : {}) as unknown as Promise<DemandesListResponse>;
+}
+
+export async function getMesSessions(evaluateurId: string): Promise<{ success: boolean; sessions: any[] }> {
+  return callGAS("get_mes_sessions", { evaluateur_id: evaluateurId }) as unknown as Promise<{ success: boolean; sessions: any[] }>;
+}
+
+export async function getMaSoumission(sessionId: string, evaluateurId: string): Promise<{ success: boolean; answers: Record<string, string>; comments: Record<string, string> }> {
+  return callGAS("get_ma_soumission", { session_id: sessionId, evaluateur_id: evaluateurId }) as unknown as Promise<{ success: boolean; answers: Record<string, string>; comments: Record<string, string> }>;
 }
 
 export async function approuverDemandeCalibrage(
