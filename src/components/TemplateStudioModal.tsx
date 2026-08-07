@@ -14,7 +14,9 @@ import {
   HelpCircle,
   ShieldAlert,
   ChevronRight,
-  Globe
+  Globe,
+  ArrowUp,
+  ArrowDown
 } from "lucide-react";
 import { getConfigTemplate, dupliquerTemplate, creerVersionAnglaiseGenii, sauvegarderGrilleComplete, type Template } from "../lib/api";
 
@@ -380,6 +382,41 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
     );
   };
 
+  const moveItem = (itemId: string, direction: "up" | "down") => {
+    setItems((prevItems) => {
+      const targetIndex = prevItems.findIndex((it) => it.item_id === itemId);
+      if (targetIndex === -1) return prevItems;
+
+      const targetItem = prevItems[targetIndex];
+
+      const siblingIndices: number[] = [];
+      prevItems.forEach((it, idx) => {
+        if (it.niveau === targetItem.niveau && it.parent_id === targetItem.parent_id) {
+          siblingIndices.push(idx);
+        }
+      });
+
+      const posInSiblings = siblingIndices.indexOf(targetIndex);
+      if (posInSiblings === -1) return prevItems;
+
+      let swapIndex = -1;
+      if (direction === "up" && posInSiblings > 0) {
+        swapIndex = siblingIndices[posInSiblings - 1];
+      } else if (direction === "down" && posInSiblings < siblingIndices.length - 1) {
+        swapIndex = siblingIndices[posInSiblings + 1];
+      }
+
+      if (swapIndex === -1) return prevItems;
+
+      const newItems = [...prevItems];
+      const temp = newItems[targetIndex];
+      newItems[targetIndex] = newItems[swapIndex];
+      newItems[swapIndex] = temp;
+
+      return newItems;
+    });
+  };
+
   const explicitCategories = items.filter((it) => it.niveau === 1);
 
   let displayCategories: { item_id: string; libelle: string; isExplicit: boolean }[] = [];
@@ -570,7 +607,27 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
                           />
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
+                          {cat.isExplicit && (
+                            <div className="flex items-center gap-0.5 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                              <button
+                                type="button"
+                                onClick={() => moveItem(cat.item_id, "up")}
+                                className="p-1 text-slate-400 hover:text-teal-300 hover:bg-slate-800 rounded transition-all cursor-pointer"
+                                title="Déplacer vers le haut"
+                              >
+                                <ArrowUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => moveItem(cat.item_id, "down")}
+                                className="p-1 text-slate-400 hover:text-teal-300 hover:bg-slate-800 rounded transition-all cursor-pointer"
+                                title="Déplacer vers le bas"
+                              >
+                                <ArrowDown className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
                           <button
                             type="button"
                             onClick={() => addItem(2, cat.item_id, cat.libelle)}
@@ -614,7 +671,25 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
                                   </div>
                                 </div>
 
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1.5">
+                                  <div className="flex items-center gap-0.5 bg-slate-900 p-1 rounded-xl border border-slate-800">
+                                    <button
+                                      type="button"
+                                      onClick={() => moveItem(n2.item_id, "up")}
+                                      className="p-1 text-slate-400 hover:text-indigo-300 hover:bg-slate-800 rounded transition-all cursor-pointer"
+                                      title="Déplacer vers le haut"
+                                    >
+                                      <ArrowUp className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => moveItem(n2.item_id, "down")}
+                                      className="p-1 text-slate-400 hover:text-indigo-300 hover:bg-slate-800 rounded transition-all cursor-pointer"
+                                      title="Déplacer vers le bas"
+                                    >
+                                      <ArrowDown className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                   <button
                                     type="button"
                                     onClick={() => addItem(3, n2.item_id, cat.libelle)}
@@ -663,6 +738,24 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
                                             />
                                           </div>
                                           <div className="flex items-center gap-1">
+                                            <div className="flex items-center gap-0.5 bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+                                              <button
+                                                type="button"
+                                                onClick={() => moveItem(n3.item_id, "up")}
+                                                className="p-1 text-slate-400 hover:text-purple-300 hover:bg-slate-800 rounded transition-all cursor-pointer"
+                                                title="Déplacer vers le haut"
+                                              >
+                                                <ArrowUp className="w-3 h-3" />
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => moveItem(n3.item_id, "down")}
+                                                className="p-1 text-slate-400 hover:text-purple-300 hover:bg-slate-800 rounded transition-all cursor-pointer"
+                                                title="Déplacer vers le bas"
+                                              >
+                                                <ArrowDown className="w-3 h-3" />
+                                              </button>
+                                            </div>
                                             <button
                                               type="button"
                                               onClick={() => addItem(4, n3.item_id, cat.libelle)}
@@ -699,13 +792,33 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
                                                     className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 font-medium text-white text-xs focus:outline-none focus:border-rose-500"
                                                     placeholder="Libellé de la précision N4..."
                                                   />
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => deleteItem(n4.item_id)}
-                                                    className="p-1 text-slate-500 hover:text-rose-400 cursor-pointer"
-                                                  >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                  </button>
+                                                  <div className="flex items-center gap-1">
+                                                    <div className="flex items-center gap-0.5 bg-slate-900 p-0.5 rounded-lg border border-slate-800">
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => moveItem(n4.item_id, "up")}
+                                                        className="p-0.5 text-slate-400 hover:text-rose-300 hover:bg-slate-800 rounded transition-all cursor-pointer"
+                                                        title="Déplacer vers le haut"
+                                                      >
+                                                        <ArrowUp className="w-3 h-3" />
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => moveItem(n4.item_id, "down")}
+                                                        className="p-0.5 text-slate-400 hover:text-rose-300 hover:bg-slate-800 rounded transition-all cursor-pointer"
+                                                        title="Déplacer vers le bas"
+                                                      >
+                                                        <ArrowDown className="w-3 h-3" />
+                                                      </button>
+                                                    </div>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => deleteItem(n4.item_id)}
+                                                      className="p-1 text-slate-500 hover:text-rose-400 cursor-pointer"
+                                                    >
+                                                      <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                  </div>
                                                 </div>
 
                                                 {/* Rule Controls for N4 */}
