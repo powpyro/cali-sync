@@ -11,6 +11,7 @@ import {
   reinitialiserArbitrages,
   getRapportPdf,
   supprimerTemplate,
+  modifierRoleEvaluateur,
   getApiUrl,
   setApiUrl,
   type SessionInfo,
@@ -1037,6 +1038,66 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
                 </div>
               ))}
+            </div>
+          </section>
+
+          {/* ── Section 4: Gestion des Utilisateurs & Rôles ─────────────────── */}
+          <section className="glass-card rounded-2xl p-6 sm:p-8 space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-2 text-white font-bold text-base">
+                <Users className="w-5 h-5 text-indigo-400" /> Registre des Utilisateurs & Rôles
+              </div>
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30">
+                {evaluateurs.length} utilisateur(s)
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {evaluateurs.map((user) => {
+                const currentRole = user.role || (user.identifiant === "admin" || user.identifiant === "oumar.toure" ? "admin" : "evaluateur");
+                return (
+                  <div key={user.identifiant} className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-0.5">
+                        <div className="font-extrabold text-white text-sm">{user.nom_complet}</div>
+                        <div className="text-xs text-slate-400 font-mono">@{user.identifiant}</div>
+                      </div>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${
+                        currentRole === "admin" ? "bg-amber-500/10 text-amber-400 border-amber-500/30" :
+                        currentRole === "animateur" ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/30" :
+                        "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                      }`}>
+                        {currentRole.toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-xs text-slate-400">
+                      <span>Sessions : <strong className="text-white">{user.nombre_sessions || 0}</strong></span>
+                      <select
+                        value={currentRole}
+                        onChange={async (e) => {
+                          const newRole = e.target.value as "evaluateur" | "animateur" | "admin";
+                          setActionLoadingId(user.identifiant);
+                          const res = await modifierRoleEvaluateur(user.identifiant, newRole);
+                          setActionLoadingId(null);
+                          if (res.success) {
+                            setActionFeedback({ success: true, message: `Rôle de ${user.nom_complet} mis à jour : ${newRole}` });
+                            fetchEvaluateurs();
+                          } else {
+                            setActionFeedback({ success: false, message: res.message || "Erreur lors du changement de rôle." });
+                          }
+                        }}
+                        disabled={actionLoadingId === user.identifiant}
+                        className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer disabled:opacity-50"
+                      >
+                        <option value="evaluateur">Évaluateur</option>
+                        <option value="animateur">Animateur</option>
+                        <option value="admin">Administrateur</option>
+                      </select>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </section>
 

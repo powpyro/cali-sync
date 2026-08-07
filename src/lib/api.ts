@@ -39,6 +39,7 @@ export interface ProfilEvaluateur {
   nombre_sessions_participes?: number;
   nombre_sessions_ratees?: number;
   nombre_sessions_animees?: number;
+  role?: "evaluateur" | "animateur" | "admin";
 }
 
 export interface LoginResponse {
@@ -311,6 +312,7 @@ async function callGAS(
     "creer_version_anglaise_genii",
     "enregistrer_decision_finale",
     "enregistrer_decisions_batch",
+    "modifier_role_evaluateur",
   ].includes(action);
 
   const queryParams = new URLSearchParams({
@@ -385,8 +387,8 @@ export async function listerEvaluateurs(): Promise<ListerEvaluateursResponse> {
   return callGAS("lister_evaluateurs") as unknown as Promise<ListerEvaluateursResponse>;
 }
 
-export async function creerEvaluateur(identifiant: string, nomComplet: string): Promise<ApiResponse> {
-  return callGAS("creer_evaluateur", { identifiant, nom_complet: nomComplet });
+export async function creerEvaluateur(identifiant: string, nomComplet: string, role?: string): Promise<ApiResponse> {
+  return callGAS("creer_evaluateur", { identifiant, nom_complet: nomComplet, role });
 }
 
 export async function proposerCalibrage(payload: {
@@ -659,6 +661,16 @@ export async function sauvegarderGrilleComplete(
     template_id: templateId,
     nom: nomTemplate,
     items: items,
+  });
+}
+
+export async function modifierRoleEvaluateur(
+  targetIdentifiant: string,
+  nouveauRole: "evaluateur" | "animateur" | "admin"
+): Promise<ApiResponse> {
+  return callGAS("modifier_role_evaluateur", {
+    target_identifiant: targetIdentifiant,
+    nouveau_role: nouveauRole,
   });
 }
 

@@ -5,10 +5,8 @@ import {
   User,
   UserPlus,
   ArrowRight,
-  Shield,
   CheckCircle2,
   AlertCircle,
-  Lock,
 } from "lucide-react";
 import { Button } from "./ui/Button";
 import { Badge } from "./ui/Badge";
@@ -29,18 +27,12 @@ interface LoginScreenProps {
   onLogin: (result: LoginResult) => void;
 }
 
-const ADMIN_PIN = "0607";
-
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
-  const [step, setStep] = useState<"identify" | "create_profile" | "admin_pin">("identify");
+  const [step, setStep] = useState<"identify" | "create_profile">("identify");
   const [identifiant, setIdentifiant] = useState("");
   const [nomComplet, setNomComplet] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const [adminPin, setAdminPin] = useState("");
-  const [adminPinError, setAdminPinError] = useState(false);
-  const [adminPinShake, setAdminPinShake] = useState(false);
 
   const handleIdentify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +50,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
     if (res.success && res.exists && res.profil) {
       setNomComplet(res.profil.nom_complet);
-      onLogin({ identifiant: cleanId, nomComplet: res.profil.nom_complet, role: "evaluateur" });
+      const userRole = (res.profil.role as LoginRole) || (cleanId === "admin" || cleanId === "oumar.toure" ? "admin" : "evaluateur");
+      onLogin({ identifiant: cleanId, nomComplet: res.profil.nom_complet, role: userRole });
     } else if (res.success && !res.exists) {
       setStep("create_profile");
     } else {
@@ -75,25 +68,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
     setLoading(true);
     setError(null);
 
-    const res = await creerEvaluateur(identifiant, nomComplet.trim());
+    const defaultRole: LoginRole = (identifiant === "admin" || identifiant === "oumar.toure") ? "admin" : "evaluateur";
+    const res = await creerEvaluateur(identifiant, nomComplet.trim(), defaultRole);
     setLoading(false);
 
     if (res.success) {
-      onLogin({ identifiant, nomComplet: nomComplet.trim(), role: "evaluateur" });
+      const assignedRole = (res.role as LoginRole) || defaultRole;
+      onLogin({ identifiant, nomComplet: nomComplet.trim(), role: assignedRole });
     } else {
       setError(res.message || "Erreur lors de la création du profil.");
-    }
-  };
-
-  const handleAdminPin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (adminPin === ADMIN_PIN) {
-      onLogin({ identifiant: identifiant || "admin", nomComplet: nomComplet || "Administrateur", role: "admin" });
-    } else {
-      setAdminPinError(true);
-      setAdminPinShake(true);
-      setAdminPin("");
-      setTimeout(() => setAdminPinShake(false), 400);
     }
   };
 
@@ -172,15 +155,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                 Accéder aux sessions
               </Button>
             </form>
-
-            <div className="pt-4 border-t border-slate-800/80 text-center">
-              <button
-                onClick={() => setStep("admin_pin")}
-                className="text-xs text-slate-500 hover:text-amber-400 font-semibold transition-colors flex items-center justify-center gap-1.5 mx-auto cursor-pointer"
-              >
-                <Lock className="w-3.5 h-3.5" /> Accès Admin / Animateur
-              </button>
-            </div>
           </Card>
         )}
 
@@ -240,72 +214,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                   className="flex-1"
                 >
                   Enregistrer & Continuer
-                </Button>
-              </div>
-            </form>
-          </Card>
-        )}
-
-        {/* Step: Admin PIN */}
-        {step === "admin_pin" && (
-          <Card
-            className={`p-8 space-y-6 animate-scale-up border border-slate-800 ${
-              adminPinShake ? "animate-shake" : ""
-            }`}
-          >
-            <div className="text-center space-y-1">
-              <div className="mx-auto w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-3">
-                <Shield className="w-6 h-6 text-amber-400" />
-              </div>
-              <h2 className="text-lg font-extrabold text-white">Console Administration</h2>
-              <p className="text-xs text-slate-400">Saisissez le code secret administrateur.</p>
-            </div>
-
-            <form onSubmit={handleAdminPin} className="space-y-4">
-              <input
-                type="password"
-                value={adminPin}
-                onChange={(e) => {
-                  setAdminPin(e.target.value);
-                  setAdminPinError(false);
-                }}
-                placeholder="Code secret admin"
-                autoFocus
-                className={`w-full text-center text-2xl font-black tracking-widest px-4 py-3.5 rounded-xl bg-slate-950 border transition-all focus:outline-none ${
-                  adminPinError
-                    ? "border-rose-500 text-rose-400 focus:ring-2 focus:ring-rose-500/30"
-                    : "border-slate-800 text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
-                }`}
-              />
-
-              {adminPinError && (
-                <p className="text-xs text-rose-400 font-semibold text-center">
-                  Code secret incorrect. Réessayez.
-                </p>
-              )}
-
-              <div className="flex gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="md"
-                  onClick={() => {
-                    setStep("identify");
-                    setAdminPin("");
-                    setAdminPinError(false);
-                  }}
-                >
-                  Retour
-                </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="md"
-                  disabled={!adminPin}
-                  icon={<Shield className="w-4 h-4" />}
-                  className="flex-1 bg-amber-600 hover:bg-amber-500 border-amber-500/30 shadow-amber-600/20"
-                >
-                  Accéder à la console
                 </Button>
               </div>
             </form>
