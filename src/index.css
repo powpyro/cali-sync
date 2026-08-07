@@ -1,8 +1,10 @@
 @import "tailwindcss";
+@import "./styles/design-tokens.css";
+@import "./styles/components.css";
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-900 antialiased selection:bg-emerald-500 selection:text-white min-h-screen font-sans;
+    @apply bg-slate-950 text-slate-100 antialiased selection:bg-teal-500 selection:text-white min-h-screen font-sans;
   }
 }
 
