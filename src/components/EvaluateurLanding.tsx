@@ -760,20 +760,30 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
                       >
                         <ArrowRight className="w-4.5 h-4.5" /> 🟢 Commencer l'évaluation
                       </button>
-                    ) : session.statut === "OPEN" ? (
-                      <button
-                        onClick={() => handleSessionClick(session)}
-                        className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs rounded-xl transition-all shadow-md shadow-amber-600/20 flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        <FileText className="w-4 h-4" /> ✏️ Modifier mon évaluation (Avant Clôture)
-                      </button>
                     ) : (
-                      <button
-                        onClick={() => handleSessionClick(session)}
-                        className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400" /> 👁️ Consulter mon évaluation (Lecture seule)
-                      </button>
+                      <div className="space-y-2 pt-1">
+                        {session.statut === "OPEN" ? (
+                          <button
+                            onClick={() => handleSessionClick(session)}
+                            className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs rounded-xl transition-all shadow-md shadow-amber-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                          >
+                            <FileText className="w-4 h-4" /> ✏️ Modifier mon évaluation (Avant Clôture)
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleSessionClick(session)}
+                            className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 flex items-center justify-center gap-2 cursor-pointer"
+                          >
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" /> 👁️ Consulter mon évaluation (Lecture seule)
+                          </button>
+                        )}
+                        <button
+                          onClick={() => onOpenCockpit?.(session.session_id)}
+                          className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded-xl transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <Sparkles className="w-4 h-4 text-amber-300" /> 🚀 Suivre le Cockpit Live
+                        </button>
+                      </div>
                     )}
                   </div>
                 );
@@ -828,14 +838,12 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
                     </div>
 
                     <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-2 pt-2 border-t border-slate-900">
-                      {sess.roles.some((r: string) => r === "Animateur" || r === "Gauge") && (
-                        <button
-                          onClick={() => onOpenCockpit?.(sess.session_id)}
-                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-indigo-600/10"
-                        >
-                          <Sparkles className="w-3.5 h-3.5" /> 📊 Cockpit Live
-                        </button>
-                      )}
+                      <button
+                        onClick={() => onOpenCockpit?.(sess.session_id)}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-indigo-600/10"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" /> 📊 Cockpit Live
+                      </button>
                       {sess.roles.includes("Évaluateur") && (
                         <button
                           onClick={() => onOpenSubmission?.(sess.session_id)}
