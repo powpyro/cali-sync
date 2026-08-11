@@ -112,8 +112,8 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
   const [propCloseDate, setPropCloseDate] = useState("");
   const [propCloseTime, setPropCloseTime] = useState("");
 
-  const applyCloseDatePreset = (hoursToAdd: number) => {
-    const target = new Date(Date.now() + hoursToAdd * 60 * 60 * 1000);
+  const applyCloseDatePresetMinutes = (minutesToAdd: number) => {
+    const target = new Date(Date.now() + minutesToAdd * 60 * 1000);
     const yyyy = target.getFullYear();
     const mm = String(target.getMonth() + 1).padStart(2, "0");
     const dd = String(target.getDate()).padStart(2, "0");
@@ -1166,52 +1166,69 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
                   </span>
                 </div>
 
-                {/* Quick Presets (UX Delight) */}
-                <div className="space-y-1">
+                {/* Quick Presets (15 min, 30 min, 60 min, 24h) */}
+                <div className="space-y-1.5">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Définition rapide en 1-clic :
+                    Définition rapide du délai en 1-clic :
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <button
                       type="button"
-                      onClick={() => applyCloseDatePreset(24)}
-                      className="py-1.5 px-2 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-teal-300 border border-slate-700/80 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1"
+                      onClick={() => applyCloseDatePresetMinutes(15)}
+                      className="py-2 px-2 bg-slate-900 hover:bg-rose-500/10 text-slate-300 hover:text-rose-300 border border-slate-700/80 hover:border-rose-500/50 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
                     >
-                      <Zap className="w-3 h-3 text-teal-400" /> +24h (Demain)
+                      <Zap className="w-3 h-3 text-rose-400" /> Dans 15 min
                     </button>
                     <button
                       type="button"
-                      onClick={() => applyCloseDatePreset(48)}
-                      className="py-1.5 px-2 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-teal-300 border border-slate-700/80 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1"
+                      onClick={() => applyCloseDatePresetMinutes(30)}
+                      className="py-2 px-2 bg-slate-900 hover:bg-rose-500/10 text-slate-300 hover:text-rose-300 border border-slate-700/80 hover:border-rose-500/50 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
                     >
-                      <Zap className="w-3 h-3 text-teal-400" /> +48h (Dans 2j)
+                      <Zap className="w-3 h-3 text-rose-400" /> Dans 30 min
                     </button>
                     <button
                       type="button"
-                      onClick={() => applyCloseDatePreset(72)}
-                      className="py-1.5 px-2 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-teal-300 border border-slate-700/80 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1"
+                      onClick={() => applyCloseDatePresetMinutes(60)}
+                      className="py-2 px-2 bg-slate-900 hover:bg-rose-500/10 text-slate-300 hover:text-rose-300 border border-slate-700/80 hover:border-rose-500/50 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
                     >
-                      <Zap className="w-3 h-3 text-teal-400" /> +72h (Max 3j)
+                      <Zap className="w-3 h-3 text-rose-400" /> Dans 60 min
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyCloseDatePresetMinutes(24 * 60)}
+                      className="py-2 px-2 bg-slate-900 hover:bg-rose-500/10 text-slate-300 hover:text-rose-300 border border-slate-700/80 hover:border-rose-500/50 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
+                    >
+                      <Zap className="w-3 h-3 text-rose-400" /> Dans 24h
                     </button>
                   </div>
                 </div>
 
                 {/* Date & Time Input Row */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                  <input
-                    type="date"
-                    value={propCloseDate}
-                    onChange={(e) => setPropCloseDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700/80 rounded-xl text-white focus:outline-none focus:border-rose-500 text-xs"
-                    required
-                  />
-                  <input
-                    type="time"
-                    value={propCloseTime}
-                    onChange={(e) => setPropCloseTime(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700/80 rounded-xl text-white focus:outline-none focus:border-rose-500 text-xs"
-                    required
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                      📅 Date de Clôture
+                    </label>
+                    <input
+                      type="date"
+                      value={propCloseDate}
+                      onChange={(e) => setPropCloseDate(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700/90 hover:border-slate-600 rounded-xl text-white focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 text-xs font-medium transition-all"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                      🕒 Heure de Clôture
+                    </label>
+                    <input
+                      type="time"
+                      value={propCloseTime}
+                      onChange={(e) => setPropCloseTime(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700/90 hover:border-slate-600 rounded-xl text-white focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 text-xs font-medium transition-all"
+                      required
+                    />
+                  </div>
                 </div>
                 <p className="text-[10px] text-slate-400">
                   La session débutera dès validation par l'Administrateur et se fermera automatiquement à l'heure indiquée.
