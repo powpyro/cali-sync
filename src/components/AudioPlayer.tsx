@@ -85,7 +85,6 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     setCurrentTime(0);
     setDuration(0);
     setHasError(false);
-    // Reset mode on URL change
     setPlayerMode("custom");
   }, [audioUrl]);
 
@@ -162,6 +161,132 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
   if (!audioUrl) return null;
 
+  // ── COMPACT HORIZONTAL BAR MODE ──────────────────────────────────────────
+  if (compact) {
+    return (
+      <div
+        className={`relative bg-slate-950/90 border border-slate-800 rounded-2xl p-2.5 px-4 shadow-xl flex items-center justify-between gap-3 text-xs backdrop-blur-md ${className}`}
+      >
+        <audio
+          ref={audioRef}
+          src={formattedUrl}
+          onTimeUpdate={handleTimeUpdate}
+          onLoadedMetadata={handleLoadedMetadata}
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
+          onEnded={() => setIsPlaying(false)}
+          onError={handleAudioError}
+        />
+
+        {/* Play/Pause Button */}
+        {playerMode === "custom" && (
+          <button
+            type="button"
+            onClick={togglePlay}
+            disabled={hasError && !driveFileId}
+            className="w-8 h-8 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 flex items-center justify-center font-bold shadow-md shadow-teal-500/20 transition-all cursor-pointer disabled:opacity-50 flex-shrink-0"
+          >
+            {isPlaying ? <Pause className="w-4 h-4 fill-slate-950" /> : <Play className="w-4 h-4 ml-0.5 fill-slate-950" />}
+          </button>
+        )}
+
+        {/* Title Badge if present */}
+        {title && (
+          <div className="hidden md:flex items-center gap-1.5 min-w-0 max-w-[220px] flex-shrink-0">
+            <Music className="w-3.5 h-3.5 text-teal-400 flex-shrink-0" />
+            <span className="font-black text-white text-xs truncate">{title}</span>
+          </div>
+        )}
+
+        {/* Center: Scrubber Range Slider or Drive Toggle notice */}
+        {playerMode === "custom" ? (
+          <div className="flex-1 flex items-center gap-3 min-w-0">
+            <input
+              type="range"
+              min={0}
+              max={duration || 100}
+              value={currentTime}
+              onChange={handleSeek}
+              className="flex-1 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-teal-400"
+            />
+            <div className="font-mono text-[11px] text-slate-400 flex-shrink-0 flex items-center gap-1">
+              <span className="text-white font-bold">{formatTime(currentTime)}</span>
+              <span>/</span>
+              <span>{formatTime(duration)}</span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 text-[11px] text-teal-300 font-semibold truncate flex items-center gap-1.5">
+            <Tv className="w-3.5 h-3.5 text-teal-400 flex-shrink-0" />
+            <span>Mode Lecteur Google Drive Intégré</span>
+          </div>
+        )}
+
+        {/* Right side controls */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {driveFileId && (
+            <button
+              type="button"
+              onClick={() => setPlayerMode(playerMode === "custom" ? "drive" : "custom")}
+              className={`px-2.5 py-1 rounded-xl text-[10px] font-extrabold transition-all cursor-pointer flex items-center gap-1 border ${
+                playerMode === "drive"
+                  ? "bg-teal-500/20 text-teal-300 border-teal-500/40"
+                  : "bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800"
+              }`}
+              title="Changer de lecteur audio"
+            >
+              {playerMode === "custom" ? <Tv className="w-3 h-3 text-teal-400" /> : <Radio className="w-3 h-3 text-teal-400" />}
+              <span>{playerMode === "custom" ? "Drive" : "Standard"}</span>
+            </button>
+          )}
+
+          {playerMode === "custom" && (
+            <>
+              <button
+                type="button"
+                onClick={cyclePlaybackRate}
+                className="px-2 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-[10px] font-bold font-mono transition-all cursor-pointer"
+                title="Vitesse de lecture"
+              >
+                {playbackRate}x
+              </button>
+              <button
+                type="button"
+                onClick={toggleMute}
+                className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs transition-all cursor-pointer"
+                title={isMuted ? "Activer le son" : "Couper le son"}
+              >
+                {isMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-slate-300" />}
+              </button>
+            </>
+          )}
+
+          <a
+            href={audioUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs transition-all cursor-pointer"
+            title="Ouvrir dans un nouvel onglet"
+          >
+            <ExternalLink className="w-3.5 h-3.5 text-slate-400 hover:text-white" />
+          </a>
+        </div>
+
+        {/* If Drive Mode is active in compact mode, expand iframe popup below */}
+        {playerMode === "drive" && driveFileId && (
+          <div className="absolute top-full left-0 right-0 z-50 mt-2 p-2 bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl">
+            <iframe
+              src={`https://drive.google.com/file/d/${driveFileId}/preview`}
+              className="w-full h-32 rounded-xl border border-slate-800"
+              allow="autoplay"
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── FULL CARD MODE ────────────────────────────────────────────────────────
   return (
     <div
       className={`glass-panel p-4 rounded-2xl border border-slate-800 shadow-xl space-y-3 ${className}`}
@@ -245,7 +370,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
               <button
                 type="button"
                 onClick={cyclePlaybackRate}
-                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold font-mono transition-all cursor-pointer flex items-center gap-1"
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-bold font-mono transition-all cursor-pointer"
                 title="Changer la vitesse de lecture"
               >
                 <FastForward className="w-3 h-3 text-teal-400" />
@@ -303,7 +428,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
       )}
 
       {/* Temporal Markers (if any) */}
-      {markers.length > 0 && !compact && (
+      {markers.length > 0 && (
         <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-800/60">
           <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mr-1">Repères :</span>
           {markers.map((m, idx) => (

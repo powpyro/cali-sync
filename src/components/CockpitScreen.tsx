@@ -1868,10 +1868,11 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
             )}
 
             {data?.url_audio && (
-              <div className="mt-4">
+              <div className="mt-3 w-full">
                 <AudioPlayer
                   audioUrl={data.url_audio}
-                  title={`Audio Calibrage — ${data.nom_session}${data.nom_conseiller ? ` (${data.nom_conseiller})` : ""}`}
+                  title={`Audio — ${data.nom_session}${data.nom_conseiller ? ` (${data.nom_conseiller})` : ""}`}
+                  compact={true}
                 />
               </div>
             )}
