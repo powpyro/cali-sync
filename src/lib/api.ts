@@ -316,25 +316,22 @@ async function callGAS(
     "upload_audio_drive",
   ].includes(action);
 
-  const queryParams = new URLSearchParams({
-    action,
-    ...Object.entries(payload).reduce((acc, [k, v]) => {
-      if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
-        acc[k] = String(v);
-      }
-      return acc;
-    }, {} as Record<string, string>),
-  });
-
   const apiUrl = getApiUrl();
-  const urlWithParams = `${apiUrl}?${queryParams.toString()}`;
-
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s — Apps Script cold start can take 15-25s
+  const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for audio uploads
 
   try {
     if (!isPostAction) {
-      // Direct GET for simple read/query actions
+      const queryParams = new URLSearchParams({
+        action,
+        ...Object.entries(payload).reduce((acc, [k, v]) => {
+          if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+            acc[k] = String(v);
+          }
+          return acc;
+        }, {} as Record<string, string>),
+      });
+      const urlWithParams = `${apiUrl}?${queryParams.toString()}`;
       const response = await fetch(urlWithParams, { method: "GET", redirect: "follow", signal: controller.signal });
       clearTimeout(timeoutId);
       const text = await response.text();
@@ -344,8 +341,9 @@ async function callGAS(
         throw new Error(`Réponse non-JSON du serveur (HTTP ${response.status}). Vérifiez le déploiement Web App.`);
       }
     } else {
-      // POST for heavy payload submission
-      const response = await fetch(urlWithParams, {
+      // POST for heavy payload submission (DO NOT put payload in URL query params!)
+      const postUrl = `${apiUrl}?action=${encodeURIComponent(action)}`;
+      const response = await fetch(postUrl, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({ action, ...payload }),

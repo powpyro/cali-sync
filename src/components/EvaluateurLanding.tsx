@@ -111,6 +111,11 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > 20 * 1024 * 1024) {
+      setProposalFeedback({ success: false, message: "Fichier audio trop volumineux (max 20 Mo)." });
+      return;
+    }
+
     if (!file.type.startsWith("audio/") && !file.name.match(/\.(mp3|wav|m4a|ogg|aac|flac)$/i)) {
       setProposalFeedback({ success: false, message: "Format audio non supporté (utilisez MP3, WAV, M4A, OGG)." });
       return;
@@ -123,7 +128,7 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
     reader.onload = async () => {
       const resultStr = reader.result as string;
       const base64Data = resultStr.split(",")[1] || resultStr;
-      const res = await uploadAudioDrive(base64Data, file.name, file.type);
+      const res = await uploadAudioDrive(base64Data, file.name, file.type || "audio/mp3");
       setPropAudioUploading(false);
       if (res && res.success && (res as any).url_audio) {
         setPropAudio((res as any).url_audio);
@@ -131,6 +136,10 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
       } else {
         setProposalFeedback({ success: false, message: res?.message || "Erreur lors de l'upload audio vers Google Drive." });
       }
+    };
+    reader.onerror = () => {
+      setPropAudioUploading(false);
+      setProposalFeedback({ success: false, message: "Impossible de lire le fichier sur votre appareil." });
     };
     reader.readAsDataURL(file);
   };
