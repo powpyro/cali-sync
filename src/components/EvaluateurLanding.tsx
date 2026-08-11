@@ -32,8 +32,14 @@ import {
   Sparkles,
   UserCheck,
   FileText,
-  Music,
   LogOut,
+  Upload,
+  Link,
+  Zap,
+  Check,
+  X,
+  Layers,
+  Headphones,
 } from "lucide-react";
 
 interface EvaluateurLandingProps {
@@ -100,10 +106,22 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
   const [propTemplate, setPropTemplate] = useState("");
   const [propConseiller, setPropConseiller] = useState("");
   const [propAudio, setPropAudio] = useState("");
+  const [propAudioTab, setPropAudioTab] = useState<"file" | "link">("file");
   const [propAudioUploading, setPropAudioUploading] = useState(false);
   const [propConsignes, setPropConsignes] = useState("");
   const [propCloseDate, setPropCloseDate] = useState("");
   const [propCloseTime, setPropCloseTime] = useState("");
+
+  const applyCloseDatePreset = (hoursToAdd: number) => {
+    const target = new Date(Date.now() + hoursToAdd * 60 * 60 * 1000);
+    const yyyy = target.getFullYear();
+    const mm = String(target.getMonth() + 1).padStart(2, "0");
+    const dd = String(target.getDate()).padStart(2, "0");
+    const hh = String(target.getHours()).padStart(2, "0");
+    const min = String(target.getMinutes()).padStart(2, "0");
+    setPropCloseDate(`${yyyy}-${mm}-${dd}`);
+    setPropCloseTime(`${hh}:${min}`);
+  };
 
   const [proposalFeedback, setProposalFeedback] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -927,24 +945,51 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
 
       {/* ── Proposal Modal (Étape 1 : Saisie des informations de la session) ── */}
       {showProposalModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 sm:p-8 w-full max-w-2xl shadow-2xl space-y-6 my-8">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-              <div className="flex items-center gap-2 text-white font-black text-lg">
-                <Sparkles className="w-5 h-5 text-teal-400" /> Proposer un Calibrage — Étape 1 / 2
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto">
+          <div className="bg-slate-900/95 border border-slate-700/80 rounded-3xl p-6 sm:p-8 w-full max-w-2xl shadow-2xl space-y-6 my-8 relative overflow-hidden">
+            {/* Ambient Background Glow */}
+            <div className="absolute -top-20 -right-20 w-64 h-64 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
+
+            {/* Header & Step Tracker */}
+            <div className="border-b border-slate-800 pb-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5 text-white font-black text-lg">
+                  <div className="w-8 h-8 rounded-xl bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-400">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-black text-white leading-tight">Proposer un Calibrage</h3>
+                    <p className="text-[11px] text-slate-400 font-medium">Configurez les détails avant la notation Gauge de référence</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowProposalModal(false)}
+                  className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-all cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <button
-                onClick={() => setShowProposalModal(false)}
-                className="text-slate-400 hover:text-white font-bold text-sm cursor-pointer"
-              >
-                ✕
-              </button>
+
+              {/* Visual Step Progress Indicator Bar */}
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between text-[11px] font-bold">
+                  <span className="text-teal-400 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
+                    Étape 1 sur 2 : Informations de la Session
+                  </span>
+                  <span className="text-slate-500 font-mono">50% Complété</span>
+                </div>
+                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-teal-500 to-emerald-400 w-1/2 rounded-full transition-all duration-300" />
+                </div>
+              </div>
             </div>
 
-            <form onSubmit={handleProceedToGaugeStep} className="space-y-4">
+            <form onSubmit={handleProceedToGaugeStep} className="space-y-5">
               {proposalFeedback && (
                 <div
-                  className={`p-4 rounded-xl flex items-center gap-3 text-xs font-semibold ${
+                  className={`p-4 rounded-2xl flex items-center gap-3 text-xs font-semibold shadow-md ${
                     proposalFeedback.success
                       ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
                       : "bg-rose-500/10 border border-rose-500/30 text-rose-400"
@@ -959,80 +1004,126 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
                 </div>
               )}
 
-              {/* Titre & Template */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
-                    Titre du calibrage proposé <span className="text-rose-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={propTitle}
-                    onChange={(e) => setPropTitle(e.target.value)}
-                    placeholder="ex: Calibrage Équipe Vente N1"
-                    className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 transition-colors text-xs"
-                    required
-                  />
+              {/* SECTION 1 : Paramètres généraux */}
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5 flex items-center justify-between">
+                      <span>Titre du Calibrage <span className="text-rose-400">*</span></span>
+                    </label>
+                    <input
+                      type="text"
+                      value={propTitle}
+                      onChange={(e) => setPropTitle(e.target.value)}
+                      placeholder="ex: Calibrage Équipe Vente N1"
+                      className="w-full px-4 py-3 bg-slate-950 border border-slate-700/80 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all text-xs"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5 flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-teal-400" />
+                      <span>Template de Grille <span className="text-rose-400">*</span></span>
+                    </label>
+                    <select
+                      value={propTemplate}
+                      onChange={(e) => setPropTemplate(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-950 border border-slate-700/80 rounded-2xl text-white focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all text-xs"
+                      required
+                    >
+                      {templates.map((t) => (
+                        <option key={t.template_id} value={t.template_id}>
+                          {t.nom}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
-                    Template de grille <span className="text-rose-400">*</span>
-                  </label>
-                  <select
-                    value={propTemplate}
-                    onChange={(e) => setPropTemplate(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-teal-500 transition-colors text-xs"
-                    required
-                  >
-                    {templates.map((t) => (
-                      <option key={t.template_id} value={t.template_id}>
-                        {t.nom}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Infos complémentaires : Conseiller & Audio */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2 flex items-center gap-1.5">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5 flex items-center gap-1.5">
                     <UserCheck className="w-3.5 h-3.5 text-teal-400" />
-                    Nom du Conseiller / Représentant
+                    Nom du Conseiller / Représentant Évalué
                   </label>
                   <input
                     type="text"
                     value={propConseiller}
                     onChange={(e) => setPropConseiller(e.target.value)}
-                    placeholder="ex: Paul Martin (Conseiller Vente)"
-                    className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 transition-colors text-xs"
+                    placeholder="ex: Paul Martin (Conseiller Service Client)"
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-700/80 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all text-xs"
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <Music className="w-3.5 h-3.5 text-teal-400" />
-                      Fichier Audio / Lien Google Drive
-                    </span>
-                    {propAudioUploading && (
-                      <span className="text-[11px] text-teal-400 font-bold animate-pulse flex items-center gap-1">
-                        <Loader2 className="w-3 h-3 animate-spin" /> Upload Drive...
-                      </span>
-                    )}
+              {/* SECTION 2 : Fichier Audio / Lien Drive (Tabs UX) */}
+              <div className="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-200 flex items-center gap-1.5">
+                    <Headphones className="w-3.5 h-3.5 text-teal-400" /> Support Audio de la Session
                   </label>
+                  {propAudioUploading && (
+                    <span className="text-[11px] text-teal-400 font-bold animate-pulse flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Importation vers Drive...
+                    </span>
+                  )}
+                </div>
+
+                {/* Sub-tabs Selector */}
+                <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-900 rounded-xl border border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setPropAudioTab("file")}
+                    className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      propAudioTab === "file"
+                        ? "bg-teal-600 text-white shadow-md"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Upload className="w-3.5 h-3.5" /> Fichier de l'appareil
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPropAudioTab("link")}
+                    className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      propAudioTab === "link"
+                        ? "bg-teal-600 text-white shadow-md"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Link className="w-3.5 h-3.5" /> Lien Google Drive / Web
+                  </button>
+                </div>
+
+                {/* Tab 1: File Dropzone */}
+                {propAudioTab === "file" && (
                   <div className="space-y-2">
-                    <div className="flex gap-2">
-                      <input
-                        type="url"
-                        value={propAudio}
-                        onChange={(e) => setPropAudio(e.target.value)}
-                        placeholder="Coller lien Google Drive ou URL .mp3"
-                        className="flex-1 px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 transition-colors text-xs"
-                      />
-                      <label className="px-3 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0">
-                        📁 Importer
+                    {propAudio ? (
+                      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-emerald-300">Fichier audio chargé avec succès !</div>
+                            <div className="text-[10px] text-slate-400 font-mono truncate">{propAudio}</div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPropAudio("")}
+                          className="text-[11px] text-rose-400 hover:underline font-bold ml-2 flex-shrink-0"
+                        >
+                          Changer
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="border-2 border-dashed border-slate-700/80 hover:border-teal-500 hover:bg-teal-500/5 rounded-2xl p-4 cursor-pointer text-center space-y-1 transition-all block group">
+                        <Upload className="w-6 h-6 text-slate-400 group-hover:text-teal-400 group-hover:scale-110 transition-all mx-auto" />
+                        <div className="text-xs font-bold text-slate-200">
+                          {propAudioUploading ? "Importation en cours..." : "Cliquez pour parcourir et importer un audio"}
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-medium">
+                          Formats supportés : MP3, WAV, M4A, OGG (Taille max : 20 Mo)
+                        </div>
                         <input
                           type="file"
                           accept="audio/*"
@@ -1041,49 +1132,95 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
                           disabled={propAudioUploading}
                         />
                       </label>
-                    </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Tab 2: URL Input */}
+                {propAudioTab === "link" && (
+                  <div className="space-y-1.5">
+                    <input
+                      type="url"
+                      value={propAudio}
+                      onChange={(e) => setPropAudio(e.target.value)}
+                      placeholder="Collez le lien public Google Drive ou l'URL du fichier audio .mp3"
+                      className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 text-xs"
+                    />
                     {propAudio && (
-                      <div className="text-[11px] text-emerald-400 font-medium truncate flex items-center gap-1">
-                        ✓ Audio prêt : <span className="font-mono text-slate-300 truncate">{propAudio}</span>
+                      <div className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
+                        <Check className="w-3 h-3" /> Lien enregistré : <span className="font-mono text-slate-300 truncate">{propAudio}</span>
                       </div>
                     )}
                   </div>
-                </div>
+                )}
               </div>
 
-              {/* Date & Heure de Fermeture uniquement */}
-              <div className="p-4 bg-slate-800/40 border border-slate-800 rounded-2xl space-y-3">
+              {/* SECTION 3 : Date & Heure de Clôture avec Raccourcis Rapides (Presets) */}
+              <div className="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="text-xs font-bold text-rose-400 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5" /> Date & Heure de Fermeture (Clôture)
+                    <Clock className="w-3.5 h-3.5" /> Date & Heure de Fermeture (Clôture) <span className="text-rose-400">*</span>
                   </div>
-                  <span className="px-2 py-0.5 text-[10px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-full flex items-center gap-1">
+                  <span className="px-2.5 py-0.5 text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-full flex items-center gap-1">
                     ⏱ Max 72h de délai
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+
+                {/* Quick Presets (UX Delight) */}
+                <div className="space-y-1">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Définition rapide en 1-clic :
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => applyCloseDatePreset(24)}
+                      className="py-1.5 px-2 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-teal-300 border border-slate-700/80 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1"
+                    >
+                      <Zap className="w-3 h-3 text-teal-400" /> +24h (Demain)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyCloseDatePreset(48)}
+                      className="py-1.5 px-2 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-teal-300 border border-slate-700/80 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1"
+                    >
+                      <Zap className="w-3 h-3 text-teal-400" /> +48h (Dans 2j)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyCloseDatePreset(72)}
+                      className="py-1.5 px-2 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-teal-300 border border-slate-700/80 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1"
+                    >
+                      <Zap className="w-3 h-3 text-teal-400" /> +72h (Max 3j)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Date & Time Input Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                   <input
                     type="date"
                     value={propCloseDate}
                     onChange={(e) => setPropCloseDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-rose-500 text-xs"
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700/80 rounded-xl text-white focus:outline-none focus:border-rose-500 text-xs"
                     required
                   />
                   <input
                     type="time"
                     value={propCloseTime}
                     onChange={(e) => setPropCloseTime(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-rose-500 text-xs"
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700/80 rounded-xl text-white focus:outline-none focus:border-rose-500 text-xs"
                     required
                   />
                 </div>
                 <p className="text-[10px] text-slate-400">
-                  La session débutera dès validation par l'Administrateur et se fermera à l'heure indiquée.
+                  La session débutera dès validation par l'Administrateur et se fermera automatiquement à l'heure indiquée.
                 </p>
               </div>
 
+              {/* SECTION 4 : Notes */}
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2 flex items-center gap-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5 flex items-center gap-1.5">
                   <FileText className="w-3.5 h-3.5 text-slate-400" />
                   Notes / Consignes complémentaires (facultatif)
                 </label>
@@ -1092,22 +1229,23 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
                   value={propConsignes}
                   onChange={(e) => setPropConsignes(e.target.value)}
                   placeholder="ex: Porter une attention particulière sur la vérification d'identité (DPA)."
-                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 transition-colors text-xs"
+                  className="w-full px-4 py-2.5 bg-slate-950 border border-slate-700/80 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all text-xs"
                 />
               </div>
 
-              <div className="flex gap-3 pt-4">
+              {/* FOOTER ACTIONS */}
+              <div className="flex gap-3 pt-4 border-t border-slate-800/80">
                 <button
                   type="button"
                   onClick={() => setShowProposalModal(false)}
-                  className="px-5 py-3 bg-slate-800 border border-slate-700 text-slate-300 font-bold text-xs rounded-xl hover:bg-slate-700 cursor-pointer"
+                  className="px-5 py-3 bg-slate-800 border border-slate-700 text-slate-300 font-bold text-xs rounded-2xl hover:bg-slate-700 transition-all cursor-pointer"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
                   disabled={fetchingConfigItems}
-                  className="flex-1 py-3 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-teal-600/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="flex-1 py-3.5 bg-gradient-to-r from-teal-500 via-emerald-500 to-teal-600 hover:from-teal-400 hover:to-emerald-500 text-white font-black text-xs sm:text-sm rounded-2xl shadow-xl shadow-teal-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 hover:scale-[1.01]"
                 >
                   {fetchingConfigItems ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
