@@ -803,7 +803,7 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
                           </span>
                         </div>
                         {sess.nom_conseiller && (
-                          <p className="text-xs text-slate-400 mt-1">Conseiller : <span className="text-slate-200">{sess.nom_conseiller}</span></p>
+                          <p className="text-xs text-slate-400 mt-1">Connection ID : <span className="text-slate-200 font-mono">{sess.nom_conseiller}</span></p>
                         )}
                       </div>
 
@@ -879,7 +879,7 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
                           </span>
                         </div>
                         {dem.nom_conseiller && (
-                          <p className="text-xs text-slate-400 mt-1">Conseiller : <span className="text-slate-200">{dem.nom_conseiller}</span></p>
+                          <p className="text-xs text-slate-400 mt-1">Connection ID : <span className="text-slate-200 font-mono">{dem.nom_conseiller}</span></p>
                         )}
                         {dem.date_demande && (
                           <p className="text-[10px] text-slate-500 mt-1">Demandée le : {new Date(dem.date_demande).toLocaleString()}</p>
@@ -1000,15 +1000,18 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5 flex items-center gap-1.5">
                     <UserCheck className="w-3.5 h-3.5 text-teal-400" />
-                    Nom du Conseiller / Représentant Évalué
+                    Connection ID (ID de Communication)
                   </label>
                   <input
                     type="text"
                     value={propConseiller}
                     onChange={(e) => setPropConseiller(e.target.value)}
-                    placeholder="ex: Paul Martin (Conseiller Service Client)"
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-700/80 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all text-xs"
+                    placeholder="ex: 221770680391|07Aoû2026|10h44"
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-700/80 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all text-xs font-mono"
                   />
+                  <p className="text-[10px] text-slate-400 mt-1.5">
+                    Format recommandé : <span className="font-mono text-slate-300">Numéro|Date|Heure</span> (ex: 221770680391|07Aoû2026|10h44)
+                  </p>
                 </div>
               </div>
 

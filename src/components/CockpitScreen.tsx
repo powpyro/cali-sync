@@ -1852,7 +1852,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
               {data?.nom_session || "Session Live"}
               {data?.nom_conseiller && (
                 <span className="text-slate-400 font-medium text-lg block sm:inline sm:ml-2">
-                  — Conseiller : {data.nom_conseiller}
+                  — Connection ID : <span className="font-mono text-slate-200">{data.nom_conseiller}</span>
                 </span>
               )}
             </h1>

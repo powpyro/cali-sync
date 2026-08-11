@@ -697,15 +697,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <div>
                     <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2 flex items-center gap-1.5">
                       <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
-                      Nom du Conseiller / Représentant
+                      Connection ID (ID de Communication)
                     </label>
                     <input
                       type="text"
                       value={newSessionConseiller}
                       onChange={(e) => setNewSessionConseiller(e.target.value)}
-                      placeholder="ex: Marc Dubois"
-                      className="w-full px-4 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                      placeholder="ex: 221770680391|07Aoû2026|10h44"
+                      className="w-full px-4 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors text-xs font-mono"
                     />
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Format recommandé : <span className="font-mono text-slate-300">Numéro|Date|Heure</span> (ex: 221770680391|07Aoû2026|10h44)
+                    </p>
                   </div>
 
                   <div>
