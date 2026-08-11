@@ -138,7 +138,6 @@ export interface CockpitScreenProps {
   sessionId?: string;
   onSeekAudio?: (seconds: number) => void;
   onBack?: () => void;
-  initialSecondsLeft?: number;
   readOnly?: boolean;
 }
 
@@ -378,7 +377,6 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
   sessionId,
   onSeekAudio,
   onBack,
-  initialSecondsLeft = 180,
   readOnly = false,
 }) => {
   // Session Data State
@@ -391,24 +389,6 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
   // Evaluators Waiting Room State
   const [evaluators, setEvaluators] = useState<EvaluatorUser[]>([]);
   const prevStatusesRef = useRef<Record<string, string>>({});
-
-  // Timer State
-  const [secondsLeft, setSecondsLeft] = useState(initialSecondsLeft);
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-
-  const handleStartTimer = () => {
-    if (secondsLeft === 0) setSecondsLeft(initialSecondsLeft);
-    setIsTimerRunning(true);
-  };
-
-  const handlePauseTimer = () => {
-    setIsTimerRunning(false);
-  };
-
-  const handleResetTimer = () => {
-    setIsTimerRunning(false);
-    setSecondsLeft(initialSecondsLeft);
-  };
 
   // Audio Player State
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -517,12 +497,6 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
         setData(res);
         setError(null);
 
-        if (res.heure_fin) {
-          const fin = new Date(res.heure_fin).getTime();
-          const remaining = Math.max(0, Math.floor((fin - Date.now()) / 1000));
-          setSecondsLeft(remaining);
-        }
-
         if (res.evaluateurs_soumis) {
           const submittedIds = res.evaluateurs_soumis;
           setEvaluators(
@@ -575,14 +549,6 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
     }, 800);
     return () => clearTimeout(timer);
   }, [evaluators]);
-
-  useEffect(() => {
-    if (!isTimerRunning || secondsLeft <= 0) return;
-    const timerInterval = setInterval(() => {
-      setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(timerInterval);
-  }, [isTimerRunning, secondsLeft]);
 
   const handleSeek = (seconds: number) => {
     if (audioRef.current) {
@@ -2060,73 +2026,24 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
         </div>
       </section>
 
-      {/* 2. TIMER & PROGRESS */}
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-slate-900/90 rounded-3xl p-6 border border-slate-800 shadow-xl flex flex-col items-center justify-center text-center space-y-3">
-          <div className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-            <Clock className="w-4 h-4 text-indigo-400" /> Chronomètre Débat Live
-          </div>
-          <div
-            className={`tabular-timer font-black text-5xl tracking-tight ${
-              secondsLeft <= 10 && secondsLeft > 0
-                ? "text-rose-500 animate-timer-warning"
-                : "text-white"
-            }`}
-          >
-            {formatTime(secondsLeft)}
-          </div>
-
-          {/* Timer Control Buttons */}
-          <div className="flex items-center gap-2 pt-1">
-            {!isTimerRunning ? (
-              <button
-                type="button"
-                onClick={handleStartTimer}
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1.5 cursor-pointer"
-              >
-                <Play className="w-3.5 h-3.5 fill-slate-950" />
-                {secondsLeft === 0 ? "▶ Démarrer le Débat (3 min)" : "▶ Reprendre Débat"}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handlePauseTimer}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl transition-all shadow-md shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer"
-              >
-                <Pause className="w-3.5 h-3.5 fill-slate-950" />
-                ⏸ Pause Débat
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={handleResetTimer}
-              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition-all border border-slate-700 flex items-center gap-1 cursor-pointer"
-              title="Réinitialiser le chrono à 3:00"
-            >
-              <RefreshCw className="w-3.5 h-3.5" /> 🔄 3:00
-            </button>
-          </div>
+      {/* 2. PROGRESSION */}
+      <section className="bg-slate-900/90 rounded-3xl p-6 border border-slate-800 shadow-xl flex flex-col justify-center space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-black uppercase tracking-wider text-slate-400">
+            Progression Équipes / Items (N2)
+          </span>
+          <span className="text-xs font-black text-emerald-400">
+            Item {currentGlobalN2Index} sur {totalN2Count}
+          </span>
         </div>
 
-        <div className="bg-slate-900/90 rounded-3xl p-6 border border-slate-800 shadow-xl flex flex-col justify-center space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-black uppercase tracking-wider text-slate-400">
-              Progression Équipes / Items (N2)
-            </span>
-            <span className="text-xs font-black text-emerald-400">
-              Item {currentGlobalN2Index} sur {totalN2Count}
-            </span>
-          </div>
-
-          <div className="w-full h-3.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
-            <div
-              className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-300 shadow-md shadow-emerald-500/20"
-              style={{
-                width: `${totalN2Count > 0 ? (currentGlobalN2Index / totalN2Count) * 100 : 0}%`,
-              }}
-            />
-          </div>
+        <div className="w-full h-3.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+          <div
+            className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-300 shadow-md shadow-emerald-500/20"
+            style={{
+              width: `${totalN2Count > 0 ? (currentGlobalN2Index / totalN2Count) * 100 : 0}%`,
+            }}
+          />
         </div>
       </section>
 
