@@ -108,17 +108,15 @@ const getTreeImputationSummary = (rootNode: CockpitNode): TreeImputationSummary 
   return summary;
 };
 
-const nodeMatchesFilter = (node: CockpitNode, filter: "all" | "divergence" | "imputation" | "accord"): boolean => {
+const nodeMatchesFilter = (node: CockpitNode, filter: "all" | "imputation" | "accord"): boolean => {
   if (filter === "all") return true;
 
   const votesNon = node.votes_par_critere?.Non || [];
   const hasNonVotes = votesNon.length > 0;
-  const isDivergent = node.statut_accord === "divergence";
   const isAccord = node.statut_accord === "accord";
 
-  if (filter === "divergence" && isDivergent) return true;
   if (filter === "imputation" && hasNonVotes) return true;
-  if (filter === "accord" && isAccord && !hasNonVotes) return true;
+  if (filter === "accord" && isAccord) return true;
 
   if (node.children && node.children.length > 0) {
     return node.children.some((child) => nodeMatchesFilter(child, filter));
@@ -400,8 +398,8 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
   const [activeN1Index, setActiveN1Index] = useState(0);
   const [activeN2Index, setActiveN2Index] = useState(0);
 
-  // Live Focus Filter State ('all' | 'divergence' | 'imputation' | 'accord')
-  const [filterMode, setFilterMode] = useState<"all" | "divergence" | "imputation" | "accord">("all");
+  // Live Focus Filter State ('all' | 'imputation' | 'accord')
+  const [filterMode, setFilterMode] = useState<"all" | "imputation" | "accord">("all");
 
   // Sub-items drill-down toggle state
   const [expandedSubItems, setExpandedSubItems] = useState<Record<string, boolean>>({});
@@ -1232,7 +1230,6 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
 
   // Counts for Live Focus Bar in current N1 category
   const countAll = rawN2List.length;
-  const countDivergences = rawN2List.filter((n2) => nodeMatchesFilter(n2, "divergence")).length;
   const countImputations = rawN2List.filter((n2) => nodeMatchesFilter(n2, "imputation")).length;
   const countAccords = rawN2List.filter((n2) => nodeMatchesFilter(n2, "accord")).length;
 
@@ -1749,7 +1746,6 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                     .filter((child) => {
                       if (filterMode === "all") return true;
                       const childVotesNon = child.votes_par_critere?.Non || [];
-                      if (filterMode === "divergence") return child.statut_accord === "divergence";
                       if (filterMode === "imputation") return childVotesNon.length > 0;
                       if (filterMode === "accord") return child.statut_accord === "accord";
                       return true;
@@ -2105,20 +2101,6 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
             <button
               type="button"
               onClick={() => {
-                setFilterMode("divergence");
-                setActiveN2Index(0);
-              }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0 ${
-                filterMode === "divergence"
-                  ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30"
-                  : "bg-slate-950 text-amber-400 hover:bg-amber-500/10 border border-slate-800"
-              }`}
-            >
-              <Flame className="w-3.5 h-3.5 text-amber-400" /> 🔥 Divergences ({countDivergences})
-            </button>
-            <button
-              type="button"
-              onClick={() => {
                 setFilterMode("imputation");
                 setActiveN2Index(0);
               }}
@@ -2209,7 +2191,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                 <p className="text-xs text-slate-400 font-medium leading-relaxed">
                   Aucun item ne correspond au filtre{" "}
                   <strong className="text-indigo-300">
-                    "{filterMode === "divergence" ? "Divergences" : filterMode === "imputation" ? "Imputations N3/N4" : filterMode === "accord" ? "Accords" : filterMode}"
+                    "{filterMode === "imputation" ? "Imputations N3/N4" : filterMode === "accord" ? "Accords" : filterMode}"
                   </strong>{" "}
                   dans la catégorie <strong className="text-white">{cleanLibelle(currentN1?.libelle || "")}</strong>.
                 </p>
