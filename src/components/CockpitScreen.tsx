@@ -240,12 +240,16 @@ const EvaluatorVoteBadge: React.FC<EvaluatorVoteBadgeProps> = ({
   return (
     <div
       className="relative inline-block w-full"
-      onMouseEnter={() => setIsHovered(true)}
+      onMouseEnter={() => {
+        if (hasComments) setIsHovered(true);
+      }}
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Evaluator Box Pill */}
       <div
-        className={`p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer flex items-center justify-between shadow-xs hover:shadow-xl hover:-translate-y-0.5 ${
+        className={`p-3.5 rounded-2xl border transition-all duration-200 flex items-center justify-between shadow-xs ${
+          hasComments ? "cursor-pointer hover:shadow-xl hover:-translate-y-0.5" : "cursor-default"
+        } ${
           isOui
             ? "bg-slate-900/90 border-emerald-500/30 hover:border-emerald-400 hover:bg-emerald-950/40"
             : isNon
@@ -270,19 +274,15 @@ const EvaluatorVoteBadge: React.FC<EvaluatorVoteBadgeProps> = ({
           </span>
         </div>
 
-        {hasComments ? (
+        {hasComments && (
           <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 flex items-center gap-1 shadow-xs">
             💬 Justification {commentsList.length > 1 ? `(${commentsList.length})` : ""}
-          </span>
-        ) : (
-          <span className="text-[10px] font-bold text-slate-400">
-            Survoler ℹ️
           </span>
         )}
       </div>
 
-      {/* ULTRA-STYLISH HOVER POPUP CARD */}
-      {isHovered && (
+      {/* ULTRA-STYLISH HOVER POPUP CARD (ONLY WHEN COMMENTS EXIST) */}
+      {isHovered && hasComments && (
         <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-3 w-80 sm:w-96 bg-slate-950/95 backdrop-blur-2xl border border-indigo-500/50 text-white shadow-2xl rounded-3xl p-5 space-y-3.5 pointer-events-auto animate-pop-in ring-1 ring-indigo-500/30">
           {/* Pointer Triangle Arrow */}
           <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-0 h-0 border-x-8 border-x-transparent border-t-8 border-t-slate-950/95" />
