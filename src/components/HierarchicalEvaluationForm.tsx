@@ -597,7 +597,8 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
               <AudioPlayer
                 audioUrl={audioUrl}
                 title={callName}
-                compact={true}
+                floating={true}
+                defaultPosition={{ x: Math.max(20, window.innerWidth - 380), y: 80 }}
                 onPauseTimestamp={(ts) => setLastPauseTimestamp(ts)}
               />
               {lastPauseTimestamp && (

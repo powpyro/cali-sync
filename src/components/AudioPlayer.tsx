@@ -11,6 +11,9 @@ import {
   Radio,
   Tv,
   AlertCircle,
+  GripVertical,
+  Minimize2,
+  Maximize2,
 } from "lucide-react";
 
 export interface AudioMarker {
@@ -22,6 +25,8 @@ export interface AudioPlayerProps {
   audioUrl: string;
   title?: string;
   compact?: boolean;
+  floating?: boolean;
+  defaultPosition?: { x: number; y: number };
   markers?: AudioMarker[];
   className?: string;
   onPauseTimestamp?: (timestampFormatted: string, seconds: number) => void;
@@ -64,6 +69,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   audioUrl,
   title,
   compact = false,
+  floating = false,
+  defaultPosition,
   markers = [],
   className = "",
   onPauseTimestamp,
@@ -75,6 +82,14 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState<number>(1);
   const [hasError, setHasError] = useState(false);
+
+  // Floating & Dragging State
+  const [position, setPosition] = useState<{ x: number; y: number }>(
+    defaultPosition || { x: Math.max(16, window.innerWidth - 380), y: 80 }
+  );
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isMinimized, setIsMinimized] = useState(false);
 
   const driveFileId = extractGoogleDriveFileId(audioUrl);
   const formattedUrl = convertGoogleDriveUrl(audioUrl);
@@ -89,6 +104,47 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     setHasError(false);
     setPlayerMode("custom");
   }, [audioUrl]);
+
+  // Dragging logic
+  const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => {
+    setIsDragging(true);
+    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+    setDragOffset({
+      x: clientX - position.x,
+      y: clientY - position.y,
+    });
+  };
+
+  useEffect(() => {
+    const handleMove = (e: MouseEvent | TouchEvent) => {
+      if (!isDragging) return;
+      const clientX = "touches" in e ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
+      const clientY = "touches" in e ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY;
+      const maxX = Math.max(10, window.innerWidth - 120);
+      const maxY = Math.max(10, window.innerHeight - 60);
+      const newX = Math.max(10, Math.min(maxX, clientX - dragOffset.x));
+      const newY = Math.max(10, Math.min(maxY, clientY - dragOffset.y));
+      setPosition({ x: newX, y: newY });
+    };
+
+    const handleEnd = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      window.addEventListener("mousemove", handleMove);
+      window.addEventListener("mouseup", handleEnd);
+      window.addEventListener("touchmove", handleMove);
+      window.addEventListener("touchend", handleEnd);
+    }
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleEnd);
+      window.removeEventListener("touchmove", handleMove);
+      window.removeEventListener("touchend", handleEnd);
+    };
+  }, [isDragging, dragOffset]);
 
   const handleAudioPause = () => {
     setIsPlaying(false);
@@ -175,6 +231,181 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   };
 
   if (!audioUrl) return null;
+
+  // ── FLOATING DRAGGABLE WIDGET / SIDEBAR MODE ───────────────────────────────
+  if (floating) {
+    return (
+      <div
+        style={{
+          position: "fixed",
+          left: `${position.x}px`,
+          top: `${position.y}px`,
+          zIndex: 9999,
+        }}
+        className={`bg-slate-950/95 border border-teal-500/40 rounded-2xl shadow-2xl backdrop-blur-xl transition-shadow ${
+          isDragging ? "shadow-teal-500/30 ring-2 ring-teal-500/50 cursor-grabbing" : ""
+        } ${className}`}
+      >
+        <audio
+          ref={audioRef}
+          src={formattedUrl}
+          onTimeUpdate={handleTimeUpdate}
+          onLoadedMetadata={handleLoadedMetadata}
+          onPlay={() => setIsPlaying(true)}
+          onPause={handleAudioPause}
+          onEnded={() => setIsPlaying(false)}
+          onError={handleAudioError}
+        />
+
+        {/* DRAG HANDLE HEADER */}
+        <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 border-b border-slate-800 rounded-t-2xl select-none">
+          <div
+            onMouseDown={handleDragStart}
+            onTouchStart={handleDragStart}
+            className="flex items-center gap-1.5 cursor-grab active:cursor-grabbing text-slate-400 hover:text-white flex-1 min-w-0"
+            title="Maintenir et glisser pour déplacer la barre audio"
+          >
+            <GripVertical className="w-4 h-4 text-teal-400 flex-shrink-0" />
+            <Music className="w-3.5 h-3.5 text-teal-400 flex-shrink-0" />
+            <span className="text-[11px] font-black text-white truncate max-w-[200px]">
+              {title || "Lecteur Audio Flottant"}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+            <button
+              type="button"
+              onClick={() => setIsMinimized(!isMinimized)}
+              className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white text-xs transition-colors cursor-pointer"
+              title={isMinimized ? "Agrandir le lecteur" : "Réduire le lecteur en barre fine"}
+            >
+              {isMinimized ? <Maximize2 className="w-3.5 h-3.5 text-teal-400" /> : <Minimize2 className="w-3.5 h-3.5 text-slate-400" />}
+            </button>
+          </div>
+        </div>
+
+        {/* BODY: MINIMIZED OR EXPANDED */}
+        {isMinimized ? (
+          /* Mini Pill View */
+          <div className="p-2 px-3 flex items-center gap-2 text-xs">
+            {playerMode === "custom" && (
+              <button
+                type="button"
+                onClick={togglePlay}
+                disabled={hasError && !driveFileId}
+                className="w-7 h-7 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-950 flex items-center justify-center font-bold shadow-xs cursor-pointer flex-shrink-0"
+              >
+                {isPlaying ? <Pause className="w-3.5 h-3.5 fill-slate-950" /> : <Play className="w-3.5 h-3.5 ml-0.5 fill-slate-950" />}
+              </button>
+            )}
+            <div className="font-mono text-[11px] font-bold text-teal-300">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </div>
+          </div>
+        ) : (
+          /* Full Floating Player View */
+          <div className="p-3 space-y-2.5 w-72 sm:w-80">
+            <div className="flex items-center justify-between gap-2 text-xs">
+              {playerMode === "custom" && (
+                <button
+                  type="button"
+                  onClick={togglePlay}
+                  disabled={hasError && !driveFileId}
+                  className="w-8 h-8 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 flex items-center justify-center font-bold shadow-md shadow-teal-500/20 transition-all cursor-pointer disabled:opacity-50 flex-shrink-0"
+                >
+                  {isPlaying ? <Pause className="w-4 h-4 fill-slate-950" /> : <Play className="w-4 h-4 ml-0.5 fill-slate-950" />}
+                </button>
+              )}
+
+              {playerMode === "custom" ? (
+                <div className="flex-1 flex items-center gap-2 min-w-0">
+                  <input
+                    type="range"
+                    min={0}
+                    max={duration || 100}
+                    value={currentTime}
+                    onChange={handleSeek}
+                    className="flex-1 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-teal-400"
+                  />
+                  <div className="font-mono text-[11px] text-slate-400 flex-shrink-0">
+                    <span className="text-white font-bold">{formatTime(currentTime)}</span>
+                    <span>/</span>
+                    <span>{formatTime(duration)}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 text-[11px] text-teal-300 font-semibold truncate flex items-center gap-1.5">
+                  <Tv className="w-3.5 h-3.5 text-teal-400 flex-shrink-0" />
+                  <span>Mode Lecteur Google Drive Intégré</span>
+                </div>
+              )}
+            </div>
+
+            {/* Controls Bar */}
+            <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-slate-800/80">
+              {driveFileId && (
+                <button
+                  type="button"
+                  onClick={() => setPlayerMode(playerMode === "custom" ? "drive" : "custom")}
+                  className={`px-2.5 py-1 rounded-xl text-[10px] font-extrabold transition-all cursor-pointer flex items-center gap-1 border ${
+                    playerMode === "drive"
+                      ? "bg-teal-500/20 text-teal-300 border-teal-500/40"
+                      : "bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800"
+                  }`}
+                  title="Changer de lecteur audio"
+                >
+                  {playerMode === "custom" ? <Tv className="w-3 h-3 text-teal-400" /> : <Radio className="w-3 h-3 text-teal-400" />}
+                  <span>{playerMode === "custom" ? "Drive" : "Standard"}</span>
+                </button>
+              )}
+
+              {playerMode === "custom" && (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={cyclePlaybackRate}
+                    className="px-2 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-[10px] font-bold font-mono transition-all cursor-pointer"
+                    title="Vitesse de lecture"
+                  >
+                    {playbackRate}x
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleMute}
+                    className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs transition-all cursor-pointer"
+                    title={isMuted ? "Activer le son" : "Couper le son"}
+                  >
+                    {isMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-slate-300" />}
+                  </button>
+                </div>
+              )}
+
+              <a
+                href={audioUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs transition-all cursor-pointer"
+                title="Ouvrir dans un nouvel onglet"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-slate-400 hover:text-white" />
+              </a>
+            </div>
+
+            {/* DRIVE IFRAME INSIDE FLOATING WIDGET (cleanly contained without overlapping page text) */}
+            {playerMode === "drive" && driveFileId && (
+              <div className="pt-1">
+                <iframe
+                  src={`https://drive.google.com/file/d/${driveFileId}/preview`}
+                  className="w-full h-36 rounded-xl border border-slate-800 bg-slate-950 shadow-inner"
+                  allow="autoplay"
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // ── COMPACT HORIZONTAL BAR MODE ──────────────────────────────────────────
   if (compact) {
@@ -292,7 +523,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
           <div className="absolute top-full left-0 right-0 z-50 mt-2 p-2 bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl">
             <iframe
               src={`https://drive.google.com/file/d/${driveFileId}/preview`}
-              className="w-full h-32 rounded-xl border border-slate-800"
+              className="w-full h-36 rounded-xl border border-slate-800"
               allow="autoplay"
             />
           </div>
