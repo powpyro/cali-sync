@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import {
   getSessionData,
   enregistrerDecisionsBatch,
@@ -156,15 +156,80 @@ interface ConfettiParticle {
 interface EvaluatorVoteBadgeProps {
   vote: CockpitVote;
   critere: "Oui" | "Non" | "N.A." | string;
+  node?: CockpitNode;
   parseTimestamps: (text: string) => React.ReactNode;
 }
+
+const getEvaluatorCommentsForNode = (
+  vote: CockpitVote,
+  node?: CockpitNode
+): Array<{ itemLibelle?: string; comment: string }> => {
+  const results: Array<{ itemLibelle?: string; comment: string }> = [];
+  const evaluatorName = (vote.nom || "").trim().toLowerCase();
+
+  // 1. Direct comment on vote object
+  const directComment = (
+    vote.commentaire ||
+    (vote as any).comment ||
+    (vote as any).justification ||
+    (vote as any).remarque ||
+    ""
+  ).trim();
+
+  if (directComment) {
+    results.push({ comment: directComment });
+  }
+
+  // 2. Search recursively in node's children sub-items for comments by this evaluator
+  if (node && node.children && node.children.length > 0) {
+    const collectFromSubtree = (n: CockpitNode) => {
+      const allSubVotes: CockpitVote[] = [
+        ...(n.votes_par_critere?.Oui || []),
+        ...(n.votes_par_critere?.Non || []),
+        ...(n.votes_par_critere?.["N.A."] || []),
+      ];
+
+      allSubVotes.forEach((subVote) => {
+        const subEvalName = (subVote.nom || "").trim().toLowerCase();
+        if (subEvalName === evaluatorName && evaluatorName.length > 0) {
+          const subComm = (
+            subVote.commentaire ||
+            (subVote as any).comment ||
+            (subVote as any).justification ||
+            ""
+          ).trim();
+
+          if (subComm && !results.some((r) => r.comment === subComm)) {
+            const cleanName = n.libelle.replace(/^\[.*?\]\s*/, "").replace(/^[-\d.]+\s*/, "");
+            results.push({
+              itemLibelle: `[N${n.niveau}] ${cleanName}`,
+              comment: subComm,
+            });
+          }
+        }
+      });
+
+      if (n.children && n.children.length > 0) {
+        n.children.forEach(collectFromSubtree);
+      }
+    };
+
+    node.children.forEach(collectFromSubtree);
+  }
+
+  return results;
+};
 
 const EvaluatorVoteBadge: React.FC<EvaluatorVoteBadgeProps> = ({
   vote,
   critere,
+  node,
   parseTimestamps,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+
+  const commentsList = useMemo(() => getEvaluatorCommentsForNode(vote, node), [vote, node]);
+  const hasComments = commentsList.length > 0;
 
   const getInitials = (name: string) => {
     const parts = name.trim().split(" ");
@@ -208,9 +273,9 @@ const EvaluatorVoteBadge: React.FC<EvaluatorVoteBadgeProps> = ({
           </span>
         </div>
 
-        {vote.commentaire ? (
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 flex items-center gap-1">
-            💬 Justification
+        {hasComments ? (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 flex items-center gap-1 shadow-xs">
+            💬 Justification {commentsList.length > 1 ? `(${commentsList.length})` : ""}
           </span>
         ) : (
           <span className="text-[10px] font-bold text-slate-400">
@@ -263,14 +328,26 @@ const EvaluatorVoteBadge: React.FC<EvaluatorVoteBadgeProps> = ({
           </div>
 
           {/* Comment / Justification Section */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <div className="text-[10px] font-black uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
-              💬 Justification & Extrait Horodaté :
+              💬 Justification & Extrait Horodaté ({commentsList.length}) :
             </div>
 
-            {vote.commentaire ? (
-              <div className="text-xs text-slate-100 font-medium leading-relaxed bg-slate-900/90 p-3.5 rounded-2xl border border-slate-800 shadow-inner">
-                "{parseTimestamps(vote.commentaire)}"
+            {hasComments ? (
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {commentsList.map((c: { itemLibelle?: string; comment: string }, i: number) => (
+                  <div
+                    key={i}
+                    className="text-xs text-slate-100 font-medium leading-relaxed bg-slate-900/90 p-3 rounded-2xl border border-slate-800 shadow-inner space-y-1"
+                  >
+                    {c.itemLibelle && (
+                      <div className="text-[10px] font-bold text-amber-300 font-mono">
+                        {c.itemLibelle}
+                      </div>
+                    )}
+                    <div>"{parseTimestamps(c.comment)}"</div>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="text-xs text-slate-400 italic p-3 bg-slate-900/50 rounded-2xl border border-slate-800/50">
@@ -1612,6 +1689,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                         key={idx}
                         vote={v}
                         critere="Oui"
+                        node={node}
                         parseTimestamps={parseTimestampsInText}
                       />
                     ))}
@@ -1637,6 +1715,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                         key={idx}
                         vote={v}
                         critere="Non"
+                        node={node}
                         parseTimestamps={parseTimestampsInText}
                       />
                     ))}
@@ -1662,6 +1741,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                         key={idx}
                         vote={v}
                         critere="N.A."
+                        node={node}
                         parseTimestamps={parseTimestampsInText}
                       />
                     ))}
