@@ -18,6 +18,7 @@ import {
   CheckSquare,
   CornerDownRight,
   ArrowLeft,
+  PauseCircle,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,15 +121,21 @@ const CommentField: React.FC<{
   value: string;
   onChange: (v: string) => void;
   audioRef?: React.MutableRefObject<HTMLAudioElement | null>;
+  lastPauseTimestamp?: string | null;
   placeholder?: string;
   disabled?: boolean;
-}> = ({ itemId, value, onChange, audioRef, placeholder, disabled = false }) => {
+}> = ({ itemId, value, onChange, audioRef, lastPauseTimestamp, placeholder, disabled = false }) => {
   const [bumping, setBumping] = useState(false);
 
-  const insertTimestamp = () => {
+  const insertTimestamp = (tsToInsert?: string) => {
     if (disabled) return;
-    const cur = audioRef?.current?.currentTime || 0;
-    const ts = `[${String(Math.floor(cur / 60)).padStart(2, "0")}:${String(Math.floor(cur % 60)).padStart(2, "0")}] `;
+    let ts = tsToInsert;
+    if (!ts) {
+      const cur = audioRef?.current?.currentTime || 0;
+      ts = `[${String(Math.floor(cur / 60)).padStart(2, "0")}:${String(Math.floor(cur % 60)).padStart(2, "0")}] `;
+    } else {
+      ts = `${ts} `;
+    }
     setBumping(true);
     setTimeout(() => setBumping(false), 150);
     onChange(value ? `${value} ${ts}` : ts);
@@ -138,23 +145,40 @@ const CommentField: React.FC<{
 
   return (
     <div className="space-y-2 pt-2 border-t border-rose-200/60">
-      <div className="flex items-center justify-between text-xs">
+      <div className="flex items-center justify-between text-xs flex-wrap gap-2">
         <label className={`font-bold flex items-center gap-1.5 ${empty && !disabled ? "text-rose-600 animate-pulse" : "text-slate-700"}`}>
           <MessageSquare className="w-3.5 h-3.5" />
           Commentaire obligatoire {empty && "*"}
         </label>
-        <button
-          type="button"
-          onClick={insertTimestamp}
-          disabled={disabled}
-          style={{ transform: bumping ? "scale(0.92)" : "scale(1)" }}
-          className={`transition-transform px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-300 text-slate-700 text-[11px] font-bold flex items-center gap-1 ${
-            disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-200 cursor-pointer"
-          }`}
-        >
-          <Clock className="w-3 h-3 text-slate-500" />
-          Insérer minutage
-        </button>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {lastPauseTimestamp && (
+            <button
+              type="button"
+              onClick={() => insertTimestamp(lastPauseTimestamp)}
+              disabled={disabled}
+              className={`transition-all px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 text-[11px] font-extrabold flex items-center gap-1 shadow-xs animate-pulse ${
+                disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-emerald-500/20 cursor-pointer"
+              }`}
+              title="Insérer le minutage capturé lors de la mise en pause"
+            >
+              <PauseCircle className="w-3.5 h-3.5 text-emerald-600" />
+              Insérer pause {lastPauseTimestamp}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => insertTimestamp()}
+            disabled={disabled}
+            style={{ transform: bumping ? "scale(0.92)" : "scale(1)" }}
+            className={`transition-transform px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-300 text-slate-700 text-[11px] font-bold flex items-center gap-1 ${
+              disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-200 cursor-pointer"
+            }`}
+            title="Insérer le minutage actuel de l'audio"
+          >
+            <Clock className="w-3 h-3 text-slate-500" />
+            Insérer minutage
+          </button>
+        </div>
       </div>
       <textarea
         id={`comment-${itemId}`}
@@ -195,6 +219,7 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
   onBack,
 }) => {
   const [timeIsUp, setTimeIsUp] = useState(false);
+  const [lastPauseTimestamp, setLastPauseTimestamp] = useState<string | null>(null);
   const isFormDisabled = sessionLocked || timeIsUp;
 
   const tree = useMemo(() => buildTree(items), [items]);
@@ -568,8 +593,24 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
           </div>
 
           {audioUrl && (
-            <div className="w-full sm:w-auto">
-              <AudioPlayer audioUrl={audioUrl} title={callName} compact={true} />
+            <div className="w-full sm:w-auto space-y-2">
+              <AudioPlayer
+                audioUrl={audioUrl}
+                title={callName}
+                compact={true}
+                onPauseTimestamp={(ts) => setLastPauseTimestamp(ts)}
+              />
+              {lastPauseTimestamp && (
+                <div className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 flex items-center justify-between shadow-xs animate-fade-in">
+                  <span className="flex items-center gap-1.5">
+                    <PauseCircle className="w-4 h-4 text-emerald-600 animate-pulse flex-shrink-0" />
+                    Pause capturée à <strong className="font-mono text-emerald-950">{lastPauseTimestamp}</strong>
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-medium hidden sm:inline">
+                    Cliquez sur "Insérer pause" dans vos commentaires
+                  </span>
+                </div>
+              )}
             </div>
           )}
           {heureFin && (
@@ -772,6 +813,7 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
                                           itemId={sub.item.item_id}
                                           value={comments[sub.item.item_id] || ""}
                                           onChange={(v) => setComments((p) => ({ ...p, [sub.item.item_id]: v }))}
+                                          lastPauseTimestamp={lastPauseTimestamp}
                                           placeholder="Justification ou précision obligatoire de l'écart..."
                                           disabled={isFormDisabled}
                                         />

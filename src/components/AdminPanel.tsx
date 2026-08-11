@@ -35,11 +35,9 @@ import {
   Play,
   FileLock2,
   ArrowLeft,
-  Bookmark,
   Users,
   Layers,
   ExternalLink,
-  Copy,
   UserCheck,
   Award,
   Inbox,
@@ -95,8 +93,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newSessionAudio, setNewSessionAudio] = useState("");
   const [audioUploading, setAudioUploading] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
-  const [createdPin, setCreatedPin] = useState<string | null>(null);
-  const [createdSessionId, setCreatedSessionId] = useState<string | null>(null);
 
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [apiConnectionError, setApiConnectionError] = useState<string | null>(null);
@@ -219,7 +215,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
     setCreateLoading(true);
     setActionFeedback(null);
-    setCreatedPin(null);
 
     const res = await creerSession(
       newSessionName,
@@ -235,9 +230,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
     setCreateLoading(false);
 
-    if (res.success && res.pin && res.session_id) {
-      setCreatedPin(res.pin);
-      setCreatedSessionId(res.session_id);
+    if (res.success) {
       setActionFeedback({
         success: true,
         message: `Session "${newSessionName}" créée avec succès !`,
@@ -262,12 +255,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     );
     setActionLoadingId(null);
 
-    if (res.success && res.pin) {
-      setCreatedPin(res.pin);
-      setCreatedSessionId(res.session_id || demande.demande_id);
+    if (res.success) {
       setActionFeedback({
         success: true,
-        message: `Demande "${demande.nom_session}" approuvée & programmée ! Code PIN: ${res.pin}`,
+        message: `Demande "${demande.nom_session}" approuvée & programmée avec succès !`,
       });
       fetchSessions();
       fetchDemandes();
@@ -421,10 +412,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     fetchTemplates();
     fetchDemandes();
     fetchEvaluateurs();
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text).catch(() => {});
   };
 
   const getStatusBadge = (statut: string) => {
@@ -650,10 +637,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <Plus className="w-5 h-5 text-emerald-400" /> Nouvelle Session de Calibrage
               </div>
               <button
-                onClick={() => {
-                  setShowCreateForm(!showCreateForm);
-                  setCreatedPin(null);
-                }}
+                onClick={() => setShowCreateForm(!showCreateForm)}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-600/20"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -871,33 +855,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   )}
                 </button>
               </form>
-            )}
-
-            {/* Created PIN Display */}
-            {createdPin && createdSessionId && (
-              <div className="p-6 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl space-y-4">
-                <div className="flex items-center gap-2 text-indigo-300 font-bold text-sm">
-                  <Bookmark className="w-4.5 h-4.5 text-indigo-400" />
-                  Code PIN Gauge généré — Communiquez-le à l'évaluateur Gauge ({newSessionGauge})
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <div className="text-5xl font-black tracking-[0.3em] text-white text-center flex-1 py-4 bg-slate-900/80 rounded-xl border border-slate-700">
-                    {createdPin}
-                  </div>
-                  <button
-                    onClick={() => copyToClipboard(createdPin)}
-                    className="p-3 bg-slate-800 border border-slate-700 rounded-xl text-slate-300 hover:text-white hover:bg-slate-700 transition-all cursor-pointer"
-                    title="Copier le PIN"
-                  >
-                    <Copy className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <div className="text-xs text-indigo-300/70">
-                  Session: <span className="font-bold text-indigo-300">{createdSessionId}</span> • Animateur: <span className="font-bold text-purple-300">{newSessionAnimateur}</span>
-                </div>
-              </div>
             )}
           </section>
 

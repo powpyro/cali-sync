@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   getSessionsActives,
-  validerPin,
   listerTemplates,
   proposerCalibrage,
   getConfigTemplate,
@@ -90,14 +89,6 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
   useEffect(() => {
     fetchHistory();
   }, [fetchHistory]);
-
-  // Gauge PIN modal state
-  const [pinModalSession, setPinModalSession] = useState<string | null>(null);
-  const [showDirectPinModal, setShowDirectPinModal] = useState(false);
-  const [pin, setPin] = useState("");
-  const [pinError, setPinError] = useState(false);
-  const [pinLoading, setPinLoading] = useState(false);
-  const [pinShake, setPinShake] = useState(false);
 
   // Proposal Modal State
   const [showProposalModal, setShowProposalModal] = useState(false);
@@ -263,28 +254,6 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
       } else {
         onSelectSession(session.session_id, false);
       }
-    }
-  };
-
-  const handlePinValidation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pin) return;
-
-    setPinLoading(true);
-    const res = await validerPin(pinModalSession, pin);
-    setPinLoading(false);
-
-    if (res.success) {
-      const targetSessionId = (res.session_id as string) || pinModalSession || "";
-      setPinModalSession(null);
-      setShowDirectPinModal(false);
-      setPin("");
-      onSelectSession(targetSessionId, role === "gauge");
-    } else {
-      setPinError(true);
-      setPinShake(true);
-      setPin("");
-      setTimeout(() => setPinShake(false), 400);
     }
   };
 
@@ -536,19 +505,6 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {role === "gauge" && (
-              <button
-                onClick={() => {
-                  setPinModalSession(null);
-                  setPin("");
-                  setPinError(false);
-                  setShowDirectPinModal(true);
-                }}
-                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold rounded-xl transition-all shadow-md shadow-indigo-600/20 flex items-center gap-1.5 cursor-pointer"
-              >
-                <Lock className="w-4 h-4 text-indigo-200" /> Saisir Code / PIN Cockpit
-              </button>
-            )}
             <button
               onClick={() => setShowProposalModal(true)}
               className="px-3.5 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white text-xs font-extrabold rounded-xl transition-all shadow-md shadow-teal-600/20 flex items-center gap-1.5 cursor-pointer"
@@ -1270,85 +1226,6 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
                     <>
                       <span>Étape 2 : Évaluation Gauge de Référence</span>
                       <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-      {/* ── Gauge PIN Modal (Direct or Specific Session) ────────────────────── */}
-      {(pinModalSession || showDirectPinModal) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div
-            className={`bg-slate-900 border border-slate-700 rounded-2xl p-8 w-full max-w-sm shadow-2xl space-y-6 ${pinShake ? "animate-shake" : ""}`}
-          >
-            <div className="text-center space-y-2">
-              <div className="mx-auto w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center">
-                <Lock className="w-7 h-7 text-indigo-400" />
-              </div>
-              <h2 className="text-xl font-extrabold text-white">Code PIN de Session</h2>
-              <p className="text-sm text-slate-400">
-                {pinModalSession ? (
-                  <>
-                    Saisissez le PIN fourni par l'administrateur pour la session
-                    <br />
-                    <span className="text-indigo-400 font-bold">{pinModalSession}</span>
-                  </>
-                ) : (
-                  <>Saisissez le code PIN transmis par l'administrateur pour ouvrir directement votre session d'évaluation Gauge.</>
-                )}
-              </p>
-            </div>
-
-            <form onSubmit={handlePinValidation} className="space-y-4">
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                value={pin}
-                onChange={(e) => {
-                  setPin(e.target.value.replace(/\D/g, ""));
-                  setPinError(false);
-                }}
-                placeholder="••••••"
-                autoFocus
-                className={`w-full text-center text-3xl font-black tracking-[0.5em] px-4 py-3 rounded-xl bg-slate-800 border transition-all focus:outline-none ${
-                  pinError
-                    ? "border-rose-500 text-rose-400"
-                    : "border-slate-600 text-white focus:border-indigo-500"
-                }`}
-              />
-
-              {pinError && (
-                <p className="text-xs text-rose-400 font-semibold text-center">
-                  Code PIN incorrect ou aucune session trouvée. Vérifiez auprès de l'admin.
-                </p>
-              )}
-
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPinModalSession(null);
-                    setShowDirectPinModal(false);
-                    setPin("");
-                  }}
-                  className="px-5 py-3 bg-slate-800 border border-slate-700 text-slate-300 font-bold text-xs rounded-xl hover:bg-slate-700 cursor-pointer"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  disabled={pinLoading || pin.length < 4}
-                  className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {pinLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <>
-                      <Lock className="w-4 h-4" /> Accéder à l'Évaluation Gauge
                     </>
                   )}
                 </button>

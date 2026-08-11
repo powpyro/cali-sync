@@ -24,6 +24,7 @@ export interface AudioPlayerProps {
   compact?: boolean;
   markers?: AudioMarker[];
   className?: string;
+  onPauseTimestamp?: (timestampFormatted: string, seconds: number) => void;
 }
 
 export function formatTime(seconds: number): string {
@@ -65,6 +66,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   compact = false,
   markers = [],
   className = "",
+  onPauseTimestamp,
 }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -87,6 +89,19 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     setHasError(false);
     setPlayerMode("custom");
   }, [audioUrl]);
+
+  const handleAudioPause = () => {
+    setIsPlaying(false);
+    if (audioRef.current) {
+      const cur = audioRef.current.currentTime;
+      const mins = Math.floor(cur / 60);
+      const secs = Math.floor(cur % 60);
+      const formatted = `[${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}]`;
+      if (onPauseTimestamp) {
+        onPauseTimestamp(formatted, cur);
+      }
+    }
+  };
 
   const togglePlay = () => {
     if (!audioRef.current) return;
@@ -173,7 +188,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
           onPlay={() => setIsPlaying(true)}
-          onPause={() => setIsPlaying(false)}
+          onPause={handleAudioPause}
           onEnded={() => setIsPlaying(false)}
           onError={handleAudioError}
         />
@@ -297,7 +312,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
+        onPause={handleAudioPause}
         onEnded={() => setIsPlaying(false)}
         onError={handleAudioError}
       />
