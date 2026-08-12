@@ -1502,6 +1502,16 @@ function handleGetStructureGrille(ss, payload) {
   return handleGetCockpit(ss, sessionId);
 }
 
+function cleanStringKey(str) {
+  if (!str) return "";
+  return String(str)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+}
+
 function handleGetCockpit(ss, sessionId) {
   updateSessionStatuses(ss);
 
@@ -1512,9 +1522,17 @@ function handleGetCockpit(ss, sessionId) {
   var templateId  = null;
 
   var sessionGaugeId = "";
+  var sessionAnimateurId = "";
   for (var i = 1; i < sessData.length; i++) {
     if (String(sessData[i][0]).trim() === String(sessionId).trim()) {
+      sessionAnimateurId = String(sessData[i][10] || "").trim().toLowerCase();
       sessionGaugeId = String(sessData[i][11] || "").trim().toLowerCase();
+
+      // Retroactive fallback for old sessions: if gauge_id is empty, use animateur_id as gauge ID!
+      if (!sessionGaugeId && sessionAnimateurId) {
+        sessionGaugeId = sessionAnimateurId;
+      }
+
       sessionInfo = {
         session_id:  String(sessData[i][0]).trim(),
         nom_session: String(sessData[i][1]).trim(),
@@ -1523,7 +1541,7 @@ function handleGetCockpit(ss, sessionId) {
         url_audio:   String(sessData[i][8] || "").trim(),
         heure_fin:   String(sessData[i][7] || "").trim(),
         nom_conseiller: String(sessData[i][12] || "").trim(),
-        gauge_id:    String(sessData[i][11] || "").trim()
+        gauge_id:    sessionGaugeId
       };
       templateId = sessionInfo.template_id;
       break;
@@ -1534,7 +1552,7 @@ function handleGetCockpit(ss, sessionId) {
   var subSheet = ss.getSheetByName("Log_Soumissions");
   var subData  = subSheet ? subSheet.getDataRange().getValues() : [];
 
-  var gaugeMap     = {};  // itemId → { critere, commentaire, nom }
+  var gaugeMap     = {};  // itemId / libelle / cleanKey → { critere, commentaire, nom }
   var votesMap     = {};  // itemId → [{ nom, critere, commentaire }]
   var submittedSet = {};  // evalId → true
   var libellemap   = {};  // itemId → libelle (depuis les soumissions)
@@ -1546,7 +1564,8 @@ function handleGetCockpit(ss, sessionId) {
 
     var rEvalId  = String(subData[k][2]).trim();
     var rIsGaugeFlag = subData[k][3] === true || String(subData[k][3]).toUpperCase() === "TRUE";
-    var rIsGauge = rIsGaugeFlag || (sessionGaugeId !== "" && rEvalId.toLowerCase() === sessionGaugeId) || rEvalId.toLowerCase().includes("gauge");
+    var rEvalLower = rEvalId.toLowerCase();
+    var rIsGauge = rIsGaugeFlag || (sessionGaugeId !== "" && rEvalLower === sessionGaugeId) || (sessionAnimateurId !== "" && rEvalLower === sessionAnimateurId) || rEvalLower.includes("gauge");
 
     var rItemId  = String(subData[k][4]).trim();
     var rCat     = String(subData[k][5] || "Général").trim();
@@ -1558,7 +1577,15 @@ function handleGetCockpit(ss, sessionId) {
     catMap[rItemId]     = rCat;
 
     if (rIsGauge) {
-      gaugeMap[rItemId] = { critere: rStatut, commentaire: rComm, nom: rEvalId };
+      var gObj = { critere: rStatut, commentaire: rComm, nom: rEvalId };
+      gaugeMap[rItemId] = gObj;
+      if (rLibelle) gaugeMap[rLibelle] = gObj;
+
+      var cleanId  = cleanStringKey(rItemId);
+      var cleanLib = cleanStringKey(rLibelle);
+      if (cleanId)  gaugeMap[cleanId]  = gObj;
+      if (cleanLib) gaugeMap[cleanLib] = gObj;
+
       if (!rIsGaugeFlag && subSheet) {
         try { subSheet.getRange(k + 1, 4).setValue(true); } catch(e) {}
       }
@@ -1637,7 +1664,14 @@ function handleGetCockpit(ss, sessionId) {
       criticite: "Standard", categorie_racine_fr: catMap[itemId] || "Général", type_noeud: ""
     };
 
-    var gauge    = gaugeMap[itemId] || null;
+    var cleanId  = cleanStringKey(itemId);
+    var cleanLib = cleanStringKey(node.libelle);
+
+    var gauge = gaugeMap[itemId]
+      || (node.libelle ? gaugeMap[node.libelle] : null)
+      || (cleanId ? gaugeMap[cleanId] : null)
+      || (cleanLib ? gaugeMap[cleanLib] : null)
+      || null;
     var allVotes = votesMap[itemId] || [];
 
     // Grouper les votes par critère
