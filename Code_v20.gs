@@ -1565,7 +1565,14 @@ function handleGetCockpit(ss, sessionId) {
     var rEvalId  = String(subData[k][2]).trim();
     var rIsGaugeFlag = subData[k][3] === true || String(subData[k][3]).toUpperCase() === "TRUE";
     var rEvalLower = rEvalId.toLowerCase();
-    var rIsGauge = rIsGaugeFlag || (sessionGaugeId !== "" && rEvalLower === sessionGaugeId) || (sessionAnimateurId !== "" && rEvalLower === sessionAnimateurId) || rEvalLower.includes("gauge");
+    var rCleanEval = cleanStringKey(rEvalId);
+    var cleanGauge = cleanStringKey(sessionGaugeId);
+    var cleanAnim  = cleanStringKey(sessionAnimateurId);
+
+    var rIsGauge = rIsGaugeFlag
+      || (sessionGaugeId !== "" && (rEvalLower === sessionGaugeId || (cleanGauge.length >= 3 && (rCleanEval.includes(cleanGauge) || cleanGauge.includes(rCleanEval)))))
+      || (sessionAnimateurId !== "" && (rEvalLower === sessionAnimateurId || (cleanAnim.length >= 3 && (rCleanEval.includes(cleanAnim) || cleanAnim.includes(rCleanEval)))))
+      || rEvalLower.includes("gauge");
 
     var rItemId  = String(subData[k][4]).trim();
     var rCat     = String(subData[k][5] || "Général").trim();

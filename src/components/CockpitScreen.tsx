@@ -1284,11 +1284,32 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
 
     // Retroactive Fallback: Search votes array if node.gauge wasn't populated by backend
     if (!hasGaugeVote) {
+      const cleanStringKey = (str: string) =>
+        str
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]/g, "")
+          .trim();
+
+      const gaugeClean = cleanStringKey(gaugeIdLower);
+
       const isGaugeMatch = (nom: string) => {
         if (!nom) return false;
         const n = nom.trim().toLowerCase();
-        if (gaugeIdLower && n === gaugeIdLower) return true;
-        return n.includes("gauge") || n === "gauge";
+        const cleanN = cleanStringKey(n);
+
+        if (gaugeClean && cleanN) {
+          if (n === gaugeIdLower || cleanN === gaugeClean) return true;
+          // Substring / partial match (e.g., "diarra" matching "diarra.diallo" or "diallo.diarra")
+          if (
+            gaugeClean.length >= 3 &&
+            (cleanN.includes(gaugeClean) || gaugeClean.includes(cleanN))
+          ) {
+            return true;
+          }
+        }
+        return n.includes("gauge") || n === "gauge" || n.includes("admin");
       };
 
       const ouiIdx = votesOui.findIndex((v) => isGaugeMatch(v.nom));
