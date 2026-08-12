@@ -1280,7 +1280,10 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
     let votesNon = [...(node.votes_par_critere?.Non || [])];
     let votesNA = [...(node.votes_par_critere?.["N.A."] || [])];
 
-    const gaugeIdLower = (data?.gauge_id || "").trim().toLowerCase();
+    const gaugeIdLower = (
+      (data?.gauge_id || "") ||
+      (data?.animateur_id || "")
+    ).trim().toLowerCase();
 
     // Retroactive Fallback: Search votes array if node.gauge wasn't populated by backend
     if (!hasGaugeVote) {

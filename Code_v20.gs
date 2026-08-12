@@ -1347,7 +1347,8 @@ function handleSoumettreEvaluation(ss, payload) {
     return { success: false, message: "Paramètres requis manquants (session_id, evaluateur_id)." };
   }
 
-  // ── Vérifier si la session est verrouillée, clôturée, ou expirée ──
+  // ── Vérifier si la session est verrouillée, clôturée, ou expirée
+  //    ET auto-détecter le statut Gauge si est_gauge n'a pas été transmis ──
   var sessSheet = ss.getSheetByName("Sessions");
   if (sessSheet) {
     var sessData = sessSheet.getDataRange().getValues();
@@ -1355,21 +1356,47 @@ function handleSoumettreEvaluation(ss, payload) {
       if (String(sessData[i][0]).trim() === String(sessionId).trim()) {
         var status = String(sessData[i][2]).trim();
         var heureFermetureStr = sessData[i][7];
-        
+
         if (status === "LOCKED" || status === "CLOSED") {
           return { success: false, message: "La session est verrouillée ou clôturée, soumission impossible." };
         }
-        
+
         if (heureFermetureStr) {
           var closeTime = new Date(heureFermetureStr).getTime();
           var nowTime = new Date().getTime();
           if (nowTime > closeTime) {
-            if (status === "OPEN") {
-              sessSheet.getRange(i + 1, 3).setValue("LOCKED");
-            }
+            if (status === "OPEN") sessSheet.getRange(i + 1, 3).setValue("LOCKED");
             return { success: false, message: "La date limite de soumission est dépassée, soumission impossible." };
           }
         }
+
+        // ── AUTO-DÉTECTION GAUGE ─────────────────────────────────────────────
+        // Si le frontend n'a pas transmis est_gauge=true, on le déduit en
+        // comparant evalId avec gauge_id et animateur_id de la session.
+        if (!estGauge) {
+          var sessGaugeId = String(sessData[i][11] || "").trim().toLowerCase();
+          var sessAnimId  = String(sessData[i][10] || "").trim().toLowerCase();
+          if (!sessGaugeId && sessAnimId) sessGaugeId = sessAnimId;
+
+          var evalClean  = cleanStringKey(evalId);
+          var gaugeClean = cleanStringKey(sessGaugeId);
+          var animClean  = cleanStringKey(sessAnimId);
+
+          estGauge =
+            (sessGaugeId !== "" && (
+              evalId.toLowerCase() === sessGaugeId ||
+              (gaugeClean.length >= 3 && (evalClean.includes(gaugeClean) || gaugeClean.includes(evalClean)))
+            )) ||
+            (sessAnimId !== "" && (
+              evalId.toLowerCase() === sessAnimId ||
+              (animClean.length >= 3 && (evalClean.includes(animClean) || animClean.includes(evalClean)))
+            ));
+
+          if (estGauge) {
+            Logger.log("[AUTO-GAUGE] Session=" + sessionId + " Eval=" + evalId + " détecté comme Gauge via matching identifiants.");
+          }
+        }
+        // ────────────────────────────────────────────────────────────────────
         break;
       }
     }
@@ -1810,6 +1837,7 @@ function handleGetCockpit(ss, sessionId) {
     heure_fin:          sessionInfo ? sessionInfo.heure_fin : "",
     nom_conseiller:     sessionInfo ? sessionInfo.nom_conseiller : "",
     gauge_id:           sessionInfo ? sessionInfo.gauge_id : "",
+    animateur_id:       sessionAnimateurId || "",
     evaluateurs_soumis: Object.keys(submittedSet),
     grille_hierarchique: grilleHierarchique,
     is_read_only:       isReadOnly,
@@ -2480,3 +2508,66 @@ function handleUploadAudioDrive(ss, body) {
 function jsonResponse(data) {
   return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
 }
+
+// ==============================================================================
+// CORRECTION RÉTROACTIVE — Marquer est_gauge=TRUE dans Log_Soumissions
+// Appelez cette fonction UNE SEULE FOIS depuis l'éditeur GAS pour corriger
+// toutes les soumissions existantes dont le flag est_gauge est manquant.
+// ==============================================================================
+function corrigerEstGaugeRetroactif() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sessSheet = ss.getSheetByName("Sessions");
+  var subSheet  = ss.getSheetByName("Log_Soumissions");
+  if (!sessSheet || !subSheet) {
+    Logger.log("Feuilles manquantes.");
+    return;
+  }
+
+  var sessData = sessSheet.getDataRange().getValues();
+  var subData  = subSheet.getDataRange().getValues();
+
+  // Construire index: session_id → { gaugeId, animId }
+  var sessIndex = {};
+  for (var i = 1; i < sessData.length; i++) {
+    var sid     = String(sessData[i][0]).trim();
+    var gaugeId = String(sessData[i][11] || "").trim().toLowerCase();
+    var animId  = String(sessData[i][10] || "").trim().toLowerCase();
+    if (!gaugeId && animId) gaugeId = animId;
+    sessIndex[sid] = { gaugeId: gaugeId, animId: animId };
+  }
+
+  var corrected = 0;
+  for (var k = 1; k < subData.length; k++) {
+    // Si déjà TRUE, passer
+    if (subData[k][3] === true || String(subData[k][3]).toUpperCase() === "TRUE") continue;
+
+    var rSessId = String(subData[k][1]).trim();
+    var rEvalId = String(subData[k][2]).trim().toLowerCase();
+
+    var sess = sessIndex[rSessId];
+    if (!sess) continue;
+
+    var ec  = cleanStringKey(rEvalId);
+    var gc  = cleanStringKey(sess.gaugeId);
+    var ac  = cleanStringKey(sess.animId);
+
+    var isGauge =
+      (sess.gaugeId !== "" && (
+        rEvalId === sess.gaugeId ||
+        (gc.length >= 3 && (ec.includes(gc) || gc.includes(ec)))
+      )) ||
+      (sess.animId !== "" && (
+        rEvalId === sess.animId ||
+        (ac.length >= 3 && (ec.includes(ac) || ac.includes(ec)))
+      ));
+
+    if (isGauge) {
+      subSheet.getRange(k + 1, 4).setValue(true);
+      corrected++;
+      Logger.log("Corrigé ligne " + (k + 1) + " : session=" + rSessId + " eval=" + rEvalId);
+    }
+  }
+
+  Logger.log("✅ Correction terminée — " + corrected + " ligne(s) mise(s) à jour.");
+}
+

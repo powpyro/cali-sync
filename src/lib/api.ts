@@ -241,6 +241,7 @@ export interface SessionDataResponse {
   template_id?: string;
   nom_conseiller?: string;
   gauge_id?: string;
+  animateur_id?: string;
   grille_hierarchique?: CockpitNode[];
   is_read_only?: boolean;
 }
