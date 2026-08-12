@@ -1269,16 +1269,61 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
   // ─────────────────────────────────────────────────────────────────────────────
   const renderItemCard = (node: CockpitNode, isSubItem = false) => {
     const labelClean = cleanLibelle(node.libelle);
-    const votesOui = node.votes_par_critere?.Oui || [];
-    const votesNon = node.votes_par_critere?.Non || [];
-    const votesNA = node.votes_par_critere?.["N.A."] || [];
 
-    const isAccord = node.statut_accord === "accord";
-    const isDivergence = node.statut_accord === "divergence";
+    // Dynamic Gauge Extraction with Retroactive Fallback
+    let gaugeCritere = node.gauge?.critere || "N/A";
+    let gaugeComment = node.gauge?.commentaire || "";
+    let gaugeNom = node.gauge?.nom || "";
+    let hasGaugeVote = !!(node.gauge?.critere && node.gauge.critere !== "N/A" && node.gauge.critere !== "");
 
-    const gaugeCritere = node.gauge?.critere || "N/A";
-    const gaugeComment = node.gauge?.commentaire || "";
-    const hasGaugeVote = node.gauge?.critere && node.gauge.critere !== "N/A" && node.gauge.critere !== "";
+    let votesOui = [...(node.votes_par_critere?.Oui || [])];
+    let votesNon = [...(node.votes_par_critere?.Non || [])];
+    let votesNA = [...(node.votes_par_critere?.["N.A."] || [])];
+
+    const gaugeIdLower = (data?.gauge_id || "").trim().toLowerCase();
+
+    // Retroactive Fallback: Search votes array if node.gauge wasn't populated by backend
+    if (!hasGaugeVote) {
+      const isGaugeMatch = (nom: string) => {
+        if (!nom) return false;
+        const n = nom.trim().toLowerCase();
+        if (gaugeIdLower && n === gaugeIdLower) return true;
+        return n.includes("gauge") || n === "gauge";
+      };
+
+      const ouiIdx = votesOui.findIndex((v) => isGaugeMatch(v.nom));
+      const nonIdx = votesNon.findIndex((v) => isGaugeMatch(v.nom));
+      const naIdx = votesNA.findIndex((v) => isGaugeMatch(v.nom));
+
+      if (ouiIdx !== -1) {
+        const gVote = votesOui.splice(ouiIdx, 1)[0];
+        gaugeCritere = "Oui";
+        gaugeComment = gVote.commentaire || "";
+        gaugeNom = gVote.nom;
+        hasGaugeVote = true;
+      } else if (nonIdx !== -1) {
+        const gVote = votesNon.splice(nonIdx, 1)[0];
+        gaugeCritere = "Non";
+        gaugeComment = gVote.commentaire || "";
+        gaugeNom = gVote.nom;
+        hasGaugeVote = true;
+      } else if (naIdx !== -1) {
+        const gVote = votesNA.splice(naIdx, 1)[0];
+        gaugeCritere = "N.A.";
+        gaugeComment = gVote.commentaire || "";
+        gaugeNom = gVote.nom;
+        hasGaugeVote = true;
+      }
+    }
+
+    const isAccord = node.statut_accord === "accord" || (hasGaugeVote && (
+      (gaugeCritere === "Oui" && votesNon.length === 0) ||
+      (gaugeCritere === "Non" && votesOui.length === 0)
+    ));
+    const isDivergence = node.statut_accord === "divergence" || (hasGaugeVote && (
+      (gaugeCritere === "Oui" && votesNon.length > 0) ||
+      (gaugeCritere === "Non" && votesOui.length > 0)
+    ));
 
     const treeSummary = getTreeImputationSummary(node);
     const isImputedHere = votesNon.length > 0;
@@ -1572,7 +1617,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
 
                 <div className="flex items-center justify-between border-b border-indigo-500/30 pb-3">
                   <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-indigo-300">
-                    <ShieldCheck className="w-5 h-5 text-indigo-400" /> ÉVALUATEUR GAUGE
+                    <ShieldCheck className="w-5 h-5 text-indigo-400" /> ÉVALUATEUR GAUGE {gaugeNom && <span className="text-indigo-200 font-mono text-[11px] font-semibold lowercase">({gaugeNom})</span>}
                   </div>
                   <span
                     className={`px-4 py-1.5 rounded-xl text-sm font-black uppercase tracking-wide shadow-md ${

@@ -240,6 +240,7 @@ export interface SessionDataResponse {
   // Nouveaux champs cockpit hiérarchique
   template_id?: string;
   nom_conseiller?: string;
+  gauge_id?: string;
   grille_hierarchique?: CockpitNode[];
   is_read_only?: boolean;
 }
