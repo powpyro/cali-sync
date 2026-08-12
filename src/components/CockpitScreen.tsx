@@ -495,6 +495,19 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
         setData(res);
         setError(null);
 
+        // ── DEBUG: Log gauge detection data to browser console ──────────────
+        console.group("🔍 [CaliSync Cockpit] Gauge Debug");
+        console.log("gauge_id from backend:", res.gauge_id || "(empty)");
+        console.log("animateur_id from backend:", (res as any).animateur_id || "(empty)");
+        console.log("evaluateurs_soumis:", res.evaluateurs_soumis);
+        const firstN2 = res.grille_hierarchique?.[0]?.children?.[0];
+        if (firstN2) {
+          console.log("First N2 node.gauge:", firstN2.gauge);
+          console.log("First N2 votes_par_critere:", firstN2.votes_par_critere);
+        }
+        console.groupEnd();
+        // ────────────────────────────────────────────────────────────────────
+
         if (res.evaluateurs_soumis) {
           const submittedIds = res.evaluateurs_soumis;
           setEvaluators(
