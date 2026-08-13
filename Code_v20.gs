@@ -409,14 +409,18 @@ function handleApprouverDemandeCalibrage(ss, req) {
   ]);
 
   let sheetSub = ss.getSheetByName("Log_Soumissions");
+  var migratedCount = 0;
   if (sheetSub) {
     const subData = sheetSub.getDataRange().getValues();
     for (let i = 1; i < subData.length; i++) {
-      if (subData[i][1] === demandeId) {
+      // Utilisation de String().trim() pour éviter les erreurs de type (nombre vs chaîne)
+      if (String(subData[i][1]).trim() === String(demandeId).trim()) {
         sheetSub.getRange(i + 1, 2).setValue(sessionId);
+        migratedCount++;
       }
     }
   }
+  Logger.log("[APPROUVER] Session créée=" + sessionId + " depuis demande=" + demandeId + " — " + migratedCount + " ligne(s) Log_Soumissions migrée(s).");
 
   return { success: true, session_id: sessionId, pin: pin, message: "Demande approuvée & programmée !" };
 }
@@ -1629,6 +1633,70 @@ function handleGetCockpit(ss, sessionId) {
       votesMap[rItemId].push({ nom: rEvalId, critere: rStatut, commentaire: rComm });
     }
   }
+
+  // ── FALLBACK : Récupération des items Gauge soumis lors de la demande ──────
+  // Si gaugeMap est vide après le scan principal, la migration demandeId→sessionId
+  // a probablement échoué. On scanne ALL les lignes de Log_Soumissions à la
+  // recherche de lignes est_gauge=TRUE dont l'evaluateur_id correspond à gauge_id.
+  // ─────────────────────────────────────────────────────────────────────────────
+  if (Object.keys(gaugeMap).length === 0 && sessionGaugeId !== "") {
+    var cgaugeClean = cleanStringKey(sessionGaugeId);
+    var canimClean  = cleanStringKey(sessionAnimateurId);
+    Logger.log("[GAUGE FALLBACK] gaugeMap vide — scan de récupération pour gauge_id=" + sessionGaugeId);
+
+    for (var fb = 1; fb < subData.length; fb++) {
+      // Seulement les lignes explicitement marquées est_gauge=TRUE
+      var fbIsGaugeFlag = subData[fb][3] === true || String(subData[fb][3]).toUpperCase() === "TRUE";
+      if (!fbIsGaugeFlag) continue;
+
+      var fbEvalId    = String(subData[fb][2]).trim().toLowerCase();
+      var fbCleanEval = cleanStringKey(fbEvalId);
+
+      // Correspondance exacte ou floue avec gauge_id ou animateur_id
+      var fbMatch =
+        (sessionGaugeId !== "" && (
+          fbEvalId === sessionGaugeId ||
+          (cgaugeClean.length >= 3 && (fbCleanEval.includes(cgaugeClean) || cgaugeClean.includes(fbCleanEval)))
+        )) ||
+        (sessionAnimateurId !== "" && (
+          fbEvalId === sessionAnimateurId ||
+          (canimClean.length >= 3 && (fbCleanEval.includes(canimClean) || canimClean.includes(fbCleanEval)))
+        ));
+
+      if (!fbMatch) continue;
+
+      var fbItemId  = String(subData[fb][4]).trim();
+      var fbLibelle = String(subData[fb][6] || fbItemId).trim();
+      var fbStatut  = normaliserReponse(subData[fb][7]);
+      var fbComm    = String(subData[fb][8] || "").trim();
+      var fbCat     = String(subData[fb][5] || "Général").trim();
+
+      var fbObj = { critere: fbStatut, commentaire: fbComm, nom: String(subData[fb][2]).trim() };
+      gaugeMap[fbItemId] = fbObj;
+      if (fbLibelle) gaugeMap[fbLibelle] = fbObj;
+
+      var fbCleanId  = cleanStringKey(fbItemId);
+      var fbCleanLib = cleanStringKey(fbLibelle);
+      if (fbCleanId)  gaugeMap[fbCleanId]  = fbObj;
+      if (fbCleanLib) gaugeMap[fbCleanLib] = fbObj;
+
+      if (!libellemap[fbItemId]) libellemap[fbItemId] = fbLibelle;
+      if (!catMap[fbItemId])     catMap[fbItemId]     = fbCat;
+
+      // Corriger rétroactivement le session_id dans Log_Soumissions
+      if (subSheet) {
+        try {
+          var currentSessId = String(subData[fb][1]).trim();
+          if (currentSessId !== String(sessionId).trim()) {
+            subSheet.getRange(fb + 1, 2).setValue(sessionId);
+            Logger.log("[GAUGE FALLBACK] Migré ligne " + (fb+1) + " : " + currentSessId + " → " + sessionId);
+          }
+        } catch(e) {}
+      }
+    }
+    Logger.log("[GAUGE FALLBACK] Items récupérés : " + Object.keys(gaugeMap).length / 4 + " items (x4 clés)");
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
 
   // ── 3. Décisions finales (Historique_Arbitrages) ──────────────────────────
   var arbSheet = ss.getSheetByName("Historique_Arbitrages");
