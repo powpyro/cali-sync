@@ -1375,29 +1375,25 @@ function handleSoumettreEvaluation(ss, payload) {
         }
 
         // ── AUTO-DÉTECTION GAUGE ─────────────────────────────────────────────
-        // Si le frontend n'a pas transmis est_gauge=true, on le déduit en
-        // comparant evalId avec gauge_id et animateur_id de la session.
+        // Si le frontend n'a pas transmis est_gauge=true, on le déduit EN
+        // comparant evalId avec gauge_id UNIQUEMENT (col 12).
+        // ⚠️ On n'utilise PAS animateur_id : l'admin peut évaluer normalement.
         if (!estGauge) {
           var sessGaugeId = String(sessData[i][11] || "").trim().toLowerCase();
           var sessAnimId  = String(sessData[i][10] || "").trim().toLowerCase();
-          if (!sessGaugeId && sessAnimId) sessGaugeId = sessAnimId;
 
-          var evalClean  = cleanStringKey(evalId);
-          var gaugeClean = cleanStringKey(sessGaugeId);
-          var animClean  = cleanStringKey(sessAnimId);
+          // Si l'évaluateur est l'animateur mais PAS la gauge → forcer est_gauge=FALSE
+          var isAnimateur = sessAnimId !== "" && evalId.toLowerCase() === sessAnimId;
 
-          estGauge =
-            (sessGaugeId !== "" && (
-              evalId.toLowerCase() === sessGaugeId ||
-              (gaugeClean.length >= 3 && (evalClean.includes(gaugeClean) || gaugeClean.includes(evalClean)))
-            )) ||
-            (sessAnimId !== "" && (
-              evalId.toLowerCase() === sessAnimId ||
-              (animClean.length >= 3 && (evalClean.includes(animClean) || animClean.includes(evalClean)))
-            ));
+          if (!isAnimateur && sessGaugeId !== "") {
+            var evalClean  = cleanStringKey(evalId);
+            var gaugeClean = cleanStringKey(sessGaugeId);
+            estGauge = evalId.toLowerCase() === sessGaugeId ||
+              (gaugeClean.length >= 3 && (evalClean.includes(gaugeClean) || gaugeClean.includes(evalClean)));
+          }
 
           if (estGauge) {
-            Logger.log("[AUTO-GAUGE] Session=" + sessionId + " Eval=" + evalId + " détecté comme Gauge via matching identifiants.");
+            Logger.log("[AUTO-GAUGE] Session=" + sessionId + " Eval=" + evalId + " détecté comme Gauge (gauge_id=" + sessGaugeId + ").");
           }
         }
         // ────────────────────────────────────────────────────────────────────
@@ -1634,69 +1630,6 @@ function handleGetCockpit(ss, sessionId) {
     }
   }
 
-  // ── FALLBACK : Récupération des items Gauge soumis lors de la demande ──────
-  // Si gaugeMap est vide après le scan principal, la migration demandeId→sessionId
-  // a probablement échoué. On scanne ALL les lignes de Log_Soumissions à la
-  // recherche de lignes est_gauge=TRUE dont l'evaluateur_id correspond à gauge_id.
-  // ─────────────────────────────────────────────────────────────────────────────
-  if (Object.keys(gaugeMap).length === 0 && sessionGaugeId !== "") {
-    var cgaugeClean = cleanStringKey(sessionGaugeId);
-    var canimClean  = cleanStringKey(sessionAnimateurId);
-    Logger.log("[GAUGE FALLBACK] gaugeMap vide — scan de récupération pour gauge_id=" + sessionGaugeId);
-
-    for (var fb = 1; fb < subData.length; fb++) {
-      // Seulement les lignes explicitement marquées est_gauge=TRUE
-      var fbIsGaugeFlag = subData[fb][3] === true || String(subData[fb][3]).toUpperCase() === "TRUE";
-      if (!fbIsGaugeFlag) continue;
-
-      var fbEvalId    = String(subData[fb][2]).trim().toLowerCase();
-      var fbCleanEval = cleanStringKey(fbEvalId);
-
-      // Correspondance exacte ou floue avec gauge_id ou animateur_id
-      var fbMatch =
-        (sessionGaugeId !== "" && (
-          fbEvalId === sessionGaugeId ||
-          (cgaugeClean.length >= 3 && (fbCleanEval.includes(cgaugeClean) || cgaugeClean.includes(fbCleanEval)))
-        )) ||
-        (sessionAnimateurId !== "" && (
-          fbEvalId === sessionAnimateurId ||
-          (canimClean.length >= 3 && (fbCleanEval.includes(canimClean) || canimClean.includes(fbCleanEval)))
-        ));
-
-      if (!fbMatch) continue;
-
-      var fbItemId  = String(subData[fb][4]).trim();
-      var fbLibelle = String(subData[fb][6] || fbItemId).trim();
-      var fbStatut  = normaliserReponse(subData[fb][7]);
-      var fbComm    = String(subData[fb][8] || "").trim();
-      var fbCat     = String(subData[fb][5] || "Général").trim();
-
-      var fbObj = { critere: fbStatut, commentaire: fbComm, nom: String(subData[fb][2]).trim() };
-      gaugeMap[fbItemId] = fbObj;
-      if (fbLibelle) gaugeMap[fbLibelle] = fbObj;
-
-      var fbCleanId  = cleanStringKey(fbItemId);
-      var fbCleanLib = cleanStringKey(fbLibelle);
-      if (fbCleanId)  gaugeMap[fbCleanId]  = fbObj;
-      if (fbCleanLib) gaugeMap[fbCleanLib] = fbObj;
-
-      if (!libellemap[fbItemId]) libellemap[fbItemId] = fbLibelle;
-      if (!catMap[fbItemId])     catMap[fbItemId]     = fbCat;
-
-      // Corriger rétroactivement le session_id dans Log_Soumissions
-      if (subSheet) {
-        try {
-          var currentSessId = String(subData[fb][1]).trim();
-          if (currentSessId !== String(sessionId).trim()) {
-            subSheet.getRange(fb + 1, 2).setValue(sessionId);
-            Logger.log("[GAUGE FALLBACK] Migré ligne " + (fb+1) + " : " + currentSessId + " → " + sessionId);
-          }
-        } catch(e) {}
-      }
-    }
-    Logger.log("[GAUGE FALLBACK] Items récupérés : " + Object.keys(gaugeMap).length / 4 + " items (x4 clés)");
-  }
-  // ─────────────────────────────────────────────────────────────────────────────
 
   // ── 3. Décisions finales (Historique_Arbitrages) ──────────────────────────
   var arbSheet = ss.getSheetByName("Historique_Arbitrages");
@@ -2639,3 +2572,90 @@ function corrigerEstGaugeRetroactif() {
   Logger.log("✅ Correction terminée — " + corrected + " ligne(s) mise(s) à jour.");
 }
 
+// ==============================================================================
+// RÉPARATION DONNÉES CORROMPUES — À exécuter UNE SEULE FOIS depuis l'éditeur GAS
+// Corrige les dommages causés par le fallback cross-session du 12/08 :
+//  1. Réinitialise est_gauge=FALSE pour les lignes dont l'évaluateur n'est PAS
+//     le gauge_id de la session indiquée.
+//  2. Tente de restaurer le session_id correct pour les lignes migrées à tort.
+// ==============================================================================
+function repairerDonneesCorrupted() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sessSheet = ss.getSheetByName("Sessions");
+  var subSheet  = ss.getSheetByName("Log_Soumissions");
+  if (!sessSheet || !subSheet) { Logger.log("Feuilles manquantes."); return; }
+
+  var sessData = sessSheet.getDataRange().getValues();
+  var subData  = subSheet.getDataRange().getValues();
+
+  // Index 1: session_id → gauge_id (col 12)
+  var sessGaugeIndex = {};
+  // Index 2: gauge_id → [session_id, ...] pour retrouver la bonne session
+  var gaugeToSessions = {};
+  for (var i = 1; i < sessData.length; i++) {
+    var sid    = String(sessData[i][0]).trim();
+    var gid    = String(sessData[i][11] || "").trim().toLowerCase();
+    var aid    = String(sessData[i][10] || "").trim().toLowerCase();
+    // Pour les vieilles sessions sans gauge_id explicite, ne pas inclure animId
+    sessGaugeIndex[sid] = gid;
+    if (gid) {
+      if (!gaugeToSessions[gid]) gaugeToSessions[gid] = [];
+      gaugeToSessions[gid].push(sid);
+    }
+  }
+
+  var resetCount   = 0;
+  var restoredCount = 0;
+
+  for (var k = 1; k < subData.length; k++) {
+    var rowSessId = String(subData[k][1]).trim();
+    var rowEvalId = String(subData[k][2]).trim().toLowerCase();
+    var isGauge   = subData[k][3] === true || String(subData[k][3]).toUpperCase() === "TRUE";
+    if (!isGauge) continue; // On ne traite que les lignes est_gauge=TRUE
+
+    // Vérifier que l'évaluateur est bien la gauge de la session indiquée
+    var expectedGauge = sessGaugeIndex[rowSessId] || "";
+    var ec = cleanStringKey(rowEvalId);
+    var gc = cleanStringKey(expectedGauge);
+
+    var isLegit = expectedGauge !== "" && (
+      rowEvalId === expectedGauge ||
+      (gc.length >= 3 && (ec.includes(gc) || gc.includes(ec)))
+    );
+
+    if (isLegit) continue; // Ligne correcte, ne rien toucher
+
+    // ── Ligne corrompue : tenter de restaurer le bon session_id ──────────────
+    var correctSessId = null;
+    var possibleSessions = gaugeToSessions[rowEvalId] || [];
+    // Chercher aussi via fuzzy match
+    if (possibleSessions.length === 0) {
+      Object.keys(gaugeToSessions).forEach(function(gKey) {
+        var gcKey = cleanStringKey(gKey);
+        if (gcKey.length >= 3 && (ec.includes(gcKey) || gcKey.includes(ec))) {
+          possibleSessions = possibleSessions.concat(gaugeToSessions[gKey]);
+        }
+      });
+    }
+
+    if (possibleSessions.length === 1) {
+      correctSessId = possibleSessions[0];
+    } else if (possibleSessions.length > 1) {
+      // Plusieurs sessions possibles — choisir la plus récente
+      correctSessId = possibleSessions[possibleSessions.length - 1];
+    }
+
+    if (correctSessId && correctSessId !== rowSessId) {
+      subSheet.getRange(k + 1, 2).setValue(correctSessId);
+      Logger.log("[REPAIR] L" + (k+1) + " session_id restauré: " + rowSessId + " → " + correctSessId + " (eval=" + rowEvalId + ")");
+      restoredCount++;
+    } else {
+      // Impossible de retrouver la bonne session → réinitialiser est_gauge
+      subSheet.getRange(k + 1, 4).setValue(false);
+      Logger.log("[REPAIR] L" + (k+1) + " est_gauge remis à FALSE (eval=" + rowEvalId + ", sess=" + rowSessId + " n'a pas cette gauge)");
+      resetCount++;
+    }
+  }
+
+  Logger.log("✅ Réparation terminée — " + restoredCount + " session(s) restaurée(s), " + resetCount + " flag(s) réinitialisé(s).");
+}
