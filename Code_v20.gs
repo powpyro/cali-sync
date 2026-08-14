@@ -1646,6 +1646,67 @@ function handleGetCockpit(ss, sessionId) {
     }
   }
 
+  // ── FALLBACK SÉCURISÉ : migration demandeId→sessionId manquée ──────────────
+  // Déclenché uniquement si gaugeMap EST VIDE et qu'un gauge_id est défini.
+  // Contrairement à l'ancienne version, ce scan filtre STRICTEMENT par gauge_id
+  // (jamais par animateur_id) pour éviter la pollution cross-session.
+  // ───────────────────────────────────────────────────────────────────────────
+  if (Object.keys(gaugeMap).length === 0 && sessionGaugeId !== "") {
+    var fbGaugeClean = cleanStringKey(sessionGaugeId);
+    Logger.log("[GAUGE SAFE FALLBACK] gaugeMap vide pour session=" + sessionId + ", recherche par gauge_id=" + sessionGaugeId);
+    var fbFound = 0;
+
+    for (var fb = 1; fb < subData.length; fb++) {
+      // Seulement les lignes est_gauge=TRUE
+      var fbFlag = subData[fb][3] === true || String(subData[fb][3]).toUpperCase() === "TRUE";
+      if (!fbFlag) continue;
+
+      // Filtrage STRICT par gauge_id uniquement (JAMAIS animateur_id)
+      var fbEvalRaw = String(subData[fb][2]).trim();
+      var fbEvalLow = fbEvalRaw.toLowerCase();
+      var fbEvalClean = cleanStringKey(fbEvalRaw);
+
+      var fbMatch = fbEvalLow === sessionGaugeId ||
+        (fbGaugeClean.length >= 3 && (fbEvalClean.includes(fbGaugeClean) || fbGaugeClean.includes(fbEvalClean)));
+
+      if (!fbMatch) continue;
+
+      // Vérification additionnelle: ignorer les lignes dont le session_id est DÉJÀ une autre SESS_
+      var fbSessId = String(subData[fb][1]).trim();
+      if (fbSessId.startsWith("SESS_") && fbSessId !== String(sessionId).trim()) {
+        // Cette ligne appartient à UNE AUTRE session — ne pas toucher
+        continue;
+      }
+
+      var fbItemId  = String(subData[fb][4]).trim();
+      var fbLibelle = String(subData[fb][6] || fbItemId).trim();
+      var fbStatut  = normaliserReponse(subData[fb][7]);
+      var fbComm    = String(subData[fb][8] || "").trim();
+      var fbCat     = String(subData[fb][5] || "Général").trim();
+
+      var fbObj = { critere: fbStatut, commentaire: fbComm, nom: fbEvalRaw };
+      gaugeMap[fbItemId] = fbObj;
+      if (fbLibelle) gaugeMap[fbLibelle] = fbObj;
+      var fbCleanId  = cleanStringKey(fbItemId);
+      var fbCleanLib = cleanStringKey(fbLibelle);
+      if (fbCleanId)  gaugeMap[fbCleanId]  = fbObj;
+      if (fbCleanLib) gaugeMap[fbCleanLib] = fbObj;
+
+      if (!libellemap[fbItemId]) libellemap[fbItemId] = fbLibelle;
+      if (!catMap[fbItemId])     catMap[fbItemId]     = fbCat;
+
+      // Migrer rétroactivement le session_id si c'est encore un demandeId (DEM_)
+      if (subSheet && fbSessId !== String(sessionId).trim()) {
+        try {
+          subSheet.getRange(fb + 1, 2).setValue(sessionId);
+          Logger.log("[GAUGE SAFE FALLBACK] Migré ligne " + (fb+1) + " : " + fbSessId + " → " + sessionId);
+        } catch(e) {}
+      }
+      fbFound++;
+    }
+    Logger.log("[GAUGE SAFE FALLBACK] " + fbFound + " item(s) Gauge récupéré(s) pour session=" + sessionId);
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
 
   // ── 3. Décisions finales (Historique_Arbitrages) ──────────────────────────
   var arbSheet = ss.getSheetByName("Historique_Arbitrages");
