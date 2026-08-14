@@ -497,14 +497,21 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
 
         // ── DEBUG: Log gauge detection data to browser console ──────────────
         console.group("🔍 [CaliSync Cockpit] Gauge Debug");
-        console.log("gauge_id from backend:", res.gauge_id || "(empty)");
-        console.log("animateur_id from backend:", (res as any).animateur_id || "(empty)");
+        console.log("gauge_id from backend:", res.gauge_id || "(VIDE)");
+        console.log("animateur_id from backend:", (res as any).animateur_id || "(VIDE)");
+        console.log("gauge_items_count (GAS):", (res as any).gauge_items_count ?? "N/A");
         console.log("evaluateurs_soumis:", res.evaluateurs_soumis);
-        const firstN2 = res.grille_hierarchique?.[0]?.children?.[0];
+        const firstN1 = res.grille_hierarchique?.[0];
+        const firstN2 = firstN1?.children?.[0] ?? firstN1;
         if (firstN2) {
-          console.log("First N2 node.gauge:", firstN2.gauge);
-          console.log("First N2 votes_par_critere:", firstN2.votes_par_critere);
+          console.log("Premier nœud N2 — item_id:", firstN2.item_id);
+          console.log("Premier nœud N2 — node.gauge:", firstN2.gauge);
+          console.log("Premier nœud N2 — total_votes:", firstN2.total_votes);
         }
+        console.log("🔑 INTERPRÉTATION:");
+        console.log("  gauge_id VIDE → gauge jamais configurée dans Sessions");
+        console.log("  gauge_items_count=0 → gaugeMap vide (items pas trouvés en DB)");
+        console.log("  gauge_items_count>0 mais node.gauge=null → ID mismatch entre gaugeMap et cfgNodes");
         console.groupEnd();
         // ────────────────────────────────────────────────────────────────────
 

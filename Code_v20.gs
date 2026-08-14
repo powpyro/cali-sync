@@ -1916,6 +1916,7 @@ function handleGetCockpit(ss, sessionId) {
     nom_conseiller:     sessionInfo ? sessionInfo.nom_conseiller : "",
     gauge_id:           sessionInfo ? sessionInfo.gauge_id : "",
     animateur_id:       sessionAnimateurId || "",
+    gauge_items_count:  Object.keys(gaugeMap).length,   // DEBUG: nombre d’éléments dans gaugeMap
     evaluateurs_soumis: Object.keys(submittedSet),
     grille_hierarchique: grilleHierarchique,
     is_read_only:       isReadOnly,
@@ -2735,4 +2736,72 @@ function repairerDonneesCorrupted() {
   }
 
   Logger.log("✅ Réparation terminée — " + restoredCount + " session(s) restaurée(s), " + resetCount + " flag(s) réinitialisé(s).");
+}
+// ==============================================================================
+// DIAGNOSTIC — À exécuter manuellement depuis Apps Script Editor
+// Remplacez TARGET_SESSION_ID par l'ID réel de la session à inspecter.
+// ==============================================================================
+function diagnostiqueSessionGauge() {
+  var TARGET_SESSION_ID = "REMPLACER_PAR_SESSION_ID"; // ex: "SESS_2026_1234"
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  var sessSheet = ss.getSheetByName("Sessions");
+  var sessData  = sessSheet ? sessSheet.getDataRange().getValues() : [];
+  var sessRow   = null;
+  for (var i = 1; i < sessData.length; i++) {
+    if (String(sessData[i][0]).trim() === String(TARGET_SESSION_ID).trim()) {
+      sessRow = sessData[i]; break;
+    }
+  }
+
+  if (!sessRow) {
+    Logger.log("❌ Session introuvable: " + TARGET_SESSION_ID);
+    Logger.log("Sessions existantes:");
+    for (var j = 1; j < Math.min(sessData.length, 11); j++) {
+      Logger.log("  " + sessData[j][0] + " | " + sessData[j][1] + " | " + sessData[j][2]);
+    }
+    return;
+  }
+
+  Logger.log("=== SESSION ===");
+  Logger.log("session_id   : " + sessRow[0]);
+  Logger.log("nom_session  : " + sessRow[1]);
+  Logger.log("statut       : " + sessRow[2]);
+  Logger.log("animateur_id : " + sessRow[10]);
+  Logger.log("gauge_id     : " + sessRow[11]);
+
+  var gaugeId = String(sessRow[11] || "").trim().toLowerCase();
+  var subSheet = ss.getSheetByName("Log_Soumissions");
+  var subData  = subSheet ? subSheet.getDataRange().getValues() : [];
+  var countBySessId = 0, countGaugeSessId = 0, countGaugeByEvalId = 0;
+
+  for (var k = 1; k < subData.length; k++) {
+    var rSessId  = String(subData[k][1]).trim();
+    var rEvalId  = String(subData[k][2]).trim().toLowerCase();
+    var rIsGauge = subData[k][3] === true || String(subData[k][3]).toUpperCase() === "TRUE" || String(subData[k][3]).toUpperCase() === "VRAI";
+    if (rSessId === TARGET_SESSION_ID) { countBySessId++; if (rIsGauge) countGaugeSessId++; }
+    if (gaugeId && rEvalId === gaugeId && rIsGauge) {
+      countGaugeByEvalId++;
+      Logger.log("[GAUGE ROW] sess=" + rSessId + " | est_gauge=" + subData[k][3] + " | item=" + subData[k][4]);
+    }
+  }
+
+  Logger.log("\n=== LOG_SOUMISSIONS ===");
+  Logger.log("Lignes pour sessionId     : " + countBySessId);
+  Logger.log("  dont est_gauge=TRUE     : " + countGaugeSessId);
+  Logger.log("Lignes gauge (par evalId) : " + countGaugeByEvalId);
+
+  var demSheet = ss.getSheetByName("Demandes_Calibrage");
+  var demData  = demSheet ? demSheet.getDataRange().getValues() : [];
+  Logger.log("\n=== DEMANDES_CALIBRAGE ===");
+  for (var d = 1; d < demData.length; d++) {
+    if (String(demData[d][1]).trim().toLowerCase() === gaugeId) {
+      Logger.log("  demande_id=" + demData[d][0] + " | statut=" + demData[d][8]);
+    }
+  }
+
+  if (!gaugeId) Logger.log("\n⚠️ gauge_id VIDE — pas de gauge configurée.");
+  else if (countGaugeByEvalId === 0) Logger.log("\n⚠️ Aucun item gauge trouvé pour gauge_id='" + gaugeId + "' — la Gauge n'a pas soumis.");
+  else if (countGaugeSessId === 0) Logger.log("\n⚠️ Items gauge par evalId=" + countGaugeByEvalId + " MAIS pas par sessionId → migration ratée.");
+  else Logger.log("\n✅ " + countGaugeSessId + " items gauge liés à la session. Le Cockpit doit les afficher.");
 }
