@@ -231,17 +231,20 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
   const visibleSessions = (sessions || []).filter((s) => {
     if (!s) return false;
     if (role === "gauge") {
-      // Gauge / Animateur strictly sees only their own created/assigned sessions
+      // La Gauge voit TOUTES ses sessions (y compris LOCKED) afin de pouvoir
+      // encore soumettre son évaluation de référence si elle ne l'a pas encore fait.
       const isMySession =
         !s.gauge_id && !s.animateur_id
-          ? true // fallback for legacy sessions
+          ? true // fallback pour sessions legacy
           : s.gauge_id?.toLowerCase() === identifiant.toLowerCase() ||
             s.animateur_id?.toLowerCase() === identifiant.toLowerCase();
-      return isMySession;
+      // Exclure CLOSED uniquement (session définitivement clôturée)
+      return isMySession && s.statut !== "CLOSED";
     }
-    // Normal evaluators see OPEN sessions OR sessions they already submitted to (for consultation)
+    // Les évaluateurs normaux voient uniquement les sessions OPEN
+    // + sessions où ils ont déjà soumis (lecture seule)
     const alreadySubmitted = s.evaluateurs_soumis?.includes(identifiant);
-    return s.statut === "OPEN" || alreadySubmitted;
+    return s.statut === "OPEN" || (alreadySubmitted && s.statut !== "PENDING_GAUGE");
   });
 
   const handleSessionClick = (session: SessionInfo) => {
@@ -638,6 +641,10 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
                                 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
                                 : session.statut === "PENDING_GAUGE"
                                 ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/30"
+                                : session.statut === "LOCKED"
+                                ? "bg-rose-500/10 text-rose-400 border-rose-500/30"
+                                : session.statut === "GAUGE_DONE"
+                                ? "bg-teal-500/10 text-teal-400 border-teal-500/30"
                                 : "bg-slate-800 text-slate-400 border-slate-700"
                             }`}
                           >
@@ -645,6 +652,10 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
                               ? "En cours"
                               : session.statut === "PENDING_GAUGE"
                               ? "Attente Gauge"
+                              : session.statut === "LOCKED"
+                              ? "Soumissions closes"
+                              : session.statut === "GAUGE_DONE"
+                              ? "Gauge ✓"
                               : session.statut}
                           </span>
 
@@ -707,9 +718,14 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
                         {!session.gauge_soumis ? (
                           <button
                             onClick={() => onSelectSession(session.session_id, true)}
-                            className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-sm rounded-xl transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                            className={`w-full py-3.5 text-white font-extrabold text-sm rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer ${
+                              session.statut === "LOCKED"
+                                ? "bg-amber-600 hover:bg-amber-500 shadow-amber-600/20"
+                                : "bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/20"
+                            }`}
                           >
-                            <FileText className="w-4.5 h-4.5" /> ✏️ Remplir l'évaluation Gauge
+                            <FileText className="w-4.5 h-4.5" />
+                            {session.statut === "LOCKED" ? "⏰ Soumettre la Gauge hors délai" : "✏️ Remplir l'évaluation Gauge"}
                           </button>
                         ) : (
                           <>

@@ -570,7 +570,9 @@ function handleGetSessionsActives(ss) {
 
   for (let i = 1; i < data.length; i++) {
     const statut = data[i][2];
-    if (statut === "OPEN" || statut === "PENDING_GAUGE" || statut === "GAUGE_DONE") {
+    // OPEN, PENDING_GAUGE, GAUGE_DONE : actives pour évaluateurs
+    // LOCKED inclus pour permettre à la Gauge de soumettre tardivement
+    if (statut === "OPEN" || statut === "PENDING_GAUGE" || statut === "GAUGE_DONE" || statut === "LOCKED") {
       const sessId = data[i][0];
       const submittedEvals = getSubmittedEvaluators(subData, sessId);
       const gaugeDone = hasGaugeSubmitted(subData, sessId);
@@ -1361,23 +1363,9 @@ function handleSoumettreEvaluation(ss, payload) {
         var status = String(sessData[i][2]).trim();
         var heureFermetureStr = sessData[i][7];
 
-        if (status === "LOCKED" || status === "CLOSED") {
-          return { success: false, message: "La session est verrouillée ou clôturée, soumission impossible." };
-        }
-
-        if (heureFermetureStr) {
-          var closeTime = new Date(heureFermetureStr).getTime();
-          var nowTime = new Date().getTime();
-          if (nowTime > closeTime) {
-            if (status === "OPEN") sessSheet.getRange(i + 1, 3).setValue("LOCKED");
-            return { success: false, message: "La date limite de soumission est dépassée, soumission impossible." };
-          }
-        }
-
-        // ── AUTO-DÉTECTION GAUGE ─────────────────────────────────────────────
-        // Si le frontend n'a pas transmis est_gauge=true, on le déduit EN
-        // comparant evalId avec gauge_id UNIQUEMENT (col 12).
-        // ⚠️ On n'utilise PAS animateur_id : l'admin peut évaluer normalement.
+        // ── AUTO-DÉTECTION GAUGE avant le check de verrou ─────────────────────
+        // Détecter si l'évaluateur est la Gauge EN PREMIER,
+        // car la Gauge doit pouvoir soumettre même sur session LOCKED.
         if (!estGauge) {
           var sessGaugeId = String(sessData[i][11] || "").trim().toLowerCase();
           var sessAnimId  = String(sessData[i][10] || "").trim().toLowerCase();
@@ -1397,6 +1385,29 @@ function handleSoumettreEvaluation(ss, payload) {
           }
         }
         // ────────────────────────────────────────────────────────────────────
+
+        // LOCKED/CLOSED : seule la Gauge peut encore soumettre (référence hors délai)
+        if (status === "LOCKED" || status === "CLOSED") {
+          if (!estGauge) {
+            return { success: false, message: "La session est verrouillée ou clôturée, soumission impossible." };
+          }
+          // La Gauge peut soumettre même sur session LOCKED — on continue
+          Logger.log("[GAUGE BYPASS] Session LOCKED/CLOSED : soumission Gauge autorisée pour " + evalId);
+          break;
+        }
+
+        if (heureFermetureStr) {
+          var closeTime = new Date(heureFermetureStr).getTime();
+          var nowTime = new Date().getTime();
+          if (nowTime > closeTime) {
+            if (!estGauge) {
+              if (status === "OPEN") sessSheet.getRange(i + 1, 3).setValue("LOCKED");
+              return { success: false, message: "La date limite de soumission est dépassée, soumission impossible." };
+            }
+            // Gauge : délai dépassé mais autorisé — on continue
+            Logger.log("[GAUGE BYPASS] Délai dépassé : soumission Gauge hors-délai autorisée pour " + evalId);
+          }
+        }
         break;
       }
     }
@@ -1508,8 +1519,13 @@ function handleSoumettreEvaluation(ss, payload) {
     if (sessSheet2) {
       var sessData2 = sessSheet2.getDataRange().getValues();
       for (var i = 1; i < sessData2.length; i++) {
-        if (sessData2[i][0] === sessionId) {
-          if (sessData2[i][2] === "PENDING_GAUGE") sessSheet2.getRange(i + 1, 3).setValue("GAUGE_DONE");
+        if (String(sessData2[i][0]).trim() === String(sessionId).trim()) {
+          var currStatus = String(sessData2[i][2]).trim();
+          // PENDING_GAUGE ou LOCKED (soumission tardive) → GAUGE_DONE
+          if (currStatus === "PENDING_GAUGE" || currStatus === "LOCKED") {
+            sessSheet2.getRange(i + 1, 3).setValue("GAUGE_DONE");
+            Logger.log("[GAUGE SUBMIT] Session=" + sessionId + " " + currStatus + " → GAUGE_DONE");
+          }
           break;
         }
       }
