@@ -1360,6 +1360,17 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
       }
     }
 
+    // Si le commentaire Gauge au niveau N2 est vide, remonter les commentaires des sous-items N3
+    // (Leontine peut avoir commenté au niveau sous-critères plutôt qu'au niveau question principale)
+    if (!gaugeComment && hasGaugeVote && node.children && node.children.length > 0) {
+      const childGaugeComments = (node.children as CockpitNode[])
+        .filter(c => c.gauge?.commentaire && c.gauge.commentaire.trim())
+        .map(c => `[${cleanLibelle(c.libelle)}] ${c.gauge!.commentaire!.trim()}`);
+      if (childGaugeComments.length > 0) {
+        gaugeComment = childGaugeComments.join("\n");
+      }
+    }
+
     const isAccord = node.statut_accord === "accord" || (hasGaugeVote && (
       (gaugeCritere === "Oui" && votesNon.length === 0) ||
       (gaugeCritere === "Non" && votesOui.length === 0)
@@ -1676,13 +1687,9 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                   </span>
                 </div>
 
-                {gaugeComment ? (
-                  <div className="text-xs text-indigo-100 font-medium leading-relaxed bg-indigo-950/60 p-3.5 rounded-2xl border border-indigo-800/50">
-                    "{parseTimestampsInText(gaugeComment)}"
-                  </div>
-                ) : (
-                  <div className="text-xs text-indigo-400/70 italic p-2">
-                    Aucun commentaire saisi par la Gauge.
+                {gaugeComment && (
+                  <div className="text-xs text-indigo-100 font-medium leading-relaxed bg-indigo-950/60 p-3.5 rounded-2xl border border-indigo-800/50 whitespace-pre-line">
+                    &ldquo;{parseTimestampsInText(gaugeComment)}&rdquo;
                   </div>
                 )}
               </div>
