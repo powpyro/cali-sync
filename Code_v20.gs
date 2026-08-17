@@ -1758,12 +1758,19 @@ function handleGetCockpit(ss, sessionId) {
     if (templateId && rowTpl !== templateId) continue;
 
     var cItemId  = safeItemId(cfgData[c][1]);
+    if (!cItemId) continue;
+
     var cNiveau  = parseInt(String(cfgData[c][2]).trim(), 10) || 2;
     var cParent  = safeItemId(cfgData[c][3]);
     var cLibelle = String(cfgData[c][6] || "").trim();
     var cCrit    = String(cfgData[c][7] || "Standard").trim();
     var cCatRac  = String(cfgData[c][10] || "").trim();
     var cType    = String(cfgData[c][9] || "").trim();
+
+    // Si N1 sans libellé, utiliser la catégorie racine si présente
+    if (cNiveau === 1 && !cLibelle) {
+      cLibelle = cCatRac || cItemId;
+    }
 
     cfgNodes[cItemId] = {
       item_id:            cItemId,
@@ -1776,7 +1783,13 @@ function handleGetCockpit(ss, sessionId) {
     };
 
     if (cNiveau === 1) {
-      n1Roots.push(cItemId);
+      // Ignorer les N1 nommés "Général" si le libellé est purement par défaut
+      if (cLibelle.toLowerCase() !== "général" && cLibelle.toLowerCase() !== "general") {
+        n1Roots.push(cItemId);
+      } else {
+        // Enregistrer la clé pour linkage mais ne pas forcer comme racine si vide
+        n1Roots.push(cItemId);
+      }
     } else {
       if (cParent) {
         if (!childrenOf[cParent]) childrenOf[cParent] = [];
@@ -1785,12 +1798,22 @@ function handleGetCockpit(ss, sessionId) {
     }
   }
 
+  // Héritage de catégorie pour les N2 n'ayant pas de categorie_racine_fr explicite
+  Object.keys(cfgNodes).forEach(function(id) {
+    var nd = cfgNodes[id];
+    if (nd.niveau === 2 && (!nd.categorie_racine_fr || nd.categorie_racine_fr.toLowerCase() === "général")) {
+      if (nd.parent_id && cfgNodes[nd.parent_id]) {
+        nd.categorie_racine_fr = cfgNodes[nd.parent_id].libelle || cfgNodes[nd.parent_id].categorie_racine_fr || "";
+      }
+    }
+  });
+
   // ── 5. Fonction récursive pour construire un nœud de résultat ─────────────
   function buildNode(itemId) {
     var node = cfgNodes[itemId] || {
       item_id: itemId, niveau: 2, parent_id: "",
       libelle: libellemap[itemId] || itemId,
-      criticite: "Standard", categorie_racine_fr: catMap[itemId] || "Général", type_noeud: ""
+      criticite: "Standard", categorie_racine_fr: catMap[itemId] || "", type_noeud: ""
     };
 
     var cleanId  = cleanStringKey(itemId);
@@ -1855,18 +1878,35 @@ function handleGetCockpit(ss, sessionId) {
   if (n1Roots.length > 0) {
     // On a des items N1 → on les utilise comme racines
     n1Roots.forEach(function(n1Id) {
-      grilleHierarchique.push(buildNode(n1Id));
+      var builtN1 = buildNode(n1Id);
+      // Garder uniquement les N1 qui ont des enfants ou un libellé valide non-Général
+      if (builtN1.children && builtN1.children.length > 0) {
+        if (builtN1.libelle && builtN1.libelle.trim().toLowerCase() !== "général") {
+          grilleHierarchique.push(builtN1);
+        } else if (grilleHierarchique.length === 0) {
+          // Si c'est la seule catégorie, la garder sous un nom propre
+          builtN1.libelle = "Catégorie Principale";
+          grilleHierarchique.push(builtN1);
+        }
+      }
     });
-  } else {
-    // Pas de N1 dans la config → items N2 regroupés par categorie_racine_fr (mode dégradé)
+  }
+
+  // Fallback si pas de N1 valides trouvés
+  if (grilleHierarchique.length === 0) {
+    // Pas de N1 valide dans la config → items N2 regroupés par categorie_racine_fr (mode dégradé)
     var n2Ids = Object.keys(cfgNodes).filter(function(id) {
       return cfgNodes[id].niveau === 2 && !cfgNodes[id].parent_id;
     });
 
+    // Déterminer une première catégorie valide par défaut
+    var defaultCatName = "Catégorie Principale";
+
     // Regrouper par catégorie racine
     var catGroups = {};
     n2Ids.forEach(function(id) {
-      var cat = cfgNodes[id].categorie_racine_fr || "Général";
+      var cat = cfgNodes[id].categorie_racine_fr;
+      if (!cat || cat.trim().toLowerCase() === "général") cat = defaultCatName;
       if (!catGroups[cat]) catGroups[cat] = [];
       catGroups[cat].push(id);
     });
@@ -1877,13 +1917,17 @@ function handleGetCockpit(ss, sessionId) {
       Object.keys(gaugeMap).forEach(function(id) { allSubmitted[id] = true; });
       Object.keys(votesMap).forEach(function(id) { allSubmitted[id] = true; });
       Object.keys(allSubmitted).forEach(function(id) {
-        var cat = catMap[id] || "Général";
+        var cat = catMap[id];
+        if (!cat || cat.trim().toLowerCase() === "général") cat = defaultCatName;
         if (!catGroups[cat]) catGroups[cat] = [];
         catGroups[cat].push(id);
       });
     }
 
     Object.keys(catGroups).forEach(function(cat) {
+      var kids = catGroups[cat].map(function(id) { return buildNode(id); });
+      if (kids.length === 0) return;
+
       var syntheticN1 = {
         item_id: "CAT_" + cat.replace(/[^a-zA-Z0-9]/g, "_"),
         niveau: 1,
@@ -1896,7 +1940,7 @@ function handleGetCockpit(ss, sessionId) {
         total_votes: 0,
         statut_accord: "sans_votes",
         decision_finale: null,
-        children: catGroups[cat].map(function(id) { return buildNode(id); })
+        children: kids
       };
       // Hériter statut depuis enfants
       var hasDivergence = syntheticN1.children.some(function(c) { return c.statut_accord === "divergence"; });
@@ -2258,185 +2302,463 @@ function handleGetRapportPdf(ss, sessionId) {
 // Retourne l'URL du PDF ou null en cas d'échec.
 // ==============================================================================
 function genererRapportCalibrage(ss, sessionId) {
-  // ── 1. Récupérer la structure hiérarchique complète via handleGetCockpit ──────
-  const resStruct = handleGetCockpit(ss, sessionId);
+
+  // ── 1. Récupérer la structure complète ─────────────────────────────────────
+  var resStruct = handleGetCockpit(ss, sessionId);
   if (!resStruct || !resStruct.success) {
-    Logger.log("Impossible de récupérer la structure de grille pour la session " + sessionId);
+    Logger.log("Impossible de récupérer la structure pour la session " + sessionId);
     return null;
   }
 
-  // handleGetCockpit retourne les champs directement à la racine (pas de sous-objet session_info)
-  const sessionInfo = {
-    session_id:       resStruct.session_id || sessionId,
-    nom_session:      resStruct.nom_session || sessionId,
-    statut:           resStruct.statut || "CLOSED",
-    heure_fin:        resStruct.heure_fin || "",
-    nom_conseiller:   resStruct.nom_conseiller || "",
-    url_audio:        resStruct.url_audio || ""
+  var sessionInfo = {
+    session_id:     resStruct.session_id     || sessionId,
+    nom_session:    resStruct.nom_session     || sessionId,
+    statut:         resStruct.statut          || "CLOSED",
+    heure_fin:      resStruct.heure_fin       || "",
+    nom_conseiller: resStruct.nom_conseiller  || "",
+    url_audio:      resStruct.url_audio       || ""
   };
-  const categories  = resStruct.grille_hierarchique || [];
-  const evaluateurs = resStruct.evaluateurs_soumis || [];
+  var categories  = resStruct.grille_hierarchique  || [];
+  var evaluateurs = resStruct.evaluateurs_soumis   || [];
+  var gaugeId     = resStruct.gauge_id             || "";
 
-  // ── 2. Calculer le résumé statistique ───────────────────────────────────────
-  let nbOui = 0, nbNon = 0, nbNA = 0, totalArbitres = 0;
+  // ── 2. HELPERS ──────────────────────────────────────────────────────────────
+
+  // Nettoie un libellé qui contient des métadonnées DB (ex: "Label,English,Critical,VRAI,VRAI,,,")
+  function cleanLabel(raw) {
+    if (!raw) return "";
+    var s = String(raw).trim();
+    var idx = s.indexOf(",");
+    if (idx > 2) {
+      var first = s.substring(0, idx).trim();
+      var after = s.substring(idx + 1).split(",")[0].trim().toLowerCase();
+      var meta = ["vrai","faux","true","false","critical","standard","oui","non","yes","no","eliminatoire","terminal","0","1","2"];
+      if (meta.indexOf(after) >= 0 || /^\d+$/.test(after) || after.length === 0) {
+        return first;
+      }
+    }
+    return s;
+  }
+
+  // Barre de progression Unicode ▓░
+  function mkBar(filled, total, width) {
+    if (!total || total === 0) return "";
+    var n = Math.min(width, Math.round((filled / total) * width));
+    var bar = "";
+    for (var i = 0; i < n; i++) bar += "\u2593";
+    for (var i = n; i < width; i++) bar += "\u2591";
+    return bar;
+  }
+
+  // Ajoute un paragraphe stylé
+  function addLine(body, text, opts) {
+    opts = opts || {};
+    var p = body.appendParagraph(text);
+    if (opts.heading)  p.setHeading(opts.heading);
+    if (opts.bold)     p.setBold(true);
+    if (opts.italic)   p.setItalic(true);
+    if (opts.size)     p.setFontSize(opts.size);
+    if (opts.align)    p.setAlignment(opts.align);
+    if (opts.indent)   p.setIndentStart(opts.indent);
+    if (opts.spB)      p.setSpacingBefore(opts.spB);
+    if (opts.spA)      p.setSpacingAfter(opts.spA);
+    if (opts.color)    p.editAsText().setForegroundColor(opts.color);
+    return p;
+  }
+
+  // Ajoute un paragraphe avec la fin colorée à partir de charStart
+  function addLineColored(body, text, charStart, color, opts) {
+    opts = opts || {};
+    var p = body.appendParagraph(text);
+    if (opts.bold)   p.setBold(true);
+    if (opts.italic) p.setItalic(true);
+    if (opts.size)   p.setFontSize(opts.size);
+    if (opts.spB)    p.setSpacingBefore(opts.spB);
+    if (opts.spA)    p.setSpacingAfter(opts.spA);
+    if (charStart >= 0 && charStart < text.length) {
+      p.editAsText().setForegroundColor(charStart, text.length - 1, color);
+    }
+    return p;
+  }
+
+  // ── 3. Calcul des statistiques ─────────────────────────────────────────────
+  var nbOui = 0, nbNon = 0, nbNA = 0, nbNonArb = 0, nbCritNon = 0;
+  var catStats = [];
 
   categories.forEach(function(cat) {
-    const questions = cat.children || [];
-    questions.forEach(function(q) {
-      if (q.decision_finale && q.decision_finale.decision) {
-        totalArbitres++;
-        var dec = String(q.decision_finale.decision).trim();
-        if (dec === "Oui") nbOui++;
-        else if (dec === "Non") nbNon++;
-        else if (dec === "N.A.") nbNA++;
+    var qs = cat.children || [];
+    var cO = 0, cN = 0, cNA = 0;
+    qs.forEach(function(q) {
+      if (!q.decision_finale || !q.decision_finale.decision) { nbNonArb++; return; }
+      var dec = String(q.decision_finale.decision).trim();
+      if (dec === "Oui")  { nbOui++; cO++; }
+      else if (dec === "Non") {
+        nbNon++; cN++;
+        if (q.criticite === "Critical" || q.criticite === "Terminal" || q.criticite === "Eliminatoire") nbCritNon++;
       }
+      else if (dec === "N.A.") { nbNA++; cNA++; }
     });
+    catStats.push({ name: cleanLabel(cat.libelle || ""), oui: cO, non: cN, na: cNA });
   });
 
-  const tauxConformite = totalArbitres > 0 ? Math.round((nbOui / totalArbitres) * 100) : 0;
+  var totalArb   = nbOui + nbNon + nbNA;
+  var tauxGlobal = totalArb > 0 ? Math.round((nbOui / totalArb) * 100) : 0;
 
-  // ── 3. Créer le Google Document ──────────────────────────────────────────────
-  const dateStr = sessionInfo.heure_fermeture
-    ? Utilities.formatDate(new Date(sessionInfo.heure_fermeture), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm")
-    : Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm");
+  // ── 4. Formater les métadonnées de session ─────────────────────────────────
+  var dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy 'à' HH:mm");
 
-  const docTitle = "Rapport_Calibrage_" + (sessionInfo.session_id || sessionId) + "_" + dateStr.replace(/[\/: ]/g, "-");
-  const doc = DocumentApp.create(docTitle);
-  const body = doc.getBody();
+  // Nettoyer le nom du conseiller (connection_id → format lisible)
+  var conseillerDisplay = sessionInfo.nom_conseiller || "—";
+  if (/^\d{8,}/.test(conseillerDisplay)) {
+    var parts = conseillerDisplay.split("|");
+    conseillerDisplay = (parts[1] ? "Appel du " + parts[1] + " — " : "") + "ID " + parts[0].substring(0, 12) + "...";
+  }
 
-  // Marges et mise en page
-  body.setMarginTop(36);
-  body.setMarginBottom(36);
-  body.setMarginLeft(40);
-  body.setMarginRight(40);
+  // ── 5. Créer le document Google ───────────────────────────────────────────
+  var docTitle = "Rapport_Calibrage_" + (sessionInfo.session_id || sessionId);
+  var doc  = DocumentApp.create(docTitle);
+  var body = doc.getBody();
+  body.setMarginTop(40);
+  body.setMarginBottom(40);
+  body.setMarginLeft(56);
+  body.setMarginRight(56);
 
-  // ── 4. En-tête du rapport ────────────────────────────────────────────────────
-  const titlePara = body.appendParagraph("RAPPORT DE CALIBRAGE — " + (sessionInfo.nom_session || sessionInfo.session_id || sessionId));
+  // ═══════════════════════════════════════════════════════════════
+  // SECTION 1 — TITRE PRINCIPAL
+  // ═══════════════════════════════════════════════════════════════
+  var titlePara = body.appendParagraph("RAPPORT DE CALIBRAGE QUALITÉ");
   titlePara.setHeading(DocumentApp.ParagraphHeading.HEADING1);
   titlePara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  titlePara.setFontSize(17);
+  titlePara.setSpacingAfter(2);
 
-  body.appendParagraph("Session ID : " + (sessionInfo.session_id || sessionId));
-  if (sessionInfo.nom_conseiller) body.appendParagraph("Conseiller évalué : " + sessionInfo.nom_conseiller);
-  if (sessionInfo.animateur_id)   body.appendParagraph("Animateur : " + sessionInfo.animateur_id);
-  body.appendParagraph("Date de clôture : " + dateStr);
-  body.appendParagraph("Participants (" + evaluateurs.length + ") : " + (evaluateurs.join(", ") || "Aucun"));
+  var subTitle = body.appendParagraph(sessionInfo.nom_session || sessionInfo.session_id);
+  subTitle.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  subTitle.setFontSize(12);
+  subTitle.setBold(true);
+  subTitle.setSpacingAfter(14);
+
+  // Tableau identité session ─────────────────────────────────────
+  var evalListStr = evaluateurs.length > 0 ? evaluateurs.join("  •  ") : "Aucun";
+  var headerData = [
+    ["Session ID",       sessionInfo.session_id || sessionId],
+    ["Conseiller évalué",conseillerDisplay],
+    ["Date de clôture",  dateStr],
+    ["Calibreur / Gauge",gaugeId || "Aucun"],
+    ["Évaluateurs (" + evaluateurs.length + ")", evalListStr]
+  ];
+  var hTable = body.appendTable(headerData);
+  for (var r = 0; r < headerData.length; r++) {
+    var c0 = hTable.getCell(r, 0);
+    var c1 = hTable.getCell(r, 1);
+    c0.setBackgroundColor("#f1f3f4");
+    c0.setPaddingTop(4); c0.setPaddingBottom(4); c0.setPaddingLeft(8); c0.setPaddingRight(8);
+    c1.setPaddingTop(4); c1.setPaddingBottom(4); c1.setPaddingLeft(8); c1.setPaddingRight(8);
+    c0.editAsText().setFontSize(9).setBold(true).setForegroundColor("#5f6368");
+    c1.editAsText().setFontSize(9);
+  }
+  body.appendParagraph("").setSpacingAfter(4);
   body.appendHorizontalRule();
 
-  // ── 5. Résumé statistique ────────────────────────────────────────────────────
-  const summaryTitle = body.appendParagraph("RÉSUMÉ EXÉCUTIF");
-  summaryTitle.setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  // ═══════════════════════════════════════════════════════════════
+  // SECTION 2 — RÉSUMÉ EXÉCUTIF
+  // ═══════════════════════════════════════════════════════════════
+  addLine(body, "RÉSUMÉ EXÉCUTIF", {
+    heading: DocumentApp.ParagraphHeading.HEADING2, spB: 14, spA: 8
+  });
 
-  body.appendParagraph("Items N2 arbitrés : " + totalArbitres);
-  body.appendParagraph("✅ Conformes (Oui) : " + nbOui + "   |   ❌ Imputés (Non) : " + nbNon + "   |   ⚪ Non Applicables (N.A.) : " + nbNA);
-  const tauxPara = body.appendParagraph("Taux de conformité global : " + tauxConformite + "%");
-  tauxPara.setBold(true);
+  // Barre de progression + taux
+  var barStr  = mkBar(nbOui, totalArb, 22);
+  var barLine = barStr + "   " + tauxGlobal + "% de conformité";
+  var barColor = tauxGlobal >= 80 ? "#1e8e3e" : tauxGlobal >= 60 ? "#e37400" : "#c5221f";
+  var barPara = body.appendParagraph(barLine);
+  barPara.setFontSize(13);
+  barPara.setBold(true);
+  barPara.setSpacingAfter(4);
+  if (barStr.length > 0) {
+    barPara.editAsText().setForegroundColor(0, barStr.length - 1, barColor);
+  }
+
+  // KPIs
+  var kpiText = "  ✅  " + nbOui + " Conformes      ❌  " + nbNon + " Imputés      ⚪  " + nbNA + " N.A.";
+  var kpiPara = body.appendParagraph(kpiText);
+  kpiPara.setFontSize(10);
+  kpiPara.setSpacingAfter(6);
+
+  // Alerte items critiques imputés
+  if (nbCritNon > 0) {
+    var critText = "⚠   " + nbCritNon + " item(s) CRITIQUE(S) non conforme(s) — Attention particulière requise";
+    addLine(body, critText, { size: 10, bold: true, color: "#c5221f", spA: 6 });
+  }
+
+  // Items non arbitrés
+  if (nbNonArb > 0) {
+    addLine(body, "ℹ   " + nbNonArb + " item(s) sans décision finale (en attente d'arbitrage)", {
+      size: 9, italic: true, color: "#757575", spA: 6
+    });
+  }
+
+  // Tableau récapitulatif par catégorie ─────────────────────────
+  addLine(body, "Récapitulatif par catégorie :", { size: 9, bold: true, spB: 8, spA: 4 });
+
+  var catTableData = [["Catégorie", "✅ Conformes", "❌ Imputés", "Taux"]];
+  catStats.forEach(function(cs) {
+    var arb  = cs.oui + cs.non;
+    var taux = arb > 0 ? Math.round((cs.oui / arb) * 100) + "%" : "—";
+    catTableData.push([cs.name, String(cs.oui), String(cs.non), taux]);
+  });
+
+  var cTable = body.appendTable(catTableData);
+  // En-tête tableau
+  for (var ch = 0; ch < 4; ch++) {
+    var hc = cTable.getCell(0, ch);
+    hc.setBackgroundColor("#e8eaed");
+    hc.setPaddingTop(4); hc.setPaddingBottom(4); hc.setPaddingLeft(6); hc.setPaddingRight(6);
+    hc.editAsText().setFontSize(9).setBold(true).setForegroundColor("#3c4043");
+  }
+  // Lignes de données
+  for (var cr = 1; cr < catTableData.length; cr++) {
+    var cs3 = catStats[cr - 1];
+    var arb3 = cs3.oui + cs3.non;
+    for (var cc = 0; cc < 4; cc++) {
+      var dc = cTable.getCell(cr, cc);
+      dc.setPaddingTop(3); dc.setPaddingBottom(3); dc.setPaddingLeft(6); dc.setPaddingRight(6);
+      dc.editAsText().setFontSize(9);
+    }
+    // Colorer taux
+    var tauxVal = arb3 > 0 ? cs3.oui / arb3 : 1;
+    var tauxColor = tauxVal >= 0.8 ? "#1e8e3e" : tauxVal >= 0.6 ? "#e37400" : "#c5221f";
+    cTable.getCell(cr, 3).editAsText().setForegroundColor(tauxColor).setBold(true);
+    // Colorer Non si > 0
+    if (cs3.non > 0) {
+      cTable.getCell(cr, 2).editAsText().setForegroundColor("#c5221f").setBold(true);
+    }
+  }
+  body.appendParagraph("").setSpacingAfter(4);
   body.appendHorizontalRule();
 
-  // ── 6. Détail par Catégorie (N1) et Question (N2) ───────────────────────────
-  const detailTitle = body.appendParagraph("DÉTAIL DES ARBITRAGES PAR CATÉGORIE");
-  detailTitle.setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  // ═══════════════════════════════════════════════════════════════
+  // SECTION 3 — DÉTAIL PAR CATÉGORIE
+  // ═══════════════════════════════════════════════════════════════
+  addLine(body, "DÉTAIL DES ARBITRAGES PAR CATÉGORIE", {
+    heading: DocumentApp.ParagraphHeading.HEADING2, spB: 14, spA: 6
+  });
 
-  categories.forEach(function(cat) {
-    const catName = cat.libelle || cat.item_id || "Catégorie";
-    const catPara = body.appendParagraph("► " + catName.toUpperCase());
+  // ─── Rendu d'une question N2 ─────────────────────────────────
+  function renderN2Question(body, q, qIdx) {
+    var qLabel = cleanLabel(q.libelle || q.item_id || "");
+    var isCrit = q.criticite === "Critical" || q.criticite === "Terminal" || q.criticite === "Eliminatoire";
+    var decObj = q.decision_finale;
+    var decStr = decObj ? String(decObj.decision || "").trim() : "";
+    var justif = decObj ? String(decObj.justification || "").trim() : "";
+
+    // Libellé question (N2)
+    var critBadge = isCrit ? "  ★ CRITIQUE" : "";
+    var qText = "  " + (qIdx + 1) + ".  " + qLabel + critBadge;
+    var qPara  = body.appendParagraph(qText);
+    qPara.setFontSize(10);
+    qPara.setBold(true);
+    qPara.setSpacingBefore(11);
+    qPara.setSpacingAfter(2);
+    if (isCrit && critBadge) {
+      var criStart = qText.indexOf(critBadge);
+      if (criStart > 0) qPara.editAsText().setForegroundColor(criStart, qText.length - 1, "#c5221f");
+    }
+
+    // Verdict (coloré)
+    var vIcon, vText, vColor;
+    if (decStr === "Oui")  { vIcon = "\u2705"; vText = "OUI \u2014 Conforme";      vColor = "#1e8e3e"; }
+    else if (decStr === "Non")  { vIcon = "\u274C"; vText = "NON \u2014 Imput\u00e9";   vColor = "#c5221f"; }
+    else if (decStr === "N.A.") { vIcon = "\u26AA"; vText = "N.A. \u2014 Non applicable"; vColor = "#757575"; }
+    else                        { vIcon = "\u26A0";  vText = "Non arbitr\u00e9";          vColor = "#e37400"; }
+
+    var vFull  = "       " + vIcon + "  " + vText;
+    var vStart = vFull.indexOf(vIcon);
+    addLineColored(body, vFull, vStart, vColor, { bold: true, size: 10, spA: 2 });
+
+    // Justification arbitrage (uniquement si NON + texte)
+    if (decStr === "Non" && justif) {
+      var jText = "       \uD83D\uDCAC  " + justif;
+      addLine(body, jText, { size: 9, italic: true, color: "#1a73e8", spA: 4 });
+    }
+
+    // Sous-items (UNIQUEMENT si décision = NON) ──────────────────
+    if (decStr === "Non") {
+      var subItems = q.children || [];
+
+      // Filtrer les N3 imputés
+      var imputedN3 = subItems.filter(function(sub) {
+        if (sub.decision_finale && sub.decision_finale.decision === "Non") return true;
+        if (sub.gauge && sub.gauge.critere === "Non") return true;
+        if (sub.votes_par_critere && sub.votes_par_critere["Non"] && sub.votes_par_critere["Non"].length > 0) return true;
+        return false;
+      });
+
+      if (imputedN3.length > 0) {
+        var pPin = body.appendParagraph("       \uD83D\uDCCC  Motifs d'imputation retenus :");
+        pPin.setFontSize(9);
+        pPin.setBold(true);
+        pPin.setSpacingAfter(2);
+        pPin.editAsText().setForegroundColor("#c5221f");
+
+        imputedN3.forEach(function(sub) {
+          var subLabel = cleanLabel(sub.libelle || sub.item_id || "");
+
+          // Commentaire N3 : préférer gauge > décision > premier vote Non
+          var subComm = "";
+          if (sub.gauge && sub.gauge.commentaire && sub.gauge.commentaire.trim()) {
+            subComm = sub.gauge.commentaire.trim();
+          } else if (sub.decision_finale && sub.decision_finale.justification) {
+            subComm = sub.decision_finale.justification.trim();
+          } else if (sub.votes_par_critere && sub.votes_par_critere["Non"]) {
+            var vwc = sub.votes_par_critere["Non"].filter(function(v) { return v.commentaire && v.commentaire.trim(); });
+            if (vwc.length > 0) subComm = vwc[0].commentaire.trim();
+          }
+
+          var n3Para = body.appendParagraph("          \u2013  " + subLabel);
+          n3Para.setFontSize(9);
+          n3Para.setSpacingAfter(1);
+
+          if (subComm) {
+            addLine(body, "              \uD83D\uDCAC  " + subComm, {
+              size: 9, italic: true, color: "#5f6368", spA: 2
+            });
+          }
+
+          // N4 — précisions sous le N3 ──────────────────────────
+          var n4Items  = sub.children || [];
+          var impN4    = n4Items.filter(function(n4) {
+            if (n4.gauge && n4.gauge.critere === "Non") return true;
+            if (n4.votes_par_critere && n4.votes_par_critere["Non"] && n4.votes_par_critere["Non"].length > 0) return true;
+            return false;
+          });
+
+          impN4.forEach(function(n4) {
+            var n4Label = cleanLabel(n4.libelle || n4.item_id || "");
+            var n4Comm  = "";
+            if (n4.gauge && n4.gauge.commentaire && n4.gauge.commentaire.trim()) {
+              n4Comm = n4.gauge.commentaire.trim();
+            } else if (n4.votes_par_critere && n4.votes_par_critere["Non"]) {
+              var v4c = n4.votes_par_critere["Non"].filter(function(v) { return v.commentaire && v.commentaire.trim(); });
+              if (v4c.length > 0) n4Comm = v4c[0].commentaire.trim();
+            }
+
+            var n4Text = "               \u2514\u2500  " + n4Label + (n4Comm ? " :  \u201C" + n4Comm + "\u201D" : "");
+            addLine(body, n4Text, { size: 8, italic: true, color: "#3c4043", spA: 2 });
+          });
+        });
+      }
+    }
+
+    // Avis calibreur/Gauge ────────────────────────────────────────
+    if (q.gauge && q.gauge.critere && gaugeId) {
+      var gNom   = q.gauge.nom || gaugeId;
+      var gCrit  = q.gauge.critere;
+      var gComm  = "";
+
+      // Récupérer récursivement les commentaires des descendants si vide au N2
+      function collectDeepGaugeComment(node) {
+        if (node.gauge && node.gauge.commentaire && node.gauge.commentaire.trim()) return node.gauge.commentaire.trim();
+        var kids = node.children || [];
+        for (var ki = 0; ki < kids.length; ki++) {
+          var r = collectDeepGaugeComment(kids[ki]);
+          if (r) return r;
+        }
+        return "";
+      }
+      gComm = q.gauge.commentaire ? q.gauge.commentaire.trim() : collectDeepGaugeComment(q);
+
+      var gIcon  = gCrit === "Oui" ? "\u2705" : gCrit === "Non" ? "\u274C" : "\u26AA";
+      var gText  = "       \uD83C\uDFAF  Avis calibreur (" + gNom + ") : " + gIcon + " " + gCrit;
+      if (gComm) gText += "  \u2014  \u201C" + gComm + "\u201D";
+
+      addLine(body, gText, { size: 9, italic: true, color: "#7b1fa2", spA: 2 });
+
+      // Divergence flagging
+      if (decStr && decStr !== gCrit && decStr !== "") {
+        addLine(body, "              \u26A1  Divergence : calibreur \u2260 d\u00e9cision finale", {
+          size: 8, bold: true, color: "#e37400", spA: 2
+        });
+      }
+    }
+
+    body.appendParagraph("").setSpacingAfter(2);
+  }
+
+  // ─── Rendu de chaque catégorie N1 ────────────────────────────
+  categories.forEach(function(cat, catIdx) {
+    var catName = cleanLabel(cat.libelle || cat.item_id || "Catégorie").toUpperCase();
+    var qs      = cat.children || [];
+    var cs4     = catStats[catIdx] || { oui: 0, non: 0, na: 0 };
+    var arb4    = cs4.oui + cs4.non;
+    var taux4   = arb4 > 0 ? Math.round((cs4.oui / arb4) * 100) : null;
+    var tc4     = taux4 !== null ? (taux4 >= 80 ? "#1e8e3e" : taux4 >= 60 ? "#e37400" : "#c5221f") : "#757575";
+
+    // En-tête catégorie
+    var catPara = body.appendParagraph("\u25B6  " + catName);
     catPara.setHeading(DocumentApp.ParagraphHeading.HEADING3);
+    catPara.setFontSize(11);
+    catPara.setSpacingBefore(20);
+    catPara.setSpacingAfter(2);
 
-    const questions = cat.children || [];
-    if (questions.length === 0) {
-      body.appendParagraph("  (Aucune question dans cette catégorie)").setItalic(true);
+    // Stats sous le titre catégorie
+    var catSubText = "    (" + cs4.oui + " / " + arb4 + " conformes" + (taux4 !== null ? "  \u2014  " + taux4 + "%" : "") + ")";
+    addLine(body, catSubText, { size: 9, italic: true, color: tc4, spA: 5 });
+
+    if (qs.length === 0) {
+      addLine(body, "    (Aucune question arbitrée dans cette catégorie)", {
+        size: 9, italic: true, color: "#757575"
+      });
       return;
     }
 
-    questions.forEach(function(q) {
-      const qName = q.libelle || q.item_id;
-      const isCritical = q.criticite === "Critical" || q.criticite === "Terminal" || q.criticite === "Eliminatoire";
-      const qHeader = "  • " + qName + (isCritical ? " [CRITIQUE / TERMINAL]" : "");
-
-      const qPara = body.appendParagraph(qHeader);
-      qPara.setBold(true);
-
-      const decObj = q.decision_finale;
-      const decStr = decObj ? String(decObj.decision || "").trim() : "Non arbitré";
-      const justif = decObj ? String(decObj.justification || "").trim() : "";
-
-      if (decStr === "Oui") {
-        body.appendParagraph("      ✅ Décision finale : OUI (Conforme)").setBold(true);
-        // Si Conforme (Oui), masquage automatique des sous-items selon les spécifications
-      } else if (decStr === "Non") {
-        body.appendParagraph("      ❌ Décision finale : NON (Imputé)").setBold(true);
-        if (justif) {
-          body.appendParagraph("      💬 Justification / Consigne d'arbitrage : " + justif).setItalic(true);
-        }
-
-        // Afficher les sous-items imputés (N3 / pénalités) avec leurs commentaires
-        const subItems = q.children || [];
-        const imputedSubItems = subItems.filter(function(sub) {
-          if (sub.decision_finale && sub.decision_finale.decision === "Non") return true;
-          if (sub.gauge && sub.gauge.critere === "Non") return true;
-          if (sub.votes_par_critere && sub.votes_par_critere["Non"] && sub.votes_par_critere["Non"].length > 0) return true;
-          return false;
-        });
-
-        if (imputedSubItems.length > 0) {
-          body.appendParagraph("      📌 Détail des pénalités / sous-items imputés :").setBold(true);
-          imputedSubItems.forEach(function(sub) {
-            const subLabel = sub.libelle || sub.item_id;
-            var subComm = "";
-            if (sub.gauge && sub.gauge.commentaire) subComm = sub.gauge.commentaire;
-            else if (sub.decision_finale && sub.decision_finale.justification) subComm = sub.decision_finale.justification;
-
-            body.appendParagraph("        – " + subLabel + (subComm ? " (Commentaire : " + subComm + ")" : ""));
-          });
-        }
-      } else if (decStr === "N.A.") {
-        body.appendParagraph("      ⚪ Décision finale : N.A. (Non applicable)");
-      } else {
-        body.appendParagraph("      ⚠️ Décision finale : Non arbitrée");
-      }
-
-      // Résumé Gauge & Votes si présent
-      if (q.gauge) {
-        body.appendParagraph("      Gauge (" + q.gauge.nom + ") : " + q.gauge.critere +
-          (q.gauge.commentaire ? " — " + q.gauge.commentaire : ""));
-      }
-
-      body.appendParagraph(""); // Séparation
+    qs.forEach(function(q, qIdx) {
+      renderN2Question(body, q, qIdx);
     });
   });
 
-  body.appendParagraph("\n— Fin du rapport de calibrage —")
-    .setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  // ═══════════════════════════════════════════════════════════════
+  // SECTION 4 — PIED DE RAPPORT
+  // ═══════════════════════════════════════════════════════════════
+  body.appendHorizontalRule();
+  body.appendParagraph("").setSpacingAfter(6);
 
-  // ── 7. Exporter en PDF dans Google Drive ─────────────────────────────────────
+  addLine(body, "Rapport généré le " + dateStr + " via CaliSync v2.0", {
+    size: 8, italic: true, color: "#9aa0a6",
+    align: DocumentApp.HorizontalAlignment.CENTER, spB: 8
+  });
+  addLine(body, "Session : " + (sessionInfo.session_id || sessionId) + "  \u2014  Taux de conformité global : " + tauxGlobal + "%", {
+    size: 8, color: "#9aa0a6",
+    align: DocumentApp.HorizontalAlignment.CENTER
+  });
+
+  // ── Export PDF dans Google Drive ──────────────────────────────
   doc.saveAndClose();
-  const docId = doc.getId();
-  const docFile = DriveApp.getFileById(docId);
+  var docId   = doc.getId();
+  var docFile = DriveApp.getFileById(docId);
 
-  // Dossier CaliSync_Rapports
-  let folder = null;
-  const folderIter = DriveApp.getFoldersByName("CaliSync_Rapports");
+  var folder = null;
+  var folderIter = DriveApp.getFoldersByName("CaliSync_Rapports");
   if (folderIter.hasNext()) {
     folder = folderIter.next();
   } else {
     folder = DriveApp.createFolder("CaliSync_Rapports");
   }
 
-  // Exporter en PDF
-  const pdfBlob = docFile.getAs("application/pdf").setName(docTitle + ".pdf");
-  const pdfFile = folder.createFile(pdfBlob);
+  var pdfBlob = docFile.getAs("application/pdf").setName(docTitle + ".pdf");
+  var pdfFile = folder.createFile(pdfBlob);
   pdfFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  const pdfUrl = pdfFile.getUrl();
+  var pdfUrl = pdfFile.getUrl();
 
-  // Supprimer le doc Google Doc temporaire
   try { docFile.setTrashed(true); } catch(e) {}
 
-  // Enregistrer l'URL PDF dans la feuille Sessions (colonne 15 = index 14)
-  const sessSheet = ss.getSheetByName("Sessions");
+  // Enregistrer l'URL dans Sessions (colonne 15)
+  var sessSheet = ss.getSheetByName("Sessions");
   if (sessSheet) {
-    const sessData = sessSheet.getDataRange().getValues();
-    for (var i = 1; i < sessData.length; i++) {
-      if (String(sessData[i][0]).trim() === String(sessionId).trim()) {
-        sessSheet.getRange(i + 1, 15).setValue(pdfUrl);
+    var sessData = sessSheet.getDataRange().getValues();
+    for (var si = 1; si < sessData.length; si++) {
+      if (String(sessData[si][0]).trim() === String(sessionId).trim()) {
+        sessSheet.getRange(si + 1, 15).setValue(pdfUrl);
         break;
       }
     }
@@ -2444,6 +2766,9 @@ function genererRapportCalibrage(ss, sessionId) {
 
   return pdfUrl;
 }
+
+
+
 
 function updateSessionStatuses(ss) {
   const sheet = ss.getSheetByName("Sessions");
@@ -2822,3 +3147,62 @@ function diagnostiqueSessionGauge() {
   else if (countGaugeSessId === 0) Logger.log("\n⚠️ Items gauge par evalId=" + countGaugeByEvalId + " MAIS pas par sessionId → migration ratée.");
   else Logger.log("\n✅ " + countGaugeSessId + " items gauge liés à la session. Le Cockpit doit les afficher.");
 }
+
+// ==============================================================================
+// DIAGNOSTIC — Audit de l'origine de la catégorie "Général"
+// Exécutez cette fonction depuis l'éditeur Apps Script pour localiser la source.
+// ==============================================================================
+function auditGeneralCategory() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  Logger.log("=== AUDIT CATÉGORIE GÉNÉRAL ===");
+
+  // 1. Inspecter Admin_Config_Grille
+  var cfgSheet = ss.getSheetByName("Admin_Config_Grille");
+  if (cfgSheet) {
+    var cfgData = cfgSheet.getDataRange().getValues();
+    var foundCfg = 0;
+    for (var i = 1; i < cfgData.length; i++) {
+      var tplId = String(cfgData[i][0]).trim();
+      var itemId = String(cfgData[i][1]).trim();
+      var niveau = String(cfgData[i][2]).trim();
+      var parentId = String(cfgData[i][3]).trim();
+      var libelle = String(cfgData[i][6] || "").trim();
+      var catRacine = String(cfgData[i][10] || "").trim();
+
+      if (niveau === "1" && (!libelle || libelle.toLowerCase() === "général" || libelle.toLowerCase() === "general")) {
+        Logger.log("⚠️ [Admin_Config_Grille Ligne " + (i+1) + "] N1 avec libellé vide/général : tpl=" + tplId + " | item_id=" + itemId + " | libelle='" + libelle + "'");
+        foundCfg++;
+      }
+      if (niveau === "2" && (!catRacine || catRacine.toLowerCase() === "général" || catRacine.toLowerCase() === "general")) {
+        Logger.log("⚠️ [Admin_Config_Grille Ligne " + (i+1) + "] N2 sans categorie_racine : tpl=" + tplId + " | item_id=" + itemId + " | parent_id=" + parentId + " | libelle='" + libelle + "'");
+        foundCfg++;
+      }
+    }
+    if (foundCfg === 0) Logger.log("✅ Admin_Config_Grille : Aucune anomalie 'Général' détectée.");
+  } else {
+    Logger.log("❌ Feuille Admin_Config_Grille introuvable.");
+  }
+
+  // 2. Inspecter Log_Soumissions
+  var subSheet = ss.getSheetByName("Log_Soumissions");
+  if (subSheet) {
+    var subData = subSheet.getDataRange().getValues();
+    var foundSub = 0;
+    for (var k = 1; k < subData.length; k++) {
+      var sessId = String(subData[k][1]).trim();
+      var itemId = String(subData[k][4]).trim();
+      var cat = String(subData[k][5] || "").trim();
+
+      if (!cat || cat.toLowerCase() === "général" || cat.toLowerCase() === "general") {
+        if (foundSub < 15) {
+          Logger.log("⚠️ [Log_Soumissions Ligne " + (k+1) + "] Catégorie vide/général : session=" + sessId + " | item_id=" + itemId);
+        }
+        foundSub++;
+      }
+    }
+    Logger.log("Total lignes Log_Soumissions avec catégorie vide/général : " + foundSub);
+  } else {
+    Logger.log("❌ Feuille Log_Soumissions introuvable.");
+  }
+}
+
