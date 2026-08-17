@@ -1360,14 +1360,24 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
       }
     }
 
-    // Si le commentaire Gauge au niveau N2 est vide, remonter les commentaires des sous-items N3
-    // (Leontine peut avoir commenté au niveau sous-critères plutôt qu'au niveau question principale)
-    if (!gaugeComment && hasGaugeVote && node.children && node.children.length > 0) {
-      const childGaugeComments = (node.children as CockpitNode[])
-        .filter(c => c.gauge?.commentaire && c.gauge.commentaire.trim())
-        .map(c => `[${cleanLibelle(c.libelle)}] ${c.gauge!.commentaire!.trim()}`);
-      if (childGaugeComments.length > 0) {
-        gaugeComment = childGaugeComments.join("\n");
+    // Si le commentaire Gauge au niveau N2 est vide, remonter récursivement les commentaires
+    // de TOUS les descendants (N3, N4…). Le champ de commentaire n'est affiché dans le formulaire
+    // que pour les feuilles terminales (N4 ou N3 sans enfants), donc le commentaire réel
+    // est souvent stocké au niveau N4, pas N3.
+    if (!gaugeComment && hasGaugeVote) {
+      const collectGaugeCommentsDeep = (n: CockpitNode): string[] => {
+        const acc: string[] = [];
+        if (n.gauge?.commentaire?.trim()) {
+          acc.push(`[${cleanLibelle(n.libelle)}] ${n.gauge.commentaire.trim()}`);
+        }
+        if (n.children) {
+          (n.children as CockpitNode[]).forEach(c => acc.push(...collectGaugeCommentsDeep(c)));
+        }
+        return acc;
+      };
+      const deepComments = (node.children as CockpitNode[] || []).flatMap(collectGaugeCommentsDeep);
+      if (deepComments.length > 0) {
+        gaugeComment = deepComments.join("\n");
       }
     }
 
