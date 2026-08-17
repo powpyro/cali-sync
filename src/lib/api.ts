@@ -316,6 +316,8 @@ async function callGAS(
     "enregistrer_decisions_batch",
     "modifier_role_evaluateur",
     "upload_audio_drive",
+    "proposer_calibrage",          // ← items_gauge est un tableau → doit passer en POST
+    "approuver_demande_calibrage", // ← sécurité : payload complexe
   ].includes(action);
 
   const apiUrl = getApiUrl();

@@ -905,8 +905,8 @@ function handleImporterGrilleComplete(ss, payload) {
     ]);
   });
 
-  // Écriture en une seule opération ultra-rapide (bulk)
-  tplSheet.clearContents();
+  // Forcer colonne D (item_id) en TEXTE BRUT avant écriture
+  tplSheet.getRange(1, 4, newTplRows.length, 1).setNumberFormat("@"); // Col D: item_id
   tplSheet.getRange(1, 1, newTplRows.length, 7).setValues(newTplRows);
 
 
@@ -958,8 +958,11 @@ function handleImporterGrilleComplete(ss, payload) {
     ]);
   });
 
-  // Écriture en une seule opération ultra-rapide (bulk)
-  cfgSheet.clearContents();
+  // Forcer colonnes template_id(A), item_id(B), parent_id(D) en TEXTE BRUT
+  // pour éviter que des IDs comme "2026.01.01.05" soient interprétés comme dates.
+  cfgSheet.getRange(1, 1, newCfgRows.length, 1).setNumberFormat("@"); // Col A: template_id
+  cfgSheet.getRange(1, 2, newCfgRows.length, 1).setNumberFormat("@"); // Col B: item_id
+  cfgSheet.getRange(1, 4, newCfgRows.length, 1).setNumberFormat("@"); // Col D: parent_id
   cfgSheet.getRange(1, 1, newCfgRows.length, 11).setValues(newCfgRows);
 
   return {
@@ -1287,9 +1290,9 @@ function chargerConfigGrille(ss, sessionId) {
     // Filtre : seulement les lignes du template de la session (ou toutes si templateId non trouvé)
     if (templateId && rowTplId !== templateId) continue;
 
-    var itemId    = String(data[i][1]).trim();
+    var itemId    = safeItemId(data[i][1]);
     var niveau    = parseInt(String(data[i][2]).trim(), 10) || 2;
-    var parentId  = String(data[i][3] || "").trim();
+    var parentId  = safeItemId(data[i][3]);
     var estTerm   = /^(vrai|true|1|oui)$/i.test(String(data[i][4] || "").trim());
     var commOblig = /^(vrai|true|1|oui)$/i.test(String(data[i][5] || "").trim());
 
@@ -1316,9 +1319,9 @@ function handleGetConfigTemplate(ss, templateId) {
     var rowTplId = String(data[i][0]).trim();
     if (tplId && rowTplId !== tplId) continue;
 
-    var itemId    = String(data[i][1]).trim();
+    var itemId    = safeItemId(data[i][1]);
     var niveau    = parseInt(String(data[i][2]).trim(), 10) || 2;
-    var parentId  = String(data[i][3] || "").trim();
+    var parentId  = safeItemId(data[i][3]);
     var estTerm   = /^(vrai|true|1|oui)$/i.test(String(data[i][4] || "").trim());
     var commOblig = /^(vrai|true|1|oui)$/i.test(String(data[i][5] || "").trim());
     var libelle   = String(data[i][6] || "").trim();
@@ -1555,6 +1558,20 @@ function cleanStringKey(str) {
     .trim();
 }
 
+// Convertit une valeur de cellule en string ID, même si Google Sheets l'a
+// auto-converti en Date (ex: "2026.01.01" → date objet).
+function safeItemId(val) {
+  if (!val && val !== 0) return "";
+  if (val instanceof Date) {
+    // Reformater en "YYYY.MM.DD" pour tenter de reconstituer l'ID original
+    var y = val.getFullYear();
+    var m = String(val.getMonth() + 1).padStart(2, "0");
+    var d = String(val.getDate()).padStart(2, "0");
+    return y + "." + m + "." + d;
+  }
+  return String(val).trim();
+}
+
 function handleGetCockpit(ss, sessionId) {
   updateSessionStatuses(ss);
 
@@ -1740,9 +1757,9 @@ function handleGetCockpit(ss, sessionId) {
     var rowTpl  = String(cfgData[c][0]).trim();
     if (templateId && rowTpl !== templateId) continue;
 
-    var cItemId  = String(cfgData[c][1]).trim();
+    var cItemId  = safeItemId(cfgData[c][1]);
     var cNiveau  = parseInt(String(cfgData[c][2]).trim(), 10) || 2;
-    var cParent  = String(cfgData[c][3] || "").trim();
+    var cParent  = safeItemId(cfgData[c][3]);
     var cLibelle = String(cfgData[c][6] || "").trim();
     var cCrit    = String(cfgData[c][7] || "Standard").trim();
     var cCatRac  = String(cfgData[c][10] || "").trim();
