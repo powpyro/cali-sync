@@ -8,7 +8,6 @@ import {
   AlertCircle,
   ShieldCheck,
   Lock,
-  Delete,
   Eye,
   EyeOff,
 } from "lucide-react";
@@ -137,7 +136,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         });
       }
     } else {
-      setError("Code PIN incorrect. Le code PIN administrateur par défaut est 1234.");
+      setError("Code PIN incorrect. Veuillez réessayer.");
       setPinDigits(["", "", "", ""]);
       pinInputRefs.current[0]?.focus();
     }
@@ -172,24 +171,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         newDigits[index] = "";
         setPinDigits(newDigits);
       }
-    }
-  };
-
-  const handleKeypadPress = (digit: string) => {
-    const firstEmptyIndex = pinDigits.findIndex((d) => d === "");
-    if (firstEmptyIndex !== -1) {
-      handlePinChange(firstEmptyIndex, digit);
-    }
-  };
-
-  const handleKeypadBackspace = () => {
-    const lastFilledIndex = [...pinDigits].reverse().findIndex((d) => d !== "");
-    if (lastFilledIndex !== -1) {
-      const realIndex = 3 - lastFilledIndex;
-      const newDigits = [...pinDigits];
-      newDigits[realIndex] = "";
-      setPinDigits(newDigits);
-      pinInputRefs.current[realIndex]?.focus();
     }
   };
 
@@ -357,7 +338,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                 ))}
               </div>
 
-              <div className="flex flex-col items-center gap-2">
+              <div className="flex justify-center">
                 <button
                   type="button"
                   onClick={() => setShowPin(!showPin)}
@@ -373,22 +354,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                     </>
                   )}
                 </button>
-
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 text-slate-600 border border-slate-200 text-[11px] font-medium">
-                  <span>PIN par défaut :</span>
-                  <strong className="text-slate-900 font-black tracking-wider">1234</strong>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStoredAdminPin("1234");
-                      setPinDigits(["1", "2", "3", "4"]);
-                      verifyPin("1234");
-                    }}
-                    className="ml-1 text-[#0088cc] hover:underline font-bold cursor-pointer"
-                  >
-                    (Déverrouiller)
-                  </button>
-                </div>
               </div>
 
               {error && (
@@ -397,46 +362,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                   <span>{error}</span>
                 </div>
               )}
-            </div>
-
-            {/* Numeric Keypad for fast input */}
-            <div className="grid grid-cols-3 gap-2 max-w-[240px] mx-auto pt-1">
-              {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((num) => (
-                <button
-                  key={num}
-                  type="button"
-                  onClick={() => handleKeypadPress(num)}
-                  className="h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-black text-base transition-all active:scale-95 cursor-pointer shadow-xs"
-                >
-                  {num}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => {
-                  setPinDigits(["", "", "", ""]);
-                  setError(null);
-                  pinInputRefs.current[0]?.focus();
-                }}
-                className="h-11 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-400 text-xs font-bold transition-all cursor-pointer"
-              >
-                Effacer
-              </button>
-              <button
-                type="button"
-                onClick={() => handleKeypadPress("0")}
-                className="h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-black text-base transition-all active:scale-95 cursor-pointer shadow-xs"
-              >
-                0
-              </button>
-              <button
-                type="button"
-                onClick={handleKeypadBackspace}
-                className="h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs"
-                title="Retour arrière"
-              >
-                <Delete className="w-4 h-4" />
-              </button>
             </div>
 
             {/* Fallback / Switch to regular evaluator mode */}
