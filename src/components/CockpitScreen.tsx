@@ -48,6 +48,7 @@ import {
   Download,
   ExternalLink,
   MessageSquare,
+  UserCheck,
 } from "lucide-react";
 
 export interface ImputedSubItemInfo {
@@ -1959,132 +1960,123 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
       {onBack && (
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm font-bold cursor-pointer"
+          className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors text-xs font-bold cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" /> Retour au menu
         </button>
       )}
 
       {/* 1. TOP HEADER & STUDIO BAR */}
-      <section className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
-          <div>
-            <div className="flex items-center gap-2.5 flex-wrap mb-2">
+      <section className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/90 shadow-sm space-y-4">
+        {/* TOP ROW: Identity & Action Toolbar */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          {/* Left: Brand + Status Pill + Title */}
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 flex-wrap">
               <CaliSyncLogo size="sm" showText={false} />
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#1dc4ff]/10 border border-[#1dc4ff]/20 text-[#0077aa] text-xs font-black uppercase tracking-wider">
-                <Sparkles className="w-3.5 h-3.5 text-[#1dc4ff]" /> Cockpit Live
-              </div>
-              {/* SESSION STATUS BADGE */}
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#1dc4ff]/10 border border-[#1dc4ff]/20 text-[#0077aa] text-[10px] font-black uppercase tracking-wider">
+                <Sparkles className="w-3 h-3 text-[#1dc4ff]" /> Cockpit Live
+              </span>
+
+              {/* SESSION STATUS BADGES */}
               {sessionStatut === "OPEN" && (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-xs font-black uppercase tracking-wider">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-black uppercase tracking-wider">
                   <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-                  EN LIVE
-                </div>
-              )}
-              {sessionStatut === "LOCKED" && (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-black uppercase tracking-wider">
-                  <Lock className="w-3 h-3 text-amber-500" />
-                  ARBITRAGE EN COURS
-                </div>
-              )}
-              {allQuestionsArbitrated && !isReadOnly && (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-black uppercase tracking-wider">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-                  100% ARBITRÉ — PRÊT POUR CLÔTURE
-                </div>
-              )}
-              {sessionStatut === "CLOSED" && (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200 text-xs font-black uppercase tracking-wider">
-                  <CheckCircle className="w-3 h-3 text-slate-400" />
-                  SESSION ARCHIVÉE
-                </div>
-              )}
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-              {data?.nom_session || "Session Live"}
-              {data?.nom_conseiller && (
-                <span className="text-slate-500 font-medium text-base block sm:inline sm:ml-2">
-                  — ID : <span className="font-mono text-slate-700">{data.nom_conseiller}</span>
+                  En Live
                 </span>
               )}
-            </h1>
-            {isClosed && (
-              <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold">
-                👁️ MODE LECTURE SEULE — Session archivée.
-              </div>
-            )}
-            {!canArbitrate && (
-              <div className="mt-2 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#1dc4ff]/10 border border-[#1dc4ff]/20 text-[#0077aa] text-xs font-bold">
-                🔒 MODE CONSULTATION — L'arbitrage est réservé à l'Animateur, au Gauge et à l'Admin.
-              </div>
-            )}
-            {isLiveReadOnly && canArbitrate && (
-              <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold">
-                🔒 MODE LECTURE SEULE — Arbitrage disponible après la clôture.
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200">
-              <Users className="w-4 h-4 text-[#1dc4ff]" />
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Soumis :</span>
-              <span className="font-black text-xl text-slate-900">{evaluators.length}</span>
+              {sessionStatut === "LOCKED" && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-black uppercase tracking-wider">
+                  <Lock className="w-3 h-3 text-amber-600" />
+                  Arbitrage en cours
+                </span>
+              )}
+              {allQuestionsArbitrated && !isReadOnly && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-black uppercase tracking-wider">
+                  <CheckCircle className="w-3 h-3 text-emerald-600" />
+                  100% Arbitré
+                </span>
+              )}
+              {sessionStatut === "CLOSED" && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-black uppercase tracking-wider">
+                  <CheckCircle className="w-3 h-3 text-slate-500" />
+                  Archivé
+                </span>
+              )}
             </div>
 
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+              {data?.nom_session || "Session de Calibrage"}
+            </h1>
+          </div>
+
+          {/* Right: Actions Toolbar (Ordered, cohesive styling) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Live Submissions Pill */}
+            <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-slate-700 shadow-2xs">
+              <Users className="w-3.5 h-3.5 text-[#1dc4ff]" />
+              <span className="text-xs font-bold text-slate-500">Soumis :</span>
+              <span className="font-mono font-black text-sm text-slate-900">{evaluators.length}</span>
+            </div>
+
+            {/* Back to summary if closed */}
             {isClosed && (
               <button
                 type="button"
                 onClick={() => setShowClosedCockpit(false)}
-                className="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-extrabold text-xs rounded-2xl transition-all flex items-center gap-2 cursor-pointer"
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
               >
-                <ArrowLeft className="w-4 h-4" />
-                Retour au résumé
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Résumé</span>
               </button>
             )}
 
+            {/* Back to Variance Report if locked */}
             {sessionStatut === "LOCKED" && (
               <button
                 type="button"
                 onClick={() => setShowLockedCockpit(false)}
-                className="px-4 py-2.5 bg-amber-600/30 hover:bg-amber-600/40 border border-amber-500/30 text-amber-200 font-extrabold text-xs rounded-2xl transition-all flex items-center gap-2 cursor-pointer"
+                className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
               >
-                <ArrowLeft className="w-4 h-4" />
-                Rapport de Variances
+                <ArrowLeft className="w-3.5 h-3.5 text-amber-600" />
+                <span>Rapport Variances</span>
               </button>
             )}
 
+            {/* Grille PDF Modal Button */}
             <button
               type="button"
               onClick={() => setShowArbitrageReportModal(true)}
-              className="px-3.5 py-2.5 bg-[#1dc4ff]/15 hover:bg-[#1dc4ff]/25 border border-[#1dc4ff]/30 text-[#1dc4ff] font-extrabold text-xs rounded-2xl transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+              className="px-3.5 py-2 bg-[#1dc4ff]/15 hover:bg-[#1dc4ff]/25 border border-[#1dc4ff]/30 text-[#0077aa] font-black text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
               title="Visualiser et imprimer la grille d'arbitrage au format PDF A4"
             >
-              <FileText className="w-3.5 h-3.5" />
+              <FileText className="w-3.5 h-3.5 text-[#0077aa]" />
               <span>Grille PDF</span>
             </button>
 
+            {/* Reset Arbitrages Button */}
             {!isReadOnly && (
               <button
                 type="button"
                 onClick={handleResetArbitragesInCockpit}
-                className="px-3.5 py-2.5 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-300 font-extrabold text-xs rounded-2xl transition-all flex items-center gap-1.5 cursor-pointer"
-                title="Effacer tous les arbitrages enregistrés pour cette session afin de recommencer à zéro"
+                className="px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-rose-600 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                title="Effacer tous les arbitrages enregistrés pour cette session afin de recommencer"
               >
-                <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-                Réinitialiser Arbitrages
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Réinitialiser</span>
               </button>
             )}
 
+            {/* Primary Action : Clôturer Session */}
             {!isReadOnly && (
               <button
                 type="button"
                 onClick={handleCloseSessionClick}
                 disabled={isClosingSession}
-                className={`px-4 py-2.5 font-extrabold text-xs rounded-2xl transition-all shadow-lg flex items-center gap-2 cursor-pointer disabled:opacity-50 ${
+                className={`px-4 py-2 font-black text-xs rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50 ${
                   allQuestionsArbitrated
-                    ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30 ring-2 ring-rose-400/80 animate-pulse"
-                    : "bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+                    ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/20 ring-2 ring-rose-400 animate-pulse"
+                    : "bg-slate-900 hover:bg-slate-800 text-white shadow-slate-900/20"
                 }`}
                 title={
                   allQuestionsArbitrated
@@ -2093,14 +2085,58 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                 }
               >
                 {isClosingSession ? (
-                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                 ) : (
-                  <Lock className="w-4 h-4" />
+                  <Lock className="w-3.5 h-3.5" />
                 )}
-                Clôturer Session {allQuestionsArbitrated && "✅"}
+                <span>Clôturer Session {allQuestionsArbitrated && "✅"}</span>
               </button>
             )}
           </div>
+        </div>
+
+        {/* BOTTOM METADATA SUB-STRIP */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 text-xs pt-0.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            {data?.nom_conseiller && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-50 border border-slate-200/90 text-slate-700">
+                <UserCheck className="w-3.5 h-3.5 text-[#1dc4ff]" />
+                <span className="font-bold text-slate-500 text-[11px]">ID Appel :</span>
+                <span className="font-mono font-bold text-slate-900">{data.nom_conseiller}</span>
+              </div>
+            )}
+            {data?.template_id && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-50 border border-slate-200/90 text-slate-700">
+                <FileText className="w-3.5 h-3.5 text-[#1dc4ff]" />
+                <span className="font-bold text-slate-500 text-[11px]">Grille :</span>
+                <span className="font-bold text-slate-900">{data.template_id}</span>
+              </div>
+            )}
+            {data?.animateur_id && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-50 border border-slate-200/90 text-slate-700">
+                <Users className="w-3.5 h-3.5 text-[#1dc4ff]" />
+                <span className="font-bold text-slate-500 text-[11px]">Animateur :</span>
+                <span className="font-bold text-slate-900">{data.animateur_id}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Mode Info Messages */}
+          {isClosed && (
+            <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
+              👁️ Lecture seule — Session archivée
+            </span>
+          )}
+          {!canArbitrate && (
+            <span className="text-[11px] font-bold text-[#0077aa] bg-[#1dc4ff]/10 px-2.5 py-1 rounded-lg border border-[#1dc4ff]/20">
+              🔒 Mode Consultation
+            </span>
+          )}
+          {isLiveReadOnly && canArbitrate && (
+            <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+              🔒 Arbitrage disponible après clôture des votes
+            </span>
+          )}
         </div>
 
         {/* ── GAUGE SESSION OVERVIEW (LIVE COCKPIT) ── */}
