@@ -537,8 +537,8 @@ function handleCreerSession(ss, body) {
   const dureeMinutes = Math.max(5, Math.round((closeMs - nowMs) / 60000));
 
   const urlAudio = body.url_audio || "";
-  const animateurId = body.animateur_id || "";
   const gaugeId = body.gauge_id || "";
+  const animateurId = body.animateur_id || gaugeId || "Admin";
   const nomConseiller = body.nom_conseiller || "";
   const consignes = body.consignes || "";
 

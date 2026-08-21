@@ -319,14 +319,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  // ── Approve Calibration Proposal ────────────────────────────────────────────
   const handleApproveProposal = async (demande: DemandeCalibrageInfo) => {
     setActionLoadingId(demande.demande_id);
     const res = await approuverDemandeCalibrage(
       demande.demande_id,
       demande.heure_ouverture_proposee,
       demande.heure_fermeture_proposee,
-      identifiant
+      demande.evaluateur_id || identifiant
     );
     setActionLoadingId(null);
 
@@ -1147,13 +1146,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-4 space-y-3.5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5 flex items-center gap-1.5">
-                        <UserCheck className="w-3.5 h-3.5 text-[#1dc4ff]" />
-                        Animateur (Projections Cockpit)
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Award className="w-3.5 h-3.5 text-[#1dc4ff]" />
+                          Évaluateur Gauge (Référence)
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-normal">Définit l'animateur par défaut</span>
                       </label>
                       <select
-                        value={newSessionAnimateur}
-                        onChange={(e) => setNewSessionAnimateur(e.target.value)}
+                        value={newSessionGauge}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNewSessionGauge(val);
+                          setNewSessionAnimateur(val);
+                        }}
                         className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:border-[#1dc4ff] focus:ring-2 focus:ring-[#1dc4ff]/20 transition-all text-xs font-medium"
                       >
                         <option value={identifiant}>Moi ({nomComplet})</option>
@@ -1168,18 +1174,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5 flex items-center gap-1.5">
-                        <Award className="w-3.5 h-3.5 text-[#1dc4ff]" />
-                        Évaluateur Gauge (Référence)
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <UserCheck className="w-3.5 h-3.5 text-[#1dc4ff]" />
+                          Animateur (Arbitre Cockpit)
+                        </span>
+                        <span className="text-[10px] text-[#0077aa] font-bold">Gauge par défaut</span>
                       </label>
                       <select
-                        value={newSessionGauge}
-                        onChange={(e) => setNewSessionGauge(e.target.value)}
+                        value={newSessionAnimateur}
+                        onChange={(e) => setNewSessionAnimateur(e.target.value)}
                         className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:border-[#1dc4ff] focus:ring-2 focus:ring-[#1dc4ff]/20 transition-all text-xs font-medium"
                       >
-                        <option value={identifiant}>Moi ({nomComplet})</option>
+                        {newSessionGauge && newSessionGauge !== identifiant && (
+                          <option value={newSessionGauge}>
+                            Gauge ({newSessionGauge}) [Par défaut]
+                          </option>
+                        )}
+                        <option value={identifiant}>Moi — Admin ({nomComplet})</option>
                         {evaluateurs
-                          .filter((ev) => ev.identifiant !== identifiant)
+                          .filter((ev) => ev.identifiant !== identifiant && ev.identifiant !== newSessionGauge)
                           .map((ev) => (
                             <option key={ev.identifiant} value={ev.identifiant}>
                               {ev.nom_complet} ({ev.identifiant})
