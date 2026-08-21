@@ -7,6 +7,7 @@ import {
   CornerDownRight,
   Flame,
   MessageSquare,
+  AlertCircle,
 } from "lucide-react";
 import type { CockpitNode } from "../../lib/api";
 
@@ -37,6 +38,8 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
   const [selectedN3Ids, setSelectedN3Ids] = useState<string[]>([]);
   const [itemComments, setItemComments] = useState<Record<string, string>>({});
   const [justification, setJustification] = useState("");
+  const [hasCommentError, setHasCommentError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -132,19 +135,40 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
+    setHasCommentError(false);
 
-    // Check global justification
     const trimmedJustif = (justification || "").trim();
-    if (trimmedJustif.length > 0 && trimmedJustif.length < 5) {
-      alert("La synthèse globale d'arbitrage doit contenir au moins 5 caractères.");
-      return;
+    const hasValidSpecificComment = Object.values(itemComments).some(
+      (comm) => (comm || "").trim().length >= 5
+    );
+
+    // Validation 1: For "Non" (Non-conformity)
+    if (decisionN1 === "Non") {
+      if (n2Children.length > 0 && selectedN2Ids.length === 0) {
+        setErrorMessage("Veuillez cocher au moins un motif d'écart (sous-item) pour justifier la non-conformité.");
+        return;
+      }
+
+      if (trimmedJustif.length < 5 && !hasValidSpecificComment) {
+        setHasCommentError(true);
+        setErrorMessage("Le commentaire / justification d'arbitrage est obligatoire (au moins 5 caractères).");
+        return;
+      }
+    } else {
+      // Validation 2: For "Oui" or "N.A."
+      if (trimmedJustif.length < 5) {
+        setHasCommentError(true);
+        setErrorMessage("Le commentaire de synthèse / justification d'arbitrage est obligatoire (au moins 5 caractères).");
+        return;
+      }
     }
 
-    // Check specific item comments
+    // Check minimum length on all filled specific comments
     for (const [, comm] of Object.entries(itemComments)) {
       const trimmedComm = (comm || "").trim();
       if (trimmedComm.length > 0 && trimmedComm.length < 5) {
-        alert("Tout commentaire d'arbitrage renseigné doit contenir au moins 5 caractères.");
+        setErrorMessage("Tout commentaire d'arbitrage renseigné doit contenir au moins 5 caractères.");
         return;
       }
     }
@@ -157,7 +181,7 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
       selectedN2Ids: decisionN1 === "Non" ? selectedN2Ids : [],
       selectedN3Ids: decisionN1 === "Non" ? selectedN3Ids : [],
       itemComments: decisionN1 === "Non" ? itemComments : {},
-      justification,
+      justification: trimmedJustif,
     };
 
     await onSave(payload);
@@ -450,17 +474,39 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
 
             {/* SYNTHÈSE GLOBALE DE GROUPE */}
             <div className="space-y-2">
-              <label className="text-xs font-black uppercase tracking-wider text-slate-700 block">
-                Synthèse Générale de la Décision de Groupe (Remarque globale) :
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1">
+                  <span>Synthèse Générale de la Décision de Groupe</span>
+                  <span className="text-rose-500 font-bold">*</span>
+                </label>
+                <span className="text-[10px] font-bold text-slate-400">
+                  Obligatoire (min. 5 caractères)
+                </span>
+              </div>
               <textarea
                 value={justification}
-                onChange={(e) => setJustification(e.target.value)}
+                onChange={(e) => {
+                  setJustification(e.target.value);
+                  setHasCommentError(false);
+                  setErrorMessage(null);
+                }}
                 placeholder="Consigner la synthèse globale validée lors du débat de calibrage..."
                 rows={3}
-                className="w-full p-4 bg-white border border-slate-300 rounded-2xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#1dc4ff] transition-all resize-none"
+                className={`w-full p-4 bg-white border rounded-2xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none transition-all resize-none ${
+                  hasCommentError
+                    ? "border-rose-500 ring-2 ring-rose-500/20 bg-rose-50/20"
+                    : "border-slate-300 focus:border-[#1dc4ff] focus:ring-2 focus:ring-[#1dc4ff]/20"
+                }`}
               />
             </div>
+
+            {/* Error Message Alert Banner */}
+            {errorMessage && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center gap-2 animate-shake">
+                <AlertCircle className="w-4 h-4 text-rose-500 flex-shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
           </form>
         </div>
 
