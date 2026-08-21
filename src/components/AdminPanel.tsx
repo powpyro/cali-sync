@@ -320,6 +320,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const handleApproveProposal = async (demande: DemandeCalibrageInfo) => {
+    if (!demande.gauge_items_count || demande.gauge_items_count === 0) {
+      const confirmLaunch = window.confirm(
+        `⚠️ Attention : Aucun item de référence Gauge n'a été enregistré pour la demande "${demande.nom_session}".\n\nSouhaitez-vous quand même approuver et programmer cette session ?`
+      );
+      if (!confirmLaunch) return;
+    }
+
     setActionLoadingId(demande.demande_id);
     const res = await approuverDemandeCalibrage(
       demande.demande_id,
@@ -884,9 +891,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     )}
 
                     <div className="flex items-center justify-between pt-2 border-t border-slate-100 flex-wrap gap-2">
-                      <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
-                        <Award className="w-3.5 h-3.5" /> Jauge de référence pré-remplie ✓
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {d.gauge_items_count && d.gauge_items_count > 0 ? (
+                          <span className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 shadow-2xs">
+                            <Award className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Jauge Gauge : {d.gauge_items_count} item(s) pré-rempli(s) ✓</span>
+                          </span>
+                        ) : (
+                          <span className="text-xs text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 shadow-2xs">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Jauge Gauge : 0 item (Non pré-remplie)</span>
+                          </span>
+                        )}
+                      </div>
 
                       <div className="flex items-center gap-2">
                         <button

@@ -307,16 +307,29 @@ function handleListerDemandesCalibrage(ss, req) {
   const data = sheet.getDataRange().getValues();
   const demandes = [];
 
+  // Compter les items soumis par la Gauge pour chaque demande
+  const sheetSub = ss.getSheetByName("Log_Soumissions");
+  const subData = sheetSub ? sheetSub.getDataRange().getValues() : [];
+  const subCountMap = {};
+  for (let s = 1; s < subData.length; s++) {
+    const sDemId = String(subData[s][1]).trim();
+    if (sDemId) {
+      subCountMap[sDemId] = (subCountMap[sDemId] || 0) + 1;
+    }
+  }
+
   for (let i = 1; i < data.length; i++) {
+    const demId = String(data[i][0]).trim();
     const demEvalId = data[i][1];
     const demStatus = data[i][8];
+    const gaugeCount = subCountMap[demId] || 0;
 
     // Si evaluateurId est fourni, lister toutes ses demandes.
     // Sinon, lister uniquement les demandes PENDING_APPROVAL pour l'admin.
     if (evaluateurId) {
       if (String(demEvalId).trim().toLowerCase() === String(evaluateurId).trim().toLowerCase()) {
         demandes.push({
-          demande_id: data[i][0],
+          demande_id: demId,
           evaluateur_id: demEvalId,
           nom_session: data[i][2],
           template_id: data[i][3],
@@ -327,13 +340,14 @@ function handleListerDemandesCalibrage(ss, req) {
           statut: demStatus,
           date_demande: data[i][9],
           nom_conseiller: data[i][10] || "",
-          consignes: data[i][11] || ""
+          consignes: data[i][11] || "",
+          gauge_items_count: gaugeCount
         });
       }
     } else {
       if (demStatus === "PENDING_APPROVAL") {
         demandes.push({
-          demande_id: data[i][0],
+          demande_id: demId,
           evaluateur_id: demEvalId,
           nom_session: data[i][2],
           template_id: data[i][3],
@@ -344,7 +358,8 @@ function handleListerDemandesCalibrage(ss, req) {
           statut: demStatus,
           date_demande: data[i][9],
           nom_conseiller: data[i][10] || "",
-          consignes: data[i][11] || ""
+          consignes: data[i][11] || "",
+          gauge_items_count: gaugeCount
         });
       }
     }
@@ -1559,6 +1574,8 @@ function handleGetStructureGrille(ss, payload) {
 function cleanStringKey(str) {
   if (!str) return "";
   return String(str)
+    .replace(/^\[.*?\]\s*/, "")
+    .replace(/^[-\d.]+\s*/, "")
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -1832,6 +1849,18 @@ function handleGetCockpit(ss, sessionId) {
       || (cleanId ? gaugeMap[cleanId] : null)
       || (cleanLib ? gaugeMap[cleanLib] : null)
       || null;
+
+    if (!gauge && cleanLib && cleanLib.length >= 6) {
+      for (var gKey in gaugeMap) {
+        if (gaugeMap.hasOwnProperty(gKey) && gKey.length >= 6) {
+          if (gKey.includes(cleanLib) || cleanLib.includes(gKey)) {
+            gauge = gaugeMap[gKey];
+            break;
+          }
+        }
+      }
+    }
+
     var allVotes = votesMap[itemId] || [];
 
     // Grouper les votes par critère

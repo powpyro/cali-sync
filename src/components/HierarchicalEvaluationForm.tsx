@@ -364,6 +364,7 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
   const [springing, setSpringing] = useState<{ id: string; choice: PillChoice } | null>(null);
   const [lastInteracted, setLastInteracted] = useState<string | null>(null);
   const [isShakingSubmit, setIsShakingSubmit] = useState(false);
+  const [highlightMissing, setHighlightMissing] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showVictory, setShowVictory] = useState(false);
@@ -371,6 +372,21 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const handleAutoFillConforme = () => {
+    if (isFormDisabled) return;
+    const newAnswers: Record<string, PillChoice> = { ...answers };
+    let count = 0;
+    items.filter((i) => i.niveau === 2).forEach((q) => {
+      if (!newAnswers[q.item_id]) {
+        newAnswers[q.item_id] = "Oui";
+        count++;
+      }
+    });
+    setAnswers(newAnswers);
+    setHighlightMissing(false);
+    triggerToast(`✨ ${count} question(s) pré-remplie(s) en "Oui (Conforme)".`);
   };
 
   const toggleCategory = (label: string) => {
@@ -552,9 +568,18 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
     }
     if (unratedN2.length > 0) {
       setIsShakingSubmit(true);
+      setHighlightMissing(true);
       setTimeout(() => setIsShakingSubmit(false), 400);
-      triggerToast(`${unratedN2.length} question(s) sans réponse.`);
-      document.getElementById(`q-card-${unratedN2[0]}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      triggerToast(`⚠️ ${unratedN2.length} question(s) obligatoire(s) sans réponse.`);
+      
+      const firstUnratedId = unratedN2[0];
+      const catIdx = tree.findIndex((cat) => cat.questions.some((q) => q.item.item_id === firstUnratedId));
+      if (catIdx >= 0 && viewMode === "stepped") {
+        setActiveCategoryIndex(catIdx);
+      }
+      setTimeout(() => {
+        document.getElementById(`q-card-${firstUnratedId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 150);
       return;
     }
     if (missingComments.length > 0) {
@@ -955,6 +980,41 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
               );
             })}
           </div>
+
+          {/* Quick Completeness & Auto-Fill Toolbar */}
+          <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                unratedN2.length === 0
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                  : "bg-amber-50 text-amber-800 border-amber-200"
+              }`}>
+                {unratedN2.length === 0 ? (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Grille 100% complétée ({answeredN2}/{totalN2})</span>
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                    <span>{unratedN2.length} question(s) restante(s) sur {totalN2}</span>
+                  </>
+                )}
+              </span>
+            </div>
+
+            {unratedN2.length > 0 && !isFormDisabled && (
+              <button
+                type="button"
+                onClick={handleAutoFillConforme}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black transition-all cursor-pointer shadow-sm shadow-emerald-600/20 active:scale-95"
+                title="Cocher 'Oui' sur tous les items non encore évalués pour accélérer la saisie"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>Pré-remplir Tout Conforme</span>
+              </button>
+            )}
+          </div>
         </section>
 
         {(viewMode === "stepped"
@@ -1012,7 +1072,10 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
                     const subItemsVisible = showSubsOnOui ? isOui : isNon;
                     const triggerLabel = showSubsOnOui ? "Yes" : "No";
 
-                    const cardBg = isOui
+                    const isUnratedAndAlerted = highlightMissing && !ans;
+                    const cardBg = isUnratedAndAlerted
+                      ? "bg-rose-50 border-2 border-rose-500 shadow-md ring-4 ring-rose-400/20 animate-pulse"
+                      : isOui
                       ? "bg-emerald-50/60 border-emerald-200 shadow-sm shadow-emerald-500/5"
                       : isNon
                       ? "bg-rose-50/60 border-rose-200 shadow-sm shadow-rose-500/5"

@@ -78,6 +78,7 @@ export interface DemandeCalibrageInfo {
     statut: string;
     commentaire?: string;
   }>;
+  gauge_items_count?: number;
 }
 
 export interface DemandesListResponse {
