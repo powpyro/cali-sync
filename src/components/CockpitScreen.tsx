@@ -13,6 +13,7 @@ import { ArbitrageDrawer } from "./cockpit/ArbitrageDrawer";
 import { VarianceReport } from "./cockpit/VarianceReport";
 import { AudioPlayer } from "./AudioPlayer";
 import { CaliSyncLogo } from "./ui/CaliSyncLogo";
+import { ArbitrageReportModal } from "./ArbitrageReportModal";
 import {
   Clock,
   CheckCircle2,
@@ -477,6 +478,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [showClosedCockpit, setShowClosedCockpit] = useState(false);
+  const [showArbitrageReportModal, setShowArbitrageReportModal] = useState(false);
   // LOCKED: toggle between Variance Report and Cockpit arbitrage
   const [showLockedCockpit, setShowLockedCockpit] = useState(false);
   // Track locally which N1 items have been arbitrated in this session
@@ -1214,59 +1216,81 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
             <Sparkles className="w-4 h-4 text-[#1dc4ff]" />
             Actions disponibles
           </h2>
-          <div className="grid sm:grid-cols-2 gap-3">
-            {/* PDF Download Direct Link / Button */}
+          <div className="grid sm:grid-cols-3 gap-3">
+            {/* Direct Grille PDF Report Modal Button (Primary) */}
+            <button
+              onClick={() => setShowArbitrageReportModal(true)}
+              className="flex items-center gap-3 p-4 rounded-2xl bg-[#1dc4ff]/15 border border-[#1dc4ff]/40 hover:border-[#1dc4ff] hover:bg-[#1dc4ff]/25 transition-all cursor-pointer group shadow-sm text-left"
+            >
+              <div className="w-10 h-10 rounded-xl bg-[#1dc4ff] text-slate-950 flex items-center justify-center font-bold flex-shrink-0 group-hover:scale-105 transition-transform">
+                <FileText className="w-5 h-5" />
+              </div>
+              <div className="text-left min-w-0">
+                <div className="text-sm font-black text-slate-900 flex items-center gap-1.5 truncate">
+                  Grille PDF
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#1dc4ff] text-slate-950 font-black">
+                    A4
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-500 font-medium truncate">
+                  Items notés & commentaires
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-[#0077aa] ml-auto flex-shrink-0" />
+            </button>
+
+            {/* Secondary Google Drive PDF Link */}
             {pdfUrl ? (
               <a
                 href={pdfUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-3 p-4 rounded-2xl bg-[#1dc4ff]/10 border border-[#1dc4ff]/30 hover:border-[#1dc4ff] hover:bg-[#1dc4ff]/20 transition-all cursor-pointer group shadow-xs"
+                className="flex items-center gap-3 p-4 rounded-2xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 transition-all cursor-pointer group shadow-xs text-left"
               >
-                <FileText className="w-6 h-6 text-[#0077aa] flex-shrink-0 group-hover:scale-110 transition-transform" />
-                <div className="text-left">
-                  <div className="text-sm font-black text-slate-900 flex items-center gap-1.5">
-                    Télécharger / Ouvrir le Rapport PDF <ExternalLink className="w-3.5 h-3.5 text-[#0077aa]" />
+                <FileText className="w-6 h-6 text-slate-500 flex-shrink-0 group-hover:scale-110 transition-transform" />
+                <div className="text-left min-w-0">
+                  <div className="text-sm font-bold text-slate-800 flex items-center gap-1 truncate">
+                    Rapport Complet <ExternalLink className="w-3 h-3 text-slate-400" />
                   </div>
-                  <div className="text-[11px] text-slate-500 font-medium">
-                    Rapport complet du calibrage (Google Drive)
+                  <div className="text-[11px] text-slate-500 font-medium truncate">
+                    Google Drive
                   </div>
                 </div>
-                <Download className="w-5 h-5 text-indigo-300 ml-auto flex-shrink-0" />
+                <Download className="w-4 h-4 text-slate-400 ml-auto flex-shrink-0" />
               </a>
             ) : (
               <button
                 onClick={handleFetchPdf}
                 disabled={pdfLoading}
-                className="flex items-center gap-3 p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 hover:border-indigo-400 hover:bg-indigo-500/20 transition-all cursor-pointer disabled:opacity-50 group"
+                className="flex items-center gap-3 p-4 rounded-2xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 transition-all cursor-pointer disabled:opacity-50 group text-left"
               >
                 {pdfLoading ? (
-                  <RefreshCw className="w-6 h-6 text-indigo-400 animate-spin flex-shrink-0" />
+                  <RefreshCw className="w-6 h-6 text-[#009ae5] animate-spin flex-shrink-0" />
                 ) : (
-                  <FileText className="w-6 h-6 text-indigo-400 flex-shrink-0 group-hover:scale-110 transition-transform" />
+                  <FileText className="w-6 h-6 text-slate-500 flex-shrink-0 group-hover:scale-110 transition-transform" />
                 )}
-                <div className="text-left">
-                  <div className="text-sm font-black text-white">
-                    {pdfLoading ? "Chargement du PDF..." : "Télécharger le Rapport PDF"}
+                <div className="text-left min-w-0">
+                  <div className="text-sm font-bold text-slate-800 truncate">
+                    {pdfLoading ? "Génération..." : "Rapport Complet"}
                   </div>
-                  <div className="text-[11px] text-slate-400 font-medium">
-                    Rapport complet du calibrage avec les arbitrages
+                  <div className="text-[11px] text-slate-500 font-medium truncate">
+                    Google Drive
                   </div>
                 </div>
-                <Download className="w-4 h-4 text-indigo-400 ml-auto flex-shrink-0" />
+                <Download className="w-4 h-4 text-slate-400 ml-auto flex-shrink-0" />
               </button>
             )}
 
             {/* Read-only Cockpit */}
             <button
               onClick={() => setShowClosedCockpit(true)}
-              className="flex items-center gap-3 p-4 rounded-2xl bg-slate-800/60 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 transition-all cursor-pointer group"
+              className="flex items-center gap-3 p-4 rounded-2xl bg-slate-800/60 border border-slate-700 hover:border-slate-600 hover:bg-slate-800 transition-all cursor-pointer group text-left"
             >
               <Eye className="w-6 h-6 text-slate-400 flex-shrink-0 group-hover:scale-110 transition-transform" />
-              <div className="text-left">
-                <div className="text-sm font-black text-white">Consulter le Cockpit</div>
-                <div className="text-[11px] text-slate-400 font-medium">
-                  Lecture seule — tous les arbitrages validés
+              <div className="text-left min-w-0">
+                <div className="text-sm font-black text-white truncate">Cockpit</div>
+                <div className="text-[11px] text-slate-400 font-medium truncate">
+                  Lecture seule
                 </div>
               </div>
               <ChevronRight className="w-4 h-4 text-slate-400 ml-auto flex-shrink-0" />
@@ -2049,6 +2073,16 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
               </button>
             )}
 
+            <button
+              type="button"
+              onClick={() => setShowArbitrageReportModal(true)}
+              className="px-3.5 py-2.5 bg-[#1dc4ff]/15 hover:bg-[#1dc4ff]/25 border border-[#1dc4ff]/30 text-[#1dc4ff] font-extrabold text-xs rounded-2xl transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="Visualiser et imprimer la grille d'arbitrage au format PDF A4"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Grille PDF</span>
+            </button>
+
             {!isReadOnly && (
               <button
                 type="button"
@@ -2479,6 +2513,14 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
           }
         }}
       />
+
+      {/* ARBITRAGE GRID PDF REPORT MODAL */}
+      {showArbitrageReportModal && data && (
+        <ArbitrageReportModal
+          sessionData={data}
+          onClose={() => setShowArbitrageReportModal(false)}
+        />
+      )}
     </div>
   );
 };

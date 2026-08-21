@@ -11,13 +11,16 @@ import {
   listerMesAssessments,
   soumettreAssessmentLibre,
   supprimerAssessmentLibre,
+  getSessionData,
   type SessionInfo,
   type Template,
   type AssessmentLibreInfo,
+  type SessionDataResponse,
 } from "../lib/api";
 import { HierarchicalEvaluationForm, type HierarchicalItem } from "./HierarchicalEvaluationForm";
 import { AssessmentViewerModal } from "./AssessmentViewerModal";
 import { AssessmentReportModal } from "./AssessmentReportModal";
+import { ArbitrageReportModal } from "./ArbitrageReportModal";
 import { CaliSyncLogo } from "./ui/CaliSyncLogo";
 import {
   Activity,
@@ -242,6 +245,25 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
 
   const handleRefreshAll = async () => {
     await Promise.all([fetchSessions(), fetchHistory()]);
+  };
+
+  const [selectedArbitrageReportData, setSelectedArbitrageReportData] = useState<SessionDataResponse | null>(null);
+  const [loadingArbitrageReportSessId, setLoadingArbitrageReportSessId] = useState<string | null>(null);
+
+  const handleOpenArbitrageGridReport = async (sessId: string) => {
+    setLoadingArbitrageReportSessId(sessId);
+    try {
+      const res = await getSessionData(sessId);
+      if (res && res.success) {
+        setSelectedArbitrageReportData(res);
+      } else {
+        alert("Impossible de charger les données d'arbitrage de cette session.");
+      }
+    } catch {
+      alert("Erreur lors de la récupération du rapport.");
+    } finally {
+      setLoadingArbitrageReportSessId(null);
+    }
   };
 
   const handleDownloadPdf = async (sessId: string) => {
@@ -1251,12 +1273,27 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
                         </button>
                       )}
                       {sess.statut === "CLOSED" && (
-                        <button
-                          onClick={() => handleDownloadPdf(sess.session_id)}
-                          className="px-4 py-2 bg-[#0f172a] hover:bg-[#1e293b] text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
-                        >
-                          <FileText className="w-3.5 h-3.5" /> 📄 Rapport PDF
-                        </button>
+                        <>
+                          <button
+                            onClick={() => handleOpenArbitrageGridReport(sess.session_id)}
+                            disabled={loadingArbitrageReportSessId === sess.session_id}
+                            className="px-4 py-2 bg-[#1dc4ff]/15 hover:bg-[#1dc4ff]/25 border border-[#1dc4ff]/30 text-[#0077aa] text-xs font-black rounded-xl transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50 shadow-xs"
+                            title="Ouvrir la Grille d'Arbitrage au format PDF A4 (Instantané)"
+                          >
+                            {loadingArbitrageReportSessId === sess.session_id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0077aa]" />
+                            ) : (
+                              <FileText className="w-3.5 h-3.5 text-[#0077aa]" />
+                            )}
+                            Grille Arbitrage PDF 📄
+                          </button>
+                          <button
+                            onClick={() => handleDownloadPdf(sess.session_id)}
+                            className="px-4 py-2 bg-[#0f172a] hover:bg-[#1e293b] text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                          >
+                            <FileText className="w-3.5 h-3.5" /> 📄 Rapport (Drive)
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -1950,6 +1987,14 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
           assessment={selectedAssessmentForReport}
           onClose={() => setSelectedAssessmentForReport(null)}
           onEdit={handleEditAssessment}
+        />
+      )}
+
+      {/* ── MODAL : RAPPORT D'ARBITRAGE DU CALIBRAGE ──────────────────────── */}
+      {selectedArbitrageReportData && (
+        <ArbitrageReportModal
+          sessionData={selectedArbitrageReportData}
+          onClose={() => setSelectedArbitrageReportData(null)}
         />
       )}
     </div>

@@ -19,12 +19,15 @@ import {
   uploadAudioDrive,
   getApiUrl,
   setApiUrl,
+  getSessionData,
   type SessionInfo,
   type Template,
   type ProfilEvaluateur,
   type DemandeCalibrageInfo,
+  type SessionDataResponse,
 } from "../lib/api";
 import { TemplateStudioModal } from "./TemplateStudioModal";
+import { ArbitrageReportModal } from "./ArbitrageReportModal";
 import { CaliSyncLogo } from "./ui/CaliSyncLogo";
 import {
   ShieldCheck,
@@ -140,6 +143,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [studioTemplate, setStudioTemplate] = useState<Template | null>(null);
   const [adminPinInput, setAdminPinInput] = useState(getStoredAdminPin());
   const [showAdminPin, setShowAdminPin] = useState(false);
+  const [selectedReportSessionData, setSelectedReportSessionData] = useState<SessionDataResponse | null>(null);
+  const [loadingReportSessionId, setLoadingReportSessionId] = useState<string | null>(null);
+
+  const handleOpenArbitrageGridReport = async (sessionId: string) => {
+    setLoadingReportSessionId(sessionId);
+    try {
+      const res = await getSessionData(sessionId);
+      if (res && res.success) {
+        setSelectedReportSessionData(res);
+      } else {
+        setActionFeedback({ success: false, message: res?.message || "Impossible de charger les données d'arbitrage de cette session." });
+      }
+    } catch {
+      setActionFeedback({ success: false, message: "Erreur réseau lors du chargement de la session." });
+    } finally {
+      setLoadingReportSessionId(null);
+    }
+  };
 
   const handleSaveAdminPin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1388,17 +1409,31 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     {session.statut === "CLOSED" && (
                       <>
                         <button
+                          onClick={() => handleOpenArbitrageGridReport(session.session_id)}
+                          disabled={loadingReportSessionId === session.session_id}
+                          className="px-3 py-1.5 bg-[#1dc4ff]/15 border border-[#1dc4ff]/30 text-[#0077aa] text-xs font-black rounded-xl hover:bg-[#1dc4ff]/25 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50 shadow-xs"
+                          title="Ouvrir la Grille d'Arbitrage au format PDF A4 (Instantané)"
+                        >
+                          {loadingReportSessionId === session.session_id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0077aa]" />
+                          ) : (
+                            <FileText className="w-3.5 h-3.5 text-[#0077aa]" />
+                          )}
+                          Grille Arbitrage PDF 📄
+                        </button>
+
+                        <button
                           onClick={() => handleDownloadPdfForSession(session.session_id)}
                           disabled={actionLoadingId === session.session_id}
                           className="px-3 py-1.5 bg-[#0f172a] text-white text-xs font-bold rounded-xl hover:bg-[#1e293b] transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50 shadow-sm"
-                          title="Ouvrir ou Générer le Rapport PDF de cette session"
+                          title="Ouvrir ou Générer le Rapport PDF de cette session (Google Drive)"
                         >
                           {actionLoadingId === session.session_id ? (
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
                           ) : (
                             <FileText className="w-3.5 h-3.5" />
                           )}
-                          Rapport PDF 📄
+                          Rapport Complet (Drive)
                         </button>
 
                         <button
@@ -1770,6 +1805,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ARBITRAGE GRID PDF REPORT MODAL */}
+      {selectedReportSessionData && (
+        <ArbitrageReportModal
+          sessionData={selectedReportSessionData}
+          onClose={() => setSelectedReportSessionData(null)}
+        />
       )}
     </div>
   );
