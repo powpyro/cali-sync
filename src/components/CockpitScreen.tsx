@@ -1009,41 +1009,22 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
   // ── ÉCRAN LOCKED : RAPPORT DE VARIANCES POST-SOUMISSIONS ─────────────────
   if (sessionStatut === "LOCKED" && !showLockedCockpit) {
     return (
-      <div className="max-w-5xl mx-auto space-y-6 font-sans pb-16">
-        {onBack && (
-          <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm font-bold cursor-pointer">
-            <ArrowLeft className="w-4 h-4" /> Retour au menu
-          </button>
-        )}
+      <div className="max-w-5xl mx-auto space-y-4 font-sans pb-16">
+        <div className="flex items-center justify-between">
+          {onBack && (
+            <button onClick={onBack} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors text-xs font-bold cursor-pointer">
+              <ArrowLeft className="w-4 h-4" /> Retour au menu
+            </button>
+          )}
 
-        {/* Status banner */}
-        <div className="flex items-center justify-between flex-wrap gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">
-          <div className="flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-            <div>
-              <div className="text-xs font-black text-amber-300 uppercase tracking-wider">
-                Soumissions Closes — Arbitrage disponible
-              </div>
-              <div className="text-sm font-black text-white">{data?.nom_session}</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => fetchSession(false)}
-              disabled={loading}
-              className="px-4 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-              Actualiser
-            </button>
-            <button
-              onClick={() => setShowLockedCockpit(true)}
-              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black transition-all cursor-pointer flex items-center gap-2 shadow-lg shadow-indigo-600/20"
-            >
-              <Lock className="w-3.5 h-3.5" />
-              Cockpit Arbitrage →
-            </button>
-          </div>
+          <button
+            onClick={() => fetchSession(false)}
+            disabled={loading}
+            className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50 shadow-2xs ml-auto"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-[#1dc4ff]" : "text-slate-400"}`} />
+            <span>Actualiser</span>
+          </button>
         </div>
 
         {/* Variance Report */}

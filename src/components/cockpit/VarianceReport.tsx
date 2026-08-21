@@ -5,14 +5,14 @@ import {
   Users,
   AlertTriangle,
   CheckCircle2,
-  MinusCircle,
   Settings,
   BarChart3,
-  Target,
   Award,
   Table2,
   ChevronDown,
   ChevronUp,
+  SlidersHorizontal,
+  Lock,
 } from "lucide-react";
 import { type CockpitNode } from "../../lib/api";
 import {
@@ -174,10 +174,10 @@ export function VarianceReport({ grille, nomSession, onOpenCockpit }: VarianceRe
 
   if (allEvalIds.length === 0) {
     return (
-      <div className="glass-card rounded-3xl p-12 text-center space-y-4 border border-amber-500/20">
-        <AlertTriangle className="w-12 h-12 text-amber-400 mx-auto" />
-        <p className="text-slate-300 text-sm font-medium">
-          Aucune évaluation soumise — le rapport de variances n'est pas disponible.
+      <div className="bg-white rounded-3xl p-12 text-center space-y-4 border border-amber-200 shadow-sm">
+        <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto" />
+        <p className="text-slate-600 text-sm font-semibold">
+          Aucune évaluation soumise — le rapport de variances n'est pas encore disponible.
         </p>
       </div>
     );
@@ -193,158 +193,233 @@ export function VarianceReport({ grille, nomSession, onOpenCockpit }: VarianceRe
         />
       )}
 
-      <div className="space-y-6">
-        {/* ── HEADER ────────────────────────────────────────────────────── */}
-        <div className="glass-card rounded-3xl overflow-hidden border border-amber-500/30 shadow-2xl">
-          <div className="h-2 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500" />
-          <div className="p-6 flex items-start justify-between flex-wrap gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-amber-400" />
-                <span className="text-xs font-black uppercase tracking-wider text-amber-300">
-                  Rapport de Variances — Post Soumissions
-                </span>
-              </div>
-              <h2 className="text-xl font-black text-white tracking-tight">
-                {nomSession || "Session de Calibrage"}
-              </h2>
-              <p className="text-xs text-slate-400 font-medium">
-                Analyse des écarts évaluateurs vs référence Gauge
-              </p>
+      <div className="space-y-6 font-sans">
+        {/* ── HEADER CARD UNIFIÉ & COMPACT ────────────────────────────────── */}
+        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm p-5 sm:p-6 flex items-center justify-between flex-wrap gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-black uppercase tracking-wider">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                Soumissions Closes • Arbitrage Disponible
+              </span>
             </div>
+            <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
+              {nomSession || "Session de Calibrage"}
+            </h1>
+            <p className="text-xs text-slate-500 font-medium flex items-center gap-1.5">
+              <BarChart3 className="w-3.5 h-3.5 text-[#1dc4ff]" />
+              Analyse des variances évaluateurs vs référence Gauge
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => setShowConfig(true)}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-bold transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+              title="Configurer les seuils de variance et les couleurs"
             >
-              <Settings className="w-3.5 h-3.5 text-indigo-400" />
-              Config Couleurs
+              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+              <span>Seuils & Couleurs</span>
             </button>
+
+            {onOpenCockpit && (
+              <button
+                onClick={onOpenCockpit}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1dc4ff] hover:bg-[#009ae5] text-slate-950 text-xs font-black transition-all cursor-pointer shadow-md shadow-[#1dc4ff]/20"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Cockpit Arbitrage →</span>
+              </button>
+            )}
           </div>
         </div>
 
-        {/* ── KPI GLOBAUX ──────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {/* Participants */}
-          <div className="glass-card rounded-2xl p-4 border border-slate-700/50 space-y-1 text-center">
-            <Users className="w-5 h-5 text-indigo-400 mx-auto" />
-            <div className="text-2xl font-black text-white">{allEvalIds.length}</div>
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Évaluateurs</div>
-          </div>
-
-          {/* Variance moyenne */}
-          <div className={`glass-card rounded-2xl p-4 border space-y-1 text-center ${avgCls.badge}`}>
-            <TrendingUp className={`w-5 h-5 mx-auto ${avgCls.text}`} />
-            <div className={`text-2xl font-black ${avgCls.text}`}>{avgVariance}%</div>
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Variance Moy.</div>
-          </div>
-
-          {/* Most divergent */}
-          {mostDivergent && (
-            <div className="glass-card rounded-2xl p-4 border border-rose-500/20 space-y-1 text-center">
-              <TrendingDown className="w-5 h-5 text-rose-400 mx-auto" />
-              <div className="text-sm font-black text-white leading-tight line-clamp-2">
-                {cleanLibelle(mostDivergent.item.libelle).substring(0, 30)}…
-              </div>
-              <div className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">
-                +Divergent ({mostDivergent.rate}%)
+        {/* ── 4 CARTES KPI HARMONISÉES ────────────────────────────────────── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {/* 1. Évaluateurs */}
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs flex flex-col justify-between space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Évaluateurs
+              </span>
+              <div className="w-7 h-7 rounded-lg bg-[#1dc4ff]/10 text-[#009ae5] flex items-center justify-center">
+                <Users className="w-4 h-4" />
               </div>
             </div>
-          )}
-
-          {/* Least divergent */}
-          {leastDivergent && leastDivergent.rate < (mostDivergent?.rate ?? 101) && (
-            <div className="glass-card rounded-2xl p-4 border border-emerald-500/20 space-y-1 text-center">
-              <Award className="w-5 h-5 text-emerald-400 mx-auto" />
-              <div className="text-sm font-black text-white leading-tight line-clamp-2">
-                {cleanLibelle(leastDivergent.item.libelle).substring(0, 30)}…
+            <div>
+              <div className="text-2xl sm:text-3xl font-black text-slate-900">
+                {allEvalIds.length}
               </div>
-              <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
-                +Consensuel ({leastDivergent.rate}%)
+              <div className="text-[11px] text-slate-500 font-medium">
+                soumission(s) reçue(s)
               </div>
             </div>
-          )}
+          </div>
+
+          {/* 2. Variance Moyenne */}
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs flex flex-col justify-between space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Variance Moyenne
+              </span>
+              <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                <TrendingUp className="w-4 h-4" />
+              </div>
+            </div>
+            <div>
+              <div className={`text-2xl sm:text-3xl font-black ${avgCls.text}`}>
+                {avgVariance}%
+              </div>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className={`px-2 py-0.5 rounded text-[10px] font-black ${avgCls.badge}`}>
+                  {avgVariance <= thresholds.greenMax
+                    ? "Calibré"
+                    : avgVariance <= thresholds.orangeMax
+                    ? "À surveiller"
+                    : "Forte variance"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 3. Top Divergent */}
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs flex flex-col justify-between space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Top Divergent
+              </span>
+              <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                <TrendingDown className="w-4 h-4" />
+              </div>
+            </div>
+            {mostDivergent ? (
+              <div className="space-y-1">
+                <div className="text-xs font-bold text-slate-800 line-clamp-2 leading-tight" title={cleanLibelle(mostDivergent.item.libelle)}>
+                  {cleanLibelle(mostDivergent.item.libelle)}
+                </div>
+                <span className="inline-block px-1.5 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-black">
+                  {mostDivergent.rate}% d'écart
+                </span>
+              </div>
+            ) : (
+              <div className="text-xs text-slate-400 font-medium">Aucun écart</div>
+            )}
+          </div>
+
+          {/* 4. Top Consensus */}
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs flex flex-col justify-between space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Top Consensus
+              </span>
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <Award className="w-4 h-4" />
+              </div>
+            </div>
+            {leastDivergent ? (
+              <div className="space-y-1">
+                <div className="text-xs font-bold text-slate-800 line-clamp-2 leading-tight" title={cleanLibelle(leastDivergent.item.libelle)}>
+                  {cleanLibelle(leastDivergent.item.libelle)}
+                </div>
+                <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black">
+                  {100 - leastDivergent.rate}% d'accord
+                </span>
+              </div>
+            ) : (
+              <div className="text-xs text-slate-400 font-medium">Aucun consensus</div>
+            )}
+          </div>
         </div>
 
-        {/* ── LÉGENDE COULEURS ──────────────────────────────────────────── */}
-        <div className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-2xl bg-slate-900/60 border border-slate-800">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Légende :</span>
-          <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-300">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-            Calibré (≤ {thresholds.greenMax}%)
-          </span>
-          <span className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-            À surveiller ({thresholds.greenMax + 1}–{thresholds.orangeMax}%)
-          </span>
-          <span className="flex items-center gap-1.5 text-xs font-bold text-rose-300">
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-400" />
-            Forte variance (&gt; {thresholds.orangeMax}%)
-          </span>
+        {/* ── BARRE DE LÉGENDE & SEUILS ÉPURÉE ─────────────────────────────── */}
+        <div className="flex items-center justify-between p-3.5 rounded-2xl bg-white border border-slate-200 text-xs text-slate-600 flex-wrap gap-2 shadow-2xs">
+          <div className="flex items-center gap-4 flex-wrap font-medium">
+            <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Légende :</span>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 flex-shrink-0" />
+              <span>Calibré (≤ {thresholds.greenMax}%)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 flex-shrink-0" />
+              <span>À surveiller ({thresholds.greenMax + 1}–{thresholds.orangeMax}%)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 flex-shrink-0" />
+              <span>Forte variance (&gt; {thresholds.orangeMax}%)</span>
+            </div>
+          </div>
+
           <button
             onClick={() => setShowConfig(true)}
-            className="ml-auto text-[10px] text-indigo-400 hover:text-indigo-300 font-bold underline cursor-pointer"
+            className="text-[11px] font-bold text-[#0077aa] hover:underline cursor-pointer flex items-center gap-1 ml-auto"
           >
+            <Settings className="w-3 h-3" />
             Modifier les seuils
           </button>
         </div>
 
-        {/* ── TABLEAU VARIANCES PAR ÉVALUATEUR ─────────────────────────── */}
-        <div className="glass-card rounded-3xl border border-slate-700/50 overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-800 flex items-center gap-2">
-            <Target className="w-4 h-4 text-amber-400" />
-            <h3 className="text-sm font-black text-white uppercase tracking-wider">
-              Variances par Évaluateur
-            </h3>
+        {/* ── TABLEAU 1 : VARIANCES PAR ÉVALUATEUR ─────────────────────────── */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-[#1dc4ff]" />
+              <h2 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                Variances par Évaluateur
+              </h2>
+            </div>
+            <span className="text-[11px] text-slate-500 font-semibold">
+              {evalStats.length} évaluateur(s) classé(s)
+            </span>
           </div>
+
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="w-full text-xs text-left">
               <thead>
-                <tr className="border-b border-slate-800 bg-slate-900/60">
-                  <th className="px-5 py-3 text-left font-black text-slate-400 uppercase tracking-wider">Évaluateur</th>
-                  <th className="px-4 py-3 text-center font-black text-slate-400 uppercase tracking-wider">Items évalués</th>
-                  <th className="px-4 py-3 text-center font-black text-emerald-400 uppercase tracking-wider">Accords</th>
-                  <th className="px-4 py-3 text-center font-black text-rose-400 uppercase tracking-wider">Écarts</th>
-                  <th className="px-6 py-3 text-center font-black text-slate-400 uppercase tracking-wider">Taux de Variance</th>
-                  <th className="px-4 py-3 text-center font-black text-slate-400 uppercase tracking-wider">Niveau</th>
+                <tr className="border-b border-slate-100 bg-slate-50/70 text-slate-500 font-black uppercase text-[10px] tracking-wider">
+                  <th className="px-5 py-3">Évaluateur</th>
+                  <th className="px-4 py-3 text-center">Items Évalués</th>
+                  <th className="px-4 py-3 text-center">Accords</th>
+                  <th className="px-4 py-3 text-center">Écarts</th>
+                  <th className="px-4 py-3 text-left">Taux de Variance</th>
+                  <th className="px-4 py-3 text-center">Niveau</th>
                 </tr>
               </thead>
-              <tbody>
-                {evalStats.map((stat, idx) => {
+              <tbody className="divide-y divide-slate-100">
+                {evalStats.map((stat) => {
                   const cls = getVarianceColorClasses(stat.tauxVariance, thresholds);
-                  const barWidth = Math.max(2, stat.tauxVariance);
                   return (
-                    <tr
-                      key={stat.evalId}
-                      className={`border-b border-slate-800/60 transition-colors hover:bg-slate-800/30 ${idx % 2 === 0 ? "bg-slate-900/20" : ""}`}
-                    >
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-2.5">
-                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${cls.dot}`} />
-                          <span className="font-bold text-white">{stat.evalId}</span>
-                        </div>
+                    <tr key={stat.evalId} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="px-5 py-3.5 font-bold text-slate-900 flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                          stat.tauxVariance <= thresholds.greenMax ? "bg-emerald-500" :
+                          stat.tauxVariance <= thresholds.orangeMax ? "bg-amber-500" : "bg-rose-500"
+                        }`} />
+                        <span>{stat.evalId}</span>
                       </td>
-                      <td className="px-4 py-3.5 text-center font-bold text-slate-300">{stat.totalItems}</td>
-                      <td className="px-4 py-3.5 text-center">
-                        <span className="font-black text-emerald-400">{stat.accords}</span>
+                      <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-700">
+                        {stat.totalItems}
                       </td>
-                      <td className="px-4 py-3.5 text-center">
-                        <span className="font-black text-rose-400">{stat.ecarts}</span>
+                      <td className="px-4 py-3.5 text-center font-mono font-bold text-emerald-600">
+                        {stat.accords}
                       </td>
-                      <td className="px-6 py-3.5">
-                        <div className="flex items-center gap-3">
-                          <div className="flex-1 h-2 rounded-full bg-slate-800 overflow-hidden">
+                      <td className="px-4 py-3.5 text-center font-mono font-bold text-rose-600">
+                        {stat.ecarts}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-3 max-w-[200px]">
+                          <div className="flex-1 bg-slate-100 h-2.5 rounded-full overflow-hidden">
                             <div
                               className={`h-full rounded-full transition-all ${cls.bar}`}
-                              style={{ width: `${barWidth}%` }}
+                              style={{ width: `${Math.min(stat.tauxVariance, 100)}%` }}
                             />
                           </div>
-                          <span className={`font-black text-sm w-12 text-right ${cls.text}`}>
+                          <span className={`font-mono font-extrabold text-xs w-10 text-right ${cls.text}`}>
                             {stat.tauxVariance}%
                           </span>
                         </div>
                       </td>
                       <td className="px-4 py-3.5 text-center">
-                        <span className={`px-2 py-0.5 rounded-lg border text-[10px] font-black ${cls.badge}`}>
+                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black border ${cls.badge}`}>
                           {stat.tauxVariance <= thresholds.greenMax
                             ? "Calibré"
                             : stat.tauxVariance <= thresholds.orangeMax
@@ -356,37 +431,35 @@ export function VarianceReport({ grille, nomSession, onOpenCockpit }: VarianceRe
                   );
                 })}
 
-                {/* Ligne moyenne */}
-                <tr className="border-t-2 border-slate-700 bg-slate-900/60">
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-2.5">
-                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${avgCls.dot}`} />
-                      <span className="font-black text-white">Moyenne Groupe</span>
-                    </div>
+                {/* Moyenne Groupe */}
+                <tr className="bg-slate-50/90 font-black border-t-2 border-slate-200">
+                  <td className="px-5 py-3.5 text-slate-800 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-slate-400 flex-shrink-0" />
+                    <span>Moyenne Groupe</span>
                   </td>
-                  <td className="px-4 py-3.5 text-center font-bold text-slate-300">—</td>
-                  <td className="px-4 py-3.5 text-center font-black text-emerald-400">
-                    {evalStats.length > 0 ? Math.round(evalStats.reduce((a, e) => a + e.accords, 0) / evalStats.length) : 0}
+                  <td className="px-4 py-3.5 text-center text-slate-400 font-mono">—</td>
+                  <td className="px-4 py-3.5 text-center text-emerald-600 font-mono">
+                    {Math.round(evalStats.reduce((a, b) => a + b.accords, 0) / evalStats.length)}
                   </td>
-                  <td className="px-4 py-3.5 text-center font-black text-rose-400">
-                    {evalStats.length > 0 ? Math.round(evalStats.reduce((a, e) => a + e.ecarts, 0) / evalStats.length) : 0}
+                  <td className="px-4 py-3.5 text-center text-rose-600 font-mono">
+                    {Math.round(evalStats.reduce((a, b) => a + b.ecarts, 0) / evalStats.length)}
                   </td>
-                  <td className="px-6 py-3.5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-2 rounded-full bg-slate-800 overflow-hidden">
+                  <td className="px-4 py-3.5">
+                    <div className="flex items-center gap-3 max-w-[200px]">
+                      <div className="flex-1 bg-slate-200 h-2.5 rounded-full overflow-hidden">
                         <div
-                          className={`h-full rounded-full ${avgCls.bar}`}
-                          style={{ width: `${Math.max(2, avgVariance)}%` }}
+                          className={`h-full rounded-full transition-all ${avgCls.bar}`}
+                          style={{ width: `${Math.min(avgVariance, 100)}%` }}
                         />
                       </div>
-                      <span className={`font-black text-sm w-12 text-right ${avgCls.text}`}>
+                      <span className={`font-mono font-black text-xs w-10 text-right ${avgCls.text}`}>
                         {avgVariance}%
                       </span>
                     </div>
                   </td>
                   <td className="px-4 py-3.5 text-center">
-                    <span className={`px-2 py-0.5 rounded-lg border text-[10px] font-black ${avgCls.badge}`}>
-                      Groupe
+                    <span className="px-2.5 py-1 rounded-lg text-[10px] font-black bg-slate-200 border border-slate-300 text-slate-700">
+                      Moyenne
                     </span>
                   </td>
                 </tr>
@@ -395,34 +468,34 @@ export function VarianceReport({ grille, nomSession, onOpenCockpit }: VarianceRe
           </div>
         </div>
 
-        {/* ── TABLEAU CROISÉ ITEMS × ÉVALUATEURS ───────────────────────── */}
-        <div className="glass-card rounded-3xl border border-slate-700/50 overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4 flex-wrap">
+        {/* ── TABLEAU 2 : TABLEAU CROISÉ ITEMS × ÉVALUATEURS (ÉPURÉ) ───────── */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-4 flex-wrap bg-white">
             <div className="flex items-center gap-2">
-              <Table2 className="w-4 h-4 text-indigo-400" />
-              <h3 className="text-sm font-black text-white uppercase tracking-wider">
+              <Table2 className="w-4 h-4 text-[#1dc4ff]" />
+              <h2 className="text-xs font-black text-slate-800 uppercase tracking-wider">
                 Tableau des Écarts par Item
-              </h3>
+              </h2>
             </div>
+
             <div className="flex items-center gap-2 flex-wrap">
               {/* Category filter */}
               <select
                 value={catFilter}
                 onChange={(e) => setCatFilter(e.target.value)}
-                className="text-xs font-bold bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5 text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer"
+                className="text-xs font-bold bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-slate-700 focus:outline-none focus:border-[#1dc4ff] cursor-pointer shadow-2xs"
               >
                 <option value="__ALL__">Toutes catégories</option>
                 {categories.map((cat) => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
+
               <button
                 onClick={() => setShowCrossTable((v) => !v)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
               >
-                {showCrossTable
-                  ? <ChevronUp className="w-3.5 h-3.5" />
-                  : <ChevronDown className="w-3.5 h-3.5" />}
+                {showCrossTable ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                 {showCrossTable ? "Réduire" : "Afficher"}
               </button>
             </div>
@@ -430,24 +503,24 @@ export function VarianceReport({ grille, nomSession, onOpenCockpit }: VarianceRe
 
           {showCrossTable && (
             <div className="overflow-x-auto">
-              <table className="text-[11px] min-w-max w-full">
+              <table className="w-full text-xs text-left">
                 <thead>
-                  <tr className="border-b border-slate-800 bg-slate-900/60">
-                    <th className="px-4 py-3 text-left font-black text-slate-400 uppercase tracking-wider sticky left-0 bg-slate-900 z-10 min-w-[220px]">
+                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 font-black uppercase text-[10px] tracking-wider">
+                    <th className="px-5 py-3 text-left sticky left-0 bg-slate-50 z-10 min-w-[280px] border-r border-slate-200">
                       Item
                     </th>
-                    <th className="px-3 py-3 text-center font-black text-indigo-300 uppercase tracking-wider min-w-[80px]">
+                    <th className="px-4 py-3 text-center min-w-[90px] border-r border-slate-100">
                       🎯 Gauge
                     </th>
                     {allEvalIds.map((evalId) => (
-                      <th key={evalId} className="px-3 py-3 text-center font-bold text-slate-400 min-w-[80px]">
+                      <th key={evalId} className="px-4 py-3 text-center min-w-[100px] border-r border-slate-100">
                         <div className="flex flex-col items-center gap-0.5">
-                          <span className="truncate max-w-[70px]">{evalId.split(".")[0]}</span>
+                          <span className="truncate max-w-[90px] font-bold text-slate-800">{evalId.split(".")[0]}</span>
                           {evalStats.find((e) => e.evalId === evalId) && (() => {
                             const stat = evalStats.find((e) => e.evalId === evalId)!;
                             const cls = getVarianceColorClasses(stat.tauxVariance, thresholds);
                             return (
-                              <span className={`px-1.5 py-0.5 rounded-md border font-black text-[9px] ${cls.badge}`}>
+                              <span className={`px-1.5 py-0.5 rounded border font-mono font-black text-[9px] ${cls.badge}`}>
                                 {stat.tauxVariance}%
                               </span>
                             );
@@ -455,111 +528,100 @@ export function VarianceReport({ grille, nomSession, onOpenCockpit }: VarianceRe
                         </div>
                       </th>
                     ))}
-                    <th className="px-3 py-3 text-center font-black text-rose-400 uppercase tracking-wider min-w-[70px]">
+                    <th className="px-4 py-3 text-center font-black text-rose-600 min-w-[80px]">
                       Écarts
                     </th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100">
                   {filteredItems.map((item, idx) => {
                     const ecartTotal = Object.values(item.votesByCritere).filter(
                       (v) => item.gaugeCritere && v !== item.gaugeCritere
                     ).length;
                     const totalVoters = Object.keys(item.votesByCritere).length;
-                    const ecartRate = totalVoters > 0
-                      ? Math.round((ecartTotal / totalVoters) * 100)
-                      : 0;
-                    const rowCls = ecartRate > thresholds.orangeMax
-                      ? "bg-rose-500/5"
-                      : ecartRate > thresholds.greenMax
-                      ? "bg-amber-500/5"
-                      : "";
+                    const isN2 = item.niveau === 2;
 
                     return (
                       <tr
-                        key={item.item_id}
-                        className={`border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors ${rowCls} ${idx % 2 === 0 ? "bg-slate-900/10" : ""}`}
+                        key={item.item_id || idx}
+                        className={`hover:bg-slate-50/80 transition-colors ${
+                          isN2 ? "bg-white font-semibold" : "bg-slate-50/40 text-slate-600"
+                        } ${ecartTotal > 0 ? "bg-rose-50/30" : ""}`}
                       >
-                        {/* Item name */}
-                        <td className="px-4 py-2.5 sticky left-0 bg-inherit z-10">
-                          <div className="flex items-center gap-1.5">
-                            {item.niveau > 2 && (
-                              <span className="text-slate-600 text-[10px]">└</span>
+                        {/* Item column (Clean white/transparent background with subtle right border) */}
+                        <td className="px-5 py-2.5 sticky left-0 bg-white z-10 border-r border-slate-200">
+                          <div className="flex items-center gap-2">
+                            {!isN2 && (
+                              <span className="text-slate-400 font-mono text-[11px] pl-3">└─</span>
                             )}
-                            <span className="font-medium text-slate-200 line-clamp-2 max-w-[200px]">
+                            <span className={`text-slate-900 leading-snug line-clamp-2 ${isN2 ? "font-bold text-xs" : "font-normal text-[11px]"}`}>
                               {cleanLibelle(item.libelle)}
                             </span>
                           </div>
                         </td>
 
-                        {/* Gauge reference */}
-                        <td className="px-3 py-2.5 text-center">
+                        {/* Gauge Reference Column */}
+                        <td className="px-4 py-2.5 text-center border-r border-slate-100">
                           {item.gaugeCritere ? (
-                            <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black border ${
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black border ${
                               item.gaugeCritere === "Oui"
-                                ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-300"
+                                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
                                 : item.gaugeCritere === "Non"
-                                ? "bg-rose-500/20 border-rose-500/30 text-rose-300"
-                                : "bg-slate-500/20 border-slate-500/30 text-slate-300"
+                                ? "bg-rose-50 border-rose-200 text-rose-800"
+                                : "bg-slate-100 border-slate-200 text-slate-700"
                             }`}>
                               {item.gaugeCritere}
                             </span>
                           ) : (
-                            <span className="text-slate-600 text-[10px]">—</span>
+                            <span className="text-slate-300 text-xs font-mono">—</span>
                           )}
                         </td>
 
-                        {/* One cell per evaluator */}
+                        {/* Evaluator Votes Columns */}
                         {allEvalIds.map((evalId) => {
                           const vote = item.votesByCritere[evalId];
                           if (!vote) {
                             return (
-                              <td key={evalId} className="px-3 py-2.5 text-center">
-                                <MinusCircle className="w-4 h-4 text-slate-700 mx-auto" />
+                              <td key={evalId} className="px-4 py-2.5 text-center border-r border-slate-100">
+                                <span className="text-slate-300 text-xs font-mono">—</span>
                               </td>
                             );
                           }
                           const isAccord = item.gaugeCritere
                             ? vote === item.gaugeCritere
                             : null;
+
                           return (
-                            <td key={evalId} className="px-3 py-2.5 text-center">
-                              <div className="flex flex-col items-center gap-0.5">
+                            <td key={evalId} className="px-4 py-2.5 text-center border-r border-slate-100">
+                              <div className="inline-flex items-center gap-1">
                                 {isAccord === true && (
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-[10px]">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                                    {vote}
+                                  </span>
                                 )}
                                 {isAccord === false && (
-                                  <AlertTriangle className="w-4 h-4 text-rose-400" />
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-100 border border-rose-300 text-rose-800 font-black text-[10px] shadow-2xs">
+                                    <AlertTriangle className="w-3 h-3 text-rose-600" />
+                                    {vote}
+                                  </span>
                                 )}
                                 {isAccord === null && (
-                                  <span className="text-slate-400 text-[10px] font-bold">{vote}</span>
+                                  <span className="text-slate-600 font-medium text-[11px]">{vote}</span>
                                 )}
-                                <span className={`text-[9px] font-bold ${
-                                  isAccord === true ? "text-emerald-400" :
-                                  isAccord === false ? "text-rose-400" :
-                                  "text-slate-400"
-                                }`}>
-                                  {vote}
-                                </span>
                               </div>
                             </td>
                           );
                         })}
 
-                        {/* Ecart count for this item */}
-                        <td className="px-3 py-2.5 text-center">
+                        {/* Total Ecarts for this Item */}
+                        <td className="px-4 py-2.5 text-center">
                           {ecartTotal > 0 ? (
-                            <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black border ${
-                              ecartRate > thresholds.orangeMax
-                                ? "bg-rose-500/20 border-rose-500/30 text-rose-300"
-                                : ecartRate > thresholds.greenMax
-                                ? "bg-amber-500/20 border-amber-500/30 text-amber-300"
-                                : "bg-slate-700 border-slate-600 text-slate-300"
-                            }`}>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black bg-rose-100 border border-rose-300 text-rose-800 shadow-2xs">
                               {ecartTotal}/{totalVoters}
                             </span>
                           ) : (
-                            <span className="text-emerald-400 text-[10px] font-black">✓ 0</span>
+                            <span className="text-slate-300 text-xs font-mono">—</span>
                           )}
                         </td>
                       </tr>
@@ -569,33 +631,7 @@ export function VarianceReport({ grille, nomSession, onOpenCockpit }: VarianceRe
               </table>
             </div>
           )}
-
-          {/* Legend for icons */}
-          <div className="px-6 py-3 border-t border-slate-800 flex flex-wrap items-center gap-4 text-[10px] text-slate-500 font-bold">
-            <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Accord avec Gauge
-            </span>
-            <span className="flex items-center gap-1.5">
-              <AlertTriangle className="w-3 h-3 text-rose-400" /> Écart vs Gauge
-            </span>
-            <span className="flex items-center gap-1.5">
-              <MinusCircle className="w-3 h-3 text-slate-600" /> Non évalué
-            </span>
-          </div>
         </div>
-
-        {/* ── BOUTON COCKPIT ARBITRAGE ──────────────────────────────────── */}
-        {onOpenCockpit && (
-          <div className="flex justify-center pt-2">
-            <button
-              onClick={onOpenCockpit}
-              className="flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-sm transition-all shadow-xl shadow-indigo-600/25 cursor-pointer"
-            >
-              <Target className="w-4 h-4" />
-              Accéder au Cockpit d'Arbitrage
-            </button>
-          </div>
-        )}
       </div>
     </>
   );
