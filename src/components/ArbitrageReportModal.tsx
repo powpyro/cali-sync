@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   XCircle,
   MinusCircle,
-  AlertTriangle,
   FileText,
   Sparkles,
   User,
@@ -296,50 +295,7 @@ export const ArbitrageReportModal: React.FC<ArbitrageReportModalProps> = ({
               </div>
             </div>
 
-            {/* 3. SYNTHESIS KPI BANNER */}
-            <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-2xl p-4 sm:p-5 flex items-center justify-between gap-4 flex-wrap print:bg-slate-900 print:text-white">
-              <div className="space-y-0.5">
-                <div className="text-xs font-bold uppercase tracking-wider text-[#1dc4ff]">
-                  Bilan d'Arbitrage
-                </div>
-                <div className="text-sm sm:text-base font-extrabold">
-                  {stats.totalQuestions} Questions Évaluées
-                </div>
-              </div>
 
-              <div className="flex items-center gap-3 sm:gap-6 flex-wrap font-mono">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-emerald-400 flex-shrink-0" />
-                  <div>
-                    <div className="text-xs font-extrabold text-emerald-400">{stats.conformes}</div>
-                    <div className="text-[10px] text-slate-400">Conformes</div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-rose-400 flex-shrink-0" />
-                  <div>
-                    <div className="text-xs font-extrabold text-rose-400">{stats.nonConformes}</div>
-                    <div className="text-[10px] text-slate-400">Non-Conformes</div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-slate-400 flex-shrink-0" />
-                  <div>
-                    <div className="text-xs font-extrabold text-slate-300">{stats.na}</div>
-                    <div className="text-[10px] text-slate-400">N/A</div>
-                  </div>
-                </div>
-
-                {stats.alertesCritiques > 0 && (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-rose-500/20 border border-rose-500/40 rounded-lg text-rose-300 text-xs font-bold">
-                    <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
-                    <span>{stats.alertesCritiques} Alerte(s) Critique(s)</span>
-                  </div>
-                )}
-              </div>
-            </div>
 
             {/* 4. OPTIONAL CONTEXT & SUMMARY (IF ANY) */}
             {(sessionData.gauge_interaction_summary || sessionData.gauge_evaluator_comments) && (
