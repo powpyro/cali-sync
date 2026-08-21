@@ -15,7 +15,6 @@ import {
   supprimerSession,
   annulerDemandeCalibrage,
   supprimerEvaluateur,
-  restaurerGrilleGeniiComplete,
   uploadAudioDrive,
   getApiUrl,
   setApiUrl,
@@ -454,30 +453,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
     } catch (e) {
       setActionFeedback({ success: false, message: "Erreur lors de la suppression du template." });
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const handleRestoreGeniiOfficial = async () => {
-    if (
-      !window.confirm(
-        "Restaurer la Grille Officielle Genii Complète (100% - 10/10 Questions Process Adherence) ?\n\nCette action va créer ou mettre à jour le template officiel avec les 4 catégories, 10 questions de Process, et 73 sous-critères."
-      )
-    ) {
-      return;
-    }
-    setActionLoadingId("restore_genii_official");
-    try {
-      const res = await restaurerGrilleGeniiComplete();
-      if (res.success) {
-        setActionFeedback({ success: true, message: res.message || "Grille Genii Complète restaurée avec succès !" });
-        fetchTemplates();
-      } else {
-        setActionFeedback({ success: false, message: res.message || "Erreur lors de la restauration." });
-      }
-    } catch {
-      setActionFeedback({ success: false, message: "Erreur lors de la restauration de la grille." });
     } finally {
       setActionLoadingId(null);
     }
@@ -1500,19 +1475,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <Layers className="w-5 h-5 text-[#1dc4ff]" /> Templates de Grilles d'Évaluation
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={handleRestoreGeniiOfficial}
-                  disabled={actionLoadingId === "restore_genii_official"}
-                  className="px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-700 text-xs font-black rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                  title="Restaurer la grille officielle Genii avec toutes les 10 questions de Process Adherence"
-                >
-                  {actionLoadingId === "restore_genii_official" ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                  )}
-                  ⚡ Restaurer Grille Genii Complète (10/10 Process)
-                </button>
                 <button
                   onClick={onOpenTemplateManager}
                   className="px-4 py-2 bg-[#1dc4ff] hover:bg-[#009ae5] text-slate-950 text-xs font-black rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-[#1dc4ff]/20"
