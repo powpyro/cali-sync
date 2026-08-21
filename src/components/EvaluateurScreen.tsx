@@ -11,7 +11,8 @@ import {
   HierarchicalEvaluationForm,
   type HierarchicalItem,
 } from "./HierarchicalEvaluationForm";
-import { Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { LoadingScreen } from "./ui/LoadingScreen";
+import { AlertCircle, RefreshCw } from "lucide-react";
 
 export interface EvaluateurScreenProps {
   sessionId?: string;
@@ -144,9 +145,11 @@ export const EvaluateurScreen: React.FC<EvaluateurScreenProps> = ({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-8 space-y-4">
-        <Loader2 className="w-12 h-12 text-emerald-500 animate-spin" />
-        <p className="text-slate-300 font-medium text-sm">Chargement de la grille d'évaluation Genii…</p>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <LoadingScreen
+          title="Chargement de la grille..."
+          subtitle="Récupération de la grille d'évaluation et synchronisation des critères..."
+        />
       </div>
     );
   }

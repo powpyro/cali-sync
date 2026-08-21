@@ -13,6 +13,7 @@ import { ArbitrageDrawer } from "./cockpit/ArbitrageDrawer";
 import { VarianceReport } from "./cockpit/VarianceReport";
 import { AudioPlayer } from "./AudioPlayer";
 import { CaliSyncLogo } from "./ui/CaliSyncLogo";
+import { LoadingScreen } from "./ui/LoadingScreen";
 import { ArbitrageReportModal } from "./ArbitrageReportModal";
 import {
   Clock,
@@ -861,22 +862,11 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
   // ── LOADING SPLASHSCREEN ──────────────────────────────────────────────────
   if (loading && !data) {
     return (
-      <div className="max-w-4xl mx-auto space-y-8 font-sans pb-16">
-        {onBack && (
-          <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm font-bold cursor-pointer">
-            <ArrowLeft className="w-4 h-4" /> Retour au menu
-          </button>
-        )}
-        <div className="bg-white border border-slate-200 rounded-2xl p-16 text-center space-y-6 shadow-sm">
-          <div className="mx-auto w-16 h-16 rounded-2xl bg-[#1dc4ff]/10 border border-[#1dc4ff]/20 flex items-center justify-center">
-            <RefreshCw className="w-8 h-8 text-[#1dc4ff] animate-spin" />
-          </div>
-          <div className="space-y-2 max-w-sm mx-auto">
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">Connexion au serveur...</h2>
-            <p className="text-slate-500 text-sm font-medium">Chargement de la session en cours. Merci de patienter.</p>
-          </div>
-        </div>
-      </div>
+      <LoadingScreen
+        onBack={onBack}
+        title="Connexion au serveur..."
+        subtitle="Chargement du Cockpit Live en cours. Synchronisation des critères et des votes..."
+      />
     );
   }
 
