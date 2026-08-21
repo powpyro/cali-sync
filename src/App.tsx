@@ -138,7 +138,7 @@ export function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500 selection:text-white">
+    <div className="min-h-screen bg-[var(--bg-app)] text-[var(--text-primary)] font-sans selection:bg-[#1dc4ff] selection:text-white transition-colors duration-200">
       {/* ── Login Screen ──────────────────────────────────────────────────── */}
       {screen === "login" && (
         <LoginScreen onLogin={handleLogin} />
@@ -185,6 +185,8 @@ export function App() {
         <div className="p-4 sm:p-8">
           <CockpitScreen
             sessionId={activeSessionId || undefined}
+            userRole={user?.role}
+            userIdentifiant={user?.identifiant}
             onBack={() => {
               if (user?.role === "admin") setScreen("admin_panel");
               else if (user?.role === "gauge") setScreen("gauge_landing");

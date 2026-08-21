@@ -12,6 +12,7 @@ import {
 import { ArbitrageDrawer } from "./cockpit/ArbitrageDrawer";
 import { VarianceReport } from "./cockpit/VarianceReport";
 import { AudioPlayer } from "./AudioPlayer";
+import { CaliSyncLogo } from "./ui/CaliSyncLogo";
 import {
   Clock,
   CheckCircle2,
@@ -25,8 +26,6 @@ import {
   Users,
   RefreshCw,
   Play,
-  Pause,
-  Volume2,
   Lock,
   ChevronLeft,
   ChevronRight,
@@ -47,6 +46,7 @@ import {
   FileText,
   Download,
   ExternalLink,
+  MessageSquare,
 } from "lucide-react";
 
 export interface ImputedSubItemInfo {
@@ -134,6 +134,8 @@ export interface EvaluatorUser {
 
 export interface CockpitScreenProps {
   sessionId?: string;
+  userRole?: string;
+  userIdentifiant?: string;
   onSeekAudio?: (seconds: number) => void;
   onBack?: () => void;
   readOnly?: boolean;
@@ -248,76 +250,76 @@ const EvaluatorVoteBadge: React.FC<EvaluatorVoteBadgeProps> = ({
       {/* Evaluator Box Pill */}
       <div
         className={`p-3.5 rounded-2xl border transition-all duration-200 flex items-center justify-between shadow-xs ${
-          hasComments ? "cursor-pointer hover:shadow-xl hover:-translate-y-0.5" : "cursor-default"
+          hasComments ? "cursor-pointer hover:shadow-md hover:-translate-y-0.5" : "cursor-default"
         } ${
           isOui
-            ? "bg-slate-900/90 border-emerald-500/30 hover:border-emerald-400 hover:bg-emerald-950/40"
+            ? "bg-white border-emerald-200 hover:border-emerald-400"
             : isNon
-            ? "bg-slate-900/90 border-rose-500/30 hover:border-rose-400 hover:bg-rose-950/40"
-            : "bg-slate-900/90 border-slate-700 hover:border-slate-500 hover:bg-slate-800"
+            ? "bg-white border-rose-200 hover:border-rose-400"
+            : "bg-white border-slate-200 hover:border-slate-300"
         }`}
       >
         <div className="flex items-center gap-2.5">
           <div
-            className={`w-7 h-7 rounded-full font-black text-[11px] flex items-center justify-center shadow-md ${
+            className={`w-7 h-7 rounded-full font-black text-[11px] flex items-center justify-center ${
               isOui
-                ? "bg-emerald-500 text-slate-950"
+                ? "bg-emerald-500 text-white"
                 : isNon
                 ? "bg-rose-500 text-white"
-                : "bg-slate-700 text-slate-200"
+                : "bg-slate-200 text-slate-700"
             }`}
           >
             {getInitials(vote.nom)}
           </div>
-          <span className="font-extrabold text-sm text-white tracking-wide">
+          <span className="font-extrabold text-sm text-slate-800 tracking-wide">
             {vote.nom}
           </span>
         </div>
 
         {hasComments && (
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 flex items-center gap-1 shadow-xs">
-            💬 Justification {commentsList.length > 1 ? `(${commentsList.length})` : ""}
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-[#1dc4ff]/10 text-[#0077aa] border border-[#1dc4ff]/30 flex items-center gap-1">
+            💬 {commentsList.length > 1 ? `(${commentsList.length})` : ""}
           </span>
         )}
       </div>
 
-      {/* ULTRA-STYLISH HOVER POPUP CARD (ONLY WHEN COMMENTS EXIST) */}
+      {/* HOVER POPUP CARD (ONLY WHEN COMMENTS EXIST) */}
       {isHovered && hasComments && (
-        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-3 w-80 sm:w-96 bg-slate-950/95 backdrop-blur-2xl border border-indigo-500/50 text-white shadow-2xl rounded-3xl p-5 space-y-3.5 pointer-events-auto animate-pop-in ring-1 ring-indigo-500/30">
+        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-3 w-80 sm:w-96 bg-white border border-slate-200 text-slate-800 shadow-2xl rounded-2xl p-5 space-y-3.5 pointer-events-auto animate-pop-in">
           {/* Pointer Triangle Arrow */}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-0 h-0 border-x-8 border-x-transparent border-t-8 border-t-slate-950/95" />
+          <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-0 h-0 border-x-8 border-x-transparent border-t-8 border-t-white" />
 
           {/* Header with Avatar & Status */}
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div className="flex items-center gap-3">
               <div
-                className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-xs shadow-lg ${
+                className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs ${
                   isOui
-                    ? "bg-emerald-500 text-slate-950 shadow-emerald-500/30"
+                    ? "bg-emerald-500 text-white"
                     : isNon
-                    ? "bg-rose-500 text-white shadow-rose-500/30"
-                    : "bg-slate-700 text-slate-200"
+                    ? "bg-rose-500 text-white"
+                    : "bg-slate-200 text-slate-700"
                 }`}
               >
                 {getInitials(vote.nom)}
               </div>
               <div>
-                <div className="font-black text-sm text-white leading-snug">
+                <div className="font-black text-sm text-slate-900 leading-snug">
                   {vote.nom}
                 </div>
-                <div className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">
+                <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                   Fiche d'Évaluation
                 </div>
               </div>
             </div>
 
             <span
-              className={`px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider shadow-md ${
+              className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${
                 isOui
-                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                   : isNon
-                  ? "bg-rose-500/20 text-rose-300 border border-rose-500/40"
-                  : "bg-slate-800 text-slate-300 border border-slate-700"
+                  ? "bg-rose-50 text-rose-700 border border-rose-200"
+                  : "bg-slate-100 text-slate-600 border border-slate-200"
               }`}
             >
               Répondu "{critere}"
@@ -326,7 +328,7 @@ const EvaluatorVoteBadge: React.FC<EvaluatorVoteBadgeProps> = ({
 
           {/* Comment / Justification Section */}
           <div className="space-y-2">
-            <div className="text-[10px] font-black uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+            <div className="text-[10px] font-black uppercase tracking-wider text-[#0077aa] flex items-center gap-1.5">
               💬 Justification & Extrait Horodaté ({commentsList.length}) :
             </div>
 
@@ -335,10 +337,10 @@ const EvaluatorVoteBadge: React.FC<EvaluatorVoteBadgeProps> = ({
                 {commentsList.map((c: { itemLibelle?: string; comment: string }, i: number) => (
                   <div
                     key={i}
-                    className="text-xs text-slate-100 font-medium leading-relaxed bg-slate-900/90 p-3 rounded-2xl border border-slate-800 shadow-inner space-y-1"
+                    className="text-xs text-slate-700 font-medium leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1"
                   >
                     {c.itemLibelle && (
-                      <div className="text-[10px] font-bold text-amber-300 font-mono">
+                      <div className="text-[10px] font-bold text-slate-500 font-mono">
                         {c.itemLibelle}
                       </div>
                     )}
@@ -347,15 +349,15 @@ const EvaluatorVoteBadge: React.FC<EvaluatorVoteBadgeProps> = ({
                 ))}
               </div>
             ) : (
-              <div className="text-xs text-slate-400 italic p-3 bg-slate-900/50 rounded-2xl border border-slate-800/50">
+              <div className="text-xs text-slate-500 italic p-3 bg-slate-50 rounded-xl border border-slate-200">
                 Aucun commentaire saisi pour cette réponse.
               </div>
             )}
           </div>
 
           {/* Footer Hint */}
-          <div className="text-[10px] text-slate-400 font-extrabold tracking-wider text-right border-t border-slate-800/80 pt-2 flex items-center justify-end gap-1">
-            <Sparkles className="w-3 h-3 text-amber-400" /> Clic sur un horodatage pour écouter l'extrait audio
+          <div className="text-[10px] text-slate-500 font-bold tracking-wider text-right border-t border-slate-100 pt-2 flex items-center justify-end gap-1">
+            <Sparkles className="w-3 h-3 text-[#1dc4ff]" /> Clic sur un horodatage pour écouter l'extrait audio
           </div>
         </div>
       )}
@@ -373,6 +375,8 @@ const cleanLibelle = (text: string): string => {
 
 export const CockpitScreen: React.FC<CockpitScreenProps> = ({
   sessionId,
+  userRole,
+  userIdentifiant,
   onSeekAudio,
   onBack,
   readOnly = false,
@@ -382,17 +386,23 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const effectiveReadOnly = readOnly || data?.is_read_only === true;
+  // Check if user has permission to arbitrate (Admin, Animateur, Gauge, or session assigned ID)
+  const canArbitrate = useMemo(() => {
+    const role = (userRole || data?.user_role || "").toLowerCase();
+    const isElevatedRole = role === "admin" || role === "animateur" || role === "gauge" || role === "cockpit";
+    const isAssignedUser =
+      !!userIdentifiant &&
+      ((data?.gauge_id && userIdentifiant.toLowerCase() === data.gauge_id.toLowerCase()) ||
+       (data?.animateur_id && userIdentifiant.toLowerCase() === data.animateur_id.toLowerCase()));
+    return isElevatedRole || isAssignedUser;
+  }, [userRole, data?.user_role, data?.gauge_id, data?.animateur_id, userIdentifiant]);
+
+  // If user is a simple evaluator (not canArbitrate), force read-only mode
+  const effectiveReadOnly = readOnly || data?.is_read_only === true || !canArbitrate;
 
   // Evaluators Waiting Room State
   const [evaluators, setEvaluators] = useState<EvaluatorUser[]>([]);
   const prevStatusesRef = useRef<Record<string, string>>({});
-
-  // Audio Player State
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
 
   // Navigation State
   const [activeN1Index, setActiveN1Index] = useState(0);
@@ -569,11 +579,6 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
   }, [evaluators]);
 
   const handleSeek = (seconds: number) => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = seconds;
-      audioRef.current.play().catch(() => {});
-      setIsPlaying(true);
-    }
     if (onSeekAudio) onSeekAudio(seconds);
   };
 
@@ -616,12 +621,6 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
     checkTreeForGreen(data.grille_hierarchique);
   }, [data]);
 
-  const formatTime = (totalSecs: number) => {
-    const mins = Math.floor(totalSecs / 60);
-    const secs = Math.floor(totalSecs % 60);
-    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-  };
-
   const getInitials = (name: string) => {
     const parts = name.trim().split(" ");
     if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
@@ -651,10 +650,10 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
             e.stopPropagation();
             handleSeek(totalSecs);
           }}
-          className="font-mono font-black text-indigo-400 underline hover:text-indigo-200 cursor-pointer px-2 py-0.5 rounded-md bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/50 transition-all mx-1 text-xs inline-flex items-center gap-1 shadow-xs"
+          className="font-mono font-black text-[#0077aa] underline hover:text-[#1dc4ff] cursor-pointer px-2 py-0.5 rounded-md bg-[#1dc4ff]/10 hover:bg-[#1dc4ff]/20 border border-[#1dc4ff]/30 transition-all mx-1 text-xs inline-flex items-center gap-1"
           title={`Réécouter à ${rawTime}`}
         >
-          <Play className="w-2.5 h-2.5 fill-indigo-400" /> {rawTime}
+          <Play className="w-2.5 h-2.5 fill-[#0077aa]" /> {rawTime}
         </button>
       );
       lastIdx = regex.lastIndex;
@@ -865,13 +864,13 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
             <ArrowLeft className="w-4 h-4" /> Retour au menu
           </button>
         )}
-        <div className="glass-card rounded-3xl p-16 text-center space-y-6">
-          <div className="mx-auto w-20 h-20 rounded-3xl bg-gradient-to-tr from-indigo-500/20 via-purple-500/20 to-teal-500/20 border border-indigo-500/30 flex items-center justify-center shadow-xl">
-            <RefreshCw className="w-10 h-10 text-indigo-400 animate-spin" />
+        <div className="bg-white border border-slate-200 rounded-2xl p-16 text-center space-y-6 shadow-sm">
+          <div className="mx-auto w-16 h-16 rounded-2xl bg-[#1dc4ff]/10 border border-[#1dc4ff]/20 flex items-center justify-center">
+            <RefreshCw className="w-8 h-8 text-[#1dc4ff] animate-spin" />
           </div>
           <div className="space-y-2 max-w-sm mx-auto">
-            <h2 className="text-xl font-black text-white tracking-tight">Connexion au serveur Genii...</h2>
-            <p className="text-slate-400 text-sm font-medium">Chargement de la session en cours. Merci de patienter.</p>
+            <h2 className="text-xl font-black text-slate-900 tracking-tight">Connexion au serveur...</h2>
+            <p className="text-slate-500 text-sm font-medium">Chargement de la session en cours. Merci de patienter.</p>
           </div>
         </div>
       </div>
@@ -891,29 +890,29 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
           </button>
         )}
 
-        <div className="glass-card rounded-3xl p-12 text-center space-y-6 relative overflow-hidden">
-          <div className="mx-auto w-24 h-24 rounded-3xl bg-gradient-to-tr from-purple-500/20 via-indigo-500/20 to-teal-500/20 border border-purple-500/30 flex items-center justify-center shadow-xl animate-bounce-gentle">
-            <Coffee className="w-12 h-12 text-purple-400" />
+        <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center space-y-6 shadow-sm">
+          <div className="mx-auto w-20 h-20 rounded-2xl bg-[#1dc4ff]/10 border border-[#1dc4ff]/20 flex items-center justify-center">
+            <Coffee className="w-10 h-10 text-[#1dc4ff]" />
           </div>
 
           <div className="space-y-3 max-w-md mx-auto">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs font-bold uppercase tracking-wider">
-              <BellRing className="w-3.5 h-3.5 text-purple-400" /> Cockpit Live ☕
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#1dc4ff]/10 border border-[#1dc4ff]/20 text-[#0077aa] text-xs font-bold uppercase tracking-wider">
+              <BellRing className="w-3.5 h-3.5 text-[#1dc4ff]" /> Cockpit Live ☕
             </div>
 
-            <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
               Aucun calibrage en cours !
             </h2>
 
-            <p className="text-slate-400 text-sm font-medium leading-relaxed">
+            <p className="text-slate-500 text-sm font-medium leading-relaxed">
               Le Cockpit Live est au repos. Prenez un café ☕ !<br />
               Dès qu'une session démarrera, les résultats s'afficheront en direct sur cet écran de projection.
             </p>
           </div>
 
           {error && (
-            <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs font-medium max-w-sm mx-auto flex items-center gap-2 justify-center">
-              <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+            <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium max-w-sm mx-auto flex items-center gap-2 justify-center">
+              <AlertTriangle className="w-4 h-4 text-rose-500 flex-shrink-0" />
               {error}
             </div>
           )}
@@ -922,7 +921,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
             <button
               onClick={() => fetchSession(true)}
               disabled={loading}
-              className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-sm rounded-xl transition-all shadow-lg shadow-purple-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              className="px-6 py-3 bg-[#1dc4ff] hover:bg-[#009ae5] text-slate-950 font-extrabold text-sm rounded-xl transition-all shadow-md shadow-[#1dc4ff]/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
               Vérifier à nouveau
@@ -942,23 +941,23 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
             <ArrowLeft className="w-4 h-4" /> Retour au menu
           </button>
         )}
-        <div className="glass-card rounded-3xl p-14 text-center space-y-6 border border-yellow-500/20">
-          <div className="mx-auto w-24 h-24 rounded-3xl bg-gradient-to-tr from-yellow-500/20 via-amber-500/20 to-orange-500/20 border border-yellow-500/30 flex items-center justify-center shadow-xl">
-            <span className="text-5xl">⏳</span>
+        <div className="bg-white border border-amber-200 rounded-2xl p-14 text-center space-y-6 shadow-sm">
+          <div className="mx-auto w-20 h-20 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center">
+            <Clock className="w-10 h-10 text-amber-500" />
           </div>
           <div className="space-y-3 max-w-md mx-auto">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 text-xs font-black uppercase tracking-wider">
-              <Clock className="w-3.5 h-3.5 text-yellow-400" /> En Attente de la Gauge
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-black uppercase tracking-wider">
+              <Clock className="w-3.5 h-3.5 text-amber-500" /> En Attente de la Gauge
             </div>
-            <h2 className="text-2xl font-black text-white tracking-tight">
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight">
               {data?.nom_session || "Session de calibrage"}
             </h2>
-            <p className="text-slate-400 text-sm font-medium leading-relaxed">
-              La session est ouverte mais <strong className="text-yellow-300">l'évaluateur Gauge n'a pas encore soumis son évaluation</strong>.<br />
+            <p className="text-slate-500 text-sm font-medium leading-relaxed">
+              La session est ouverte mais <strong className="text-amber-700">l'évaluateur Gauge n'a pas encore soumis son évaluation</strong>.<br />
               Le Cockpit sera disponible dès que la Gauge aura évalué tous les items.
             </p>
           </div>
-          <button onClick={() => fetchSession(true)} disabled={loading} className="px-6 py-3 bg-yellow-600 hover:bg-yellow-500 text-white font-extrabold text-sm rounded-xl transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 mx-auto">
+          <button onClick={() => fetchSession(true)} disabled={loading} className="px-6 py-3 bg-[#1dc4ff] hover:bg-[#009ae5] text-slate-950 font-extrabold text-sm rounded-xl transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 mx-auto">
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Actualiser
           </button>
         </div>
@@ -975,29 +974,29 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
             <ArrowLeft className="w-4 h-4" /> Retour au menu
           </button>
         )}
-        <div className="glass-card rounded-3xl p-14 text-center space-y-6 border border-teal-500/20">
-          <div className="mx-auto w-24 h-24 rounded-3xl bg-gradient-to-tr from-teal-500/20 via-emerald-500/20 to-cyan-500/20 border border-teal-500/30 flex items-center justify-center shadow-xl">
-            <span className="text-5xl">⚙️</span>
+        <div className="bg-white border border-[#1dc4ff]/30 rounded-2xl p-14 text-center space-y-6 shadow-sm">
+          <div className="mx-auto w-20 h-20 rounded-2xl bg-[#1dc4ff]/10 border border-[#1dc4ff]/20 flex items-center justify-center">
+            <CheckCircle className="w-10 h-10 text-[#1dc4ff]" />
           </div>
           <div className="space-y-3 max-w-md mx-auto">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-300 text-xs font-black uppercase tracking-wider">
-              <CheckCircle className="w-3.5 h-3.5 text-teal-400" /> Gauge Soumise — En Attente d'Ouverture
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#1dc4ff]/10 border border-[#1dc4ff]/20 text-[#0077aa] text-xs font-black uppercase tracking-wider">
+              <CheckCircle className="w-3.5 h-3.5 text-[#1dc4ff]" /> Gauge Soumise — En Attente d'Ouverture
             </div>
-            <h2 className="text-2xl font-black text-white tracking-tight">
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight">
               {data?.nom_session || "Session de calibrage"}
             </h2>
-            <p className="text-slate-400 text-sm font-medium leading-relaxed">
-              La Gauge a finalisé son évaluation. <strong className="text-teal-300">Les soumissions des évaluateurs ne sont pas encore ouvertes</strong>.<br />
+            <p className="text-slate-500 text-sm font-medium leading-relaxed">
+              La Gauge a finalisé son évaluation. <strong className="text-slate-700">Les soumissions des évaluateurs ne sont pas encore ouvertes</strong>.<br />
               Le Cockpit Live s'activera automatiquement dès l'heure d'ouverture.
             </p>
             {data?.heure_fin && (
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-300 text-xs font-bold">
-                <Clock className="w-3.5 h-3.5 text-teal-400" />
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold">
+                <Clock className="w-3.5 h-3.5 text-[#1dc4ff]" />
                 Ouverture prévue : {new Date(data.heure_fin).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
               </div>
             )}
           </div>
-          <button onClick={() => fetchSession(true)} disabled={loading} className="px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white font-extrabold text-sm rounded-xl transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 mx-auto">
+          <button onClick={() => fetchSession(true)} disabled={loading} className="px-6 py-3 bg-[#1dc4ff] hover:bg-[#009ae5] text-slate-950 font-extrabold text-sm rounded-xl transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 mx-auto">
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Actualiser
           </button>
         </div>
@@ -1088,30 +1087,30 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
         )}
 
         {/* CLOSED Header Card */}
-        <div className="glass-card rounded-3xl overflow-hidden border border-slate-700/50 shadow-2xl">
+        <div className="bg-white rounded-3xl overflow-hidden border border-slate-200 shadow-sm">
           {/* Top gradient banner */}
-          <div className="h-2 bg-gradient-to-r from-slate-600 via-indigo-600 to-purple-600" />
+          <div className="h-2 bg-[#1dc4ff]" />
 
           <div className="p-8 space-y-6">
             {/* Session badge + title */}
             <div className="flex items-start justify-between flex-wrap gap-4">
               <div className="space-y-2">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-700/80 border border-slate-600 text-slate-300 text-xs font-black uppercase tracking-wider">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-600 text-xs font-black uppercase tracking-wider">
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
                   Session Archivée — Clôturée
                 </div>
-                <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
                   {data?.nom_session || "Session de calibrage"}
                 </h1>
                 {data?.nom_conseiller && (
-                  <p className="text-slate-400 text-sm font-medium">
-                    Conseiller évalué : <span className="text-white font-bold">{data.nom_conseiller}</span>
+                  <p className="text-slate-500 text-sm font-medium">
+                    Conseiller évalué : <span className="text-slate-900 font-bold">{data.nom_conseiller}</span>
                   </p>
                 )}
               </div>
               <div className="text-right space-y-1">
                 {data?.heure_fin && (
-                  <div className="text-xs text-slate-400 font-medium">
+                  <div className="text-xs text-slate-500 font-medium">
                     Clôturée le {new Date(data.heure_fin).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })}
                   </div>
                 )}
@@ -1120,21 +1119,21 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
 
             {/* Summary Stats Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 text-center space-y-1">
-                <div className="text-2xl font-black text-white">{totalItems}</div>
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Items Total</div>
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-1">
+                <div className="text-2xl font-black text-slate-900">{totalItems}</div>
+                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Items Total</div>
               </div>
-              <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-center space-y-1">
-                <div className="text-2xl font-black text-indigo-300">{arbitratedItems}</div>
-                <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Arbitrés</div>
+              <div className="p-4 rounded-2xl bg-[#1dc4ff]/10 border border-[#1dc4ff]/20 text-center space-y-1">
+                <div className="text-2xl font-black text-[#0077aa]">{arbitratedItems}</div>
+                <div className="text-[10px] font-bold text-[#0077aa] uppercase tracking-wider">Arbitrés</div>
               </div>
-              <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-center space-y-1">
-                <div className="text-2xl font-black text-emerald-300">{conformeItems}</div>
-                <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Conformes</div>
+              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-center space-y-1">
+                <div className="text-2xl font-black text-emerald-700">{conformeItems}</div>
+                <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Conformes</div>
               </div>
-              <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-center space-y-1">
-                <div className="text-2xl font-black text-rose-300">{imputeItems}</div>
-                <div className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Imputés</div>
+              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-center space-y-1">
+                <div className="text-2xl font-black text-rose-700">{imputeItems}</div>
+                <div className="text-[10px] font-bold text-rose-700 uppercase tracking-wider">Imputés</div>
               </div>
             </div>
 
@@ -1142,12 +1141,12 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
             {tauxConformite !== null && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold">
-                  <span className="text-slate-400 uppercase tracking-wider">Taux de conformité global</span>
-                  <span className={`font-black text-base ${tauxConformite >= 70 ? "text-emerald-400" : tauxConformite >= 50 ? "text-amber-400" : "text-rose-400"}`}>
+                  <span className="text-slate-500 uppercase tracking-wider">Taux de conformité global</span>
+                  <span className={`font-black text-base ${tauxConformite >= 70 ? "text-emerald-600" : tauxConformite >= 50 ? "text-amber-600" : "text-rose-600"}`}>
                     {tauxConformite}%
                   </span>
                 </div>
-                <div className="h-3 rounded-full bg-slate-800 overflow-hidden">
+                <div className="h-3 rounded-full bg-slate-100 overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all duration-1000 ${tauxConformite >= 70 ? "bg-emerald-500" : tauxConformite >= 50 ? "bg-amber-500" : "bg-rose-500"}`}
                     style={{ width: `${tauxConformite}%` }}
@@ -1158,18 +1157,61 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
 
             {/* Evaluators count */}
             {(data?.evaluateurs_soumis?.length ?? 0) > 0 && (
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-slate-300 text-sm">
-                <Users className="w-4 h-4 text-indigo-400 flex-shrink-0" />
-                <span className="font-medium"><span className="font-black text-white">{data!.evaluateurs_soumis!.length}</span> évaluateur(s) ont participé à cette session</span>
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-sm">
+                <Users className="w-4 h-4 text-[#1dc4ff] flex-shrink-0" />
+                <span className="font-medium"><span className="font-black text-slate-900">{data!.evaluateurs_soumis!.length}</span> évaluateur(s) ont participé à cette session</span>
+              </div>
+            )}
+
+            {/* ── GAUGE SESSION OVERVIEW ── */}
+            {(data?.gauge_interaction_summary || data?.gauge_evaluator_comments) && (
+              <div className="p-5 rounded-2xl bg-white border border-[#1dc4ff]/30 space-y-3 shadow-xs">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-[#0077aa]">
+                    <FileText className="w-4 h-4 text-[#1dc4ff]" />
+                    Gauge Session Overview
+                  </div>
+                  {data.gauge_id && (
+                    <span className="text-[10px] font-black px-2.5 py-0.5 rounded-md bg-[#1dc4ff]/10 text-[#0077aa] border border-[#1dc4ff]/20">
+                      Gauge : {data.gauge_id}
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {data.gauge_interaction_summary && (
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                      <div className="text-[11px] font-extrabold text-[#0077aa] flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-[#1dc4ff]" />
+                        Interaction Summary
+                      </div>
+                      <p className="text-xs text-slate-700 leading-relaxed font-medium whitespace-pre-wrap">
+                        {data.gauge_interaction_summary}
+                      </p>
+                    </div>
+                  )}
+
+                  {data.gauge_evaluator_comments && (
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                      <div className="text-[11px] font-extrabold text-slate-700 flex items-center gap-1.5">
+                        <MessageSquare className="w-3.5 h-3.5 text-[#1dc4ff]" />
+                        Evaluator Comments
+                      </div>
+                      <p className="text-xs text-slate-700 leading-relaxed font-medium whitespace-pre-wrap">
+                        {data.gauge_evaluator_comments}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
         </div>
 
         {/* Action Buttons Card */}
-        <div className="glass-card rounded-3xl p-6 border border-slate-700/50 space-y-4">
-          <h2 className="text-sm font-black text-slate-300 uppercase tracking-wider flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-indigo-400" />
+        <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4 shadow-sm">
+          <h2 className="text-sm font-black text-slate-700 uppercase tracking-wider flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-[#1dc4ff]" />
             Actions disponibles
           </h2>
           <div className="grid sm:grid-cols-2 gap-3">
@@ -1179,14 +1221,14 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                 href={pdfUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-3 p-4 rounded-2xl bg-indigo-500/20 border border-indigo-500/50 hover:border-indigo-400 hover:bg-indigo-500/30 transition-all cursor-pointer group shadow-lg shadow-indigo-500/10"
+                className="flex items-center gap-3 p-4 rounded-2xl bg-[#1dc4ff]/10 border border-[#1dc4ff]/30 hover:border-[#1dc4ff] hover:bg-[#1dc4ff]/20 transition-all cursor-pointer group shadow-xs"
               >
-                <FileText className="w-6 h-6 text-indigo-300 flex-shrink-0 group-hover:scale-110 transition-transform" />
+                <FileText className="w-6 h-6 text-[#0077aa] flex-shrink-0 group-hover:scale-110 transition-transform" />
                 <div className="text-left">
-                  <div className="text-sm font-black text-white flex items-center gap-1.5">
-                    Télécharger / Ouvrir le Rapport PDF <ExternalLink className="w-3.5 h-3.5 text-indigo-300" />
+                  <div className="text-sm font-black text-slate-900 flex items-center gap-1.5">
+                    Télécharger / Ouvrir le Rapport PDF <ExternalLink className="w-3.5 h-3.5 text-[#0077aa]" />
                   </div>
-                  <div className="text-[11px] text-slate-300 font-medium">
+                  <div className="text-[11px] text-slate-500 font-medium">
                     Rapport complet du calibrage (Google Drive)
                   </div>
                 </div>
@@ -1429,53 +1471,53 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
         id={`item-card-${node.item_id}`}
         className={`rounded-3xl border transition-all duration-300 overflow-hidden ${
           isSubItem
-            ? "bg-slate-900/90 border-slate-800 ml-4 sm:ml-8 mt-4 shadow-lg"
+            ? "bg-white border-slate-200 ml-4 sm:ml-8 mt-4 shadow-sm"
             : isImputedHere || treeSummary.totalImputations > 0
-            ? "bg-slate-900/95 border-amber-500/60 shadow-2xl shadow-amber-950/40"
+            ? "bg-white border-amber-300 shadow-md ring-1 ring-amber-200"
             : isAccord
-            ? "bg-slate-900/95 border-emerald-500/50 shadow-2xl shadow-emerald-900/20"
+            ? "bg-white border-emerald-300 shadow-sm ring-1 ring-emerald-100"
             : isDivergence
-            ? "bg-slate-900/95 border-rose-500/60 shadow-2xl shadow-rose-900/20"
-            : "bg-slate-900/90 border-slate-800 shadow-xl"
+            ? "bg-white border-rose-300 shadow-sm ring-1 ring-rose-100"
+            : "bg-white border-slate-200 shadow-sm"
         }`}
       >
         {/* ANCESTOR BREADCRUMB PATH & ANIMATOR COMPACT TOGGLE (FOR SUB-ITEMS N3/N4) */}
         {isSubItem && (
-          <div className="bg-slate-950/80 px-6 py-2.5 border-b border-slate-800 flex items-center justify-between text-[11px] font-extrabold text-slate-400 flex-wrap gap-2">
+          <div className="bg-slate-50 px-6 py-2.5 border-b border-slate-100 flex items-center justify-between text-[11px] font-extrabold text-slate-500 flex-wrap gap-2">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <Layers className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="text-slate-500 uppercase font-black">Arborescence Parent :</span>
-              <span className="text-indigo-300 font-bold">N1: {cleanLibelle(currentN1?.libelle || "")}</span>
-              <span className="text-slate-600">➔</span>
-              <span className="text-emerald-300 font-bold">N2: {cleanLibelle(currentN2?.libelle || "")}</span>
-              <span className="text-slate-600">➔</span>
-              <span className="text-amber-300 font-black">N{node.niveau}: {labelClean}</span>
+              <Layers className="w-3.5 h-3.5 text-[#1dc4ff]" />
+              <span className="text-slate-400 uppercase font-black">Arborescence Parent :</span>
+              <span className="text-slate-700 font-bold">N1: {cleanLibelle(currentN1?.libelle || "")}</span>
+              <span className="text-slate-400">➔</span>
+              <span className="text-slate-700 font-bold">N2: {cleanLibelle(currentN2?.libelle || "")}</span>
+              <span className="text-slate-400">➔</span>
+              <span className="text-slate-900 font-black">N{node.niveau}: {labelClean}</span>
             </div>
 
             <button
               type="button"
               onClick={() => setCompactParentView((prev) => ({ ...prev, [node.item_id]: !isParentCompact }))}
-              className="px-2.5 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-indigo-300 hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer text-[10px] uppercase font-black shadow-xs"
+              className="px-2.5 py-1 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-900 transition-colors flex items-center gap-1.5 cursor-pointer text-[10px] uppercase font-black shadow-xs"
             >
-              {isParentCompact ? <Eye className="w-3.5 h-3.5 text-emerald-400" /> : <EyeOff className="w-3.5 h-3.5 text-amber-400" />}
+              {isParentCompact ? <Eye className="w-3.5 h-3.5 text-emerald-600" /> : <EyeOff className="w-3.5 h-3.5 text-amber-600" />}
               {isParentCompact ? "👁️ Vue Complète" : "👁️ Vue Focus"}
             </button>
           </div>
         )}
 
         {/* ITEM CARD HEADER */}
-        <div className="p-6 border-b border-slate-800/80 bg-slate-950/40">
+        <div className="p-6 border-b border-slate-100 bg-slate-50/70">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-start gap-4">
               <div
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-base flex-shrink-0 mt-0.5 shadow-lg ${
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-base flex-shrink-0 mt-0.5 shadow-sm ${
                   isImputedHere || treeSummary.totalImputations > 0
-                    ? "bg-amber-500 text-slate-950 shadow-amber-500/30"
+                    ? "bg-amber-500 text-slate-950 shadow-amber-500/20"
                     : isAccord
-                    ? "bg-emerald-500 text-slate-950 shadow-emerald-500/30"
+                    ? "bg-emerald-500 text-white shadow-emerald-500/20"
                     : isDivergence
-                    ? "bg-rose-500 text-white shadow-rose-500/30"
-                    : "bg-slate-800 text-slate-300"
+                    ? "bg-rose-500 text-white shadow-rose-500/20"
+                    : "bg-slate-100 text-slate-600 border border-slate-200"
                 }`}
               >
                 {isImputedHere || treeSummary.totalImputations > 0 ? (
@@ -1494,10 +1536,10 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                   <span
                     className={`px-3 py-0.5 rounded-full text-xs font-black border ${
                       node.niveau === 2
-                        ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
+                        ? "bg-[#1dc4ff]/10 text-[#0077aa] border-[#1dc4ff]/30"
                         : node.niveau === 3
-                        ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
-                        : "bg-purple-500/20 text-purple-300 border-purple-500/30"
+                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                        : "bg-slate-100 text-slate-700 border-slate-200"
                     }`}
                   >
                     {node.niveau === 2
@@ -1508,25 +1550,25 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                   </span>
 
                   {isImputedHere && (
-                    <span className="px-3 py-0.5 rounded-full text-xs font-black bg-amber-500 text-slate-950 animate-pulse flex items-center gap-1 shadow-md shadow-amber-500/20">
+                    <span className="px-3 py-0.5 rounded-full text-xs font-black bg-amber-500 text-slate-950 animate-pulse flex items-center gap-1 shadow-sm">
                       <Flame className="w-3.5 h-3.5 fill-slate-950" /> 🔥 IMPUTÉ ({votesNon.length} vote{votesNon.length > 1 ? "s" : ""})
                     </span>
                   )}
 
                   {node.criticite === "Critical" && (
-                    <span className="px-3 py-0.5 rounded-full text-xs font-black bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse flex items-center gap-1">
-                      <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> CRITIQUE
+                    <span className="px-3 py-0.5 rounded-full text-xs font-black bg-rose-50 text-rose-700 border border-rose-200 animate-pulse flex items-center gap-1">
+                      <AlertTriangle className="w-3.5 h-3.5 text-rose-600" /> CRITIQUE
                     </span>
                   )}
 
                   {node.decision_finale ? (
                     <span
-                      className={`px-3 py-0.5 rounded-full text-xs font-black border flex items-center gap-1.5 shadow-sm ${
+                      className={`px-3 py-0.5 rounded-full text-xs font-black border flex items-center gap-1.5 shadow-xs ${
                         node.decision_finale.decision === "Oui"
-                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                           : node.decision_finale.decision === "Non"
-                          ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
-                          : "bg-slate-700/80 text-slate-300 border-slate-600"
+                          ? "bg-rose-50 text-rose-700 border-rose-200"
+                          : "bg-slate-100 text-slate-700 border-slate-200"
                       }`}
                     >
                       <ShieldCheck className="w-3.5 h-3.5" />
@@ -1536,12 +1578,12 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                     <span
                       className={`px-3 py-0.5 rounded-full text-xs font-extrabold border ${
                         isAccord
-                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                           : isDivergence
-                          ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                          ? "bg-rose-50 text-rose-700 border-rose-200"
                           : isSubItem && isParentN2Oui && totalVotes === 0
-                          ? "bg-slate-800/80 text-slate-400 border-slate-700/80"
-                          : "bg-slate-800 text-slate-400 border-slate-700"
+                          ? "bg-slate-100 text-slate-500 border-slate-200"
+                          : "bg-slate-100 text-slate-600 border-slate-200"
                       }`}
                     >
                       {isAccord
@@ -1555,7 +1597,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                   )}
                 </div>
 
-                <h3 className="font-black text-xl sm:text-2xl text-white leading-snug tracking-tight">
+                <h3 className="font-black text-xl sm:text-2xl text-slate-900 leading-snug tracking-tight">
                   {labelClean}
                 </h3>
               </div>
@@ -1567,21 +1609,21 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                 <button
                   type="button"
                   onClick={() => !isReadOnly && openArbitrageModal(node)}
-                  className={`px-4 py-2.5 rounded-2xl flex items-center gap-2.5 flex-shrink-0 shadow-md border transition-all ${
+                  className={`px-4 py-2.5 rounded-2xl flex items-center gap-2.5 flex-shrink-0 shadow-sm border transition-all ${
                     node.decision_finale.decision === "Oui"
-                      ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30"
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
                       : node.decision_finale.decision === "Non"
-                      ? "bg-rose-500/20 border-rose-500/40 text-rose-300 hover:bg-rose-500/30"
-                      : "bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800"
+                      ? "bg-rose-50 border-rose-200 text-rose-800 hover:bg-rose-100"
+                      : "bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200"
                   } ${!isReadOnly ? "cursor-pointer group" : ""}`}
                   title={!isReadOnly ? "Cliquer pour modifier l'arbitrage de cet item" : undefined}
                 >
-                  <Award className="w-5 h-5 flex-shrink-0 text-amber-400" />
+                  <Award className="w-5 h-5 flex-shrink-0 text-amber-600" />
                   <div className="text-left">
-                    <div className="text-[10px] font-black uppercase tracking-wider text-amber-400 flex items-center gap-1">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-amber-700 flex items-center gap-1">
                       Arbitrage Validé {!isReadOnly && <span className="text-[9px] underline font-normal">(Modifier)</span>}
                     </div>
-                    <div className="text-xs font-black text-white">
+                    <div className="text-xs font-black text-slate-900">
                       Critère : {node.decision_finale.decision} {node.decision_finale.justification && `("${node.decision_finale.justification}")`}
                     </div>
                   </div>
@@ -1590,17 +1632,17 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                 <button
                   type="button"
                   disabled
-                  className="px-4 py-2.5 bg-slate-800/80 text-slate-500 font-black text-xs rounded-2xl border border-slate-700/50 opacity-40 cursor-not-allowed flex items-center gap-2 flex-shrink-0"
+                  className="px-4 py-2.5 bg-slate-100 text-slate-400 font-black text-xs rounded-2xl border border-slate-200 opacity-60 cursor-not-allowed flex items-center gap-2 flex-shrink-0"
                   title="Aucun vote évaluateur soumis sur cet item"
                 >
-                  <Award className="w-4 h-4 text-slate-500" />
+                  <Award className="w-4 h-4 text-slate-400" />
                   Arbitrage Inactif (0 Vote)
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={() => openArbitrageModal(node)}
-                  className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-2xl transition-all shadow-lg shadow-amber-500/20 flex items-center gap-2 cursor-pointer flex-shrink-0"
+                  className="px-4 py-2.5 bg-[#1dc4ff] hover:bg-[#009ae5] text-slate-950 font-black text-xs rounded-2xl transition-all shadow-md shadow-[#1dc4ff]/20 flex items-center gap-2 cursor-pointer flex-shrink-0"
                 >
                   <Award className="w-4 h-4" />
                   ⚡ Arbitrer cet Item
@@ -1614,19 +1656,19 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
         {isParentCompact ? (
           <div
             onClick={() => setCompactParentView((prev) => ({ ...prev, [node.item_id]: false }))}
-            className="p-4 bg-slate-950/70 border-t border-slate-800/80 text-xs font-extrabold text-slate-400 hover:bg-slate-900 transition-all cursor-pointer flex items-center justify-between group"
+            className="p-4 bg-slate-50 border-t border-slate-100 text-xs font-extrabold text-slate-500 hover:bg-slate-100 transition-all cursor-pointer flex items-center justify-between group"
           >
             <div className="flex items-center gap-3">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-slate-800 text-slate-400 border border-slate-700">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-white text-slate-600 border border-slate-200">
                 N{node.niveau}
               </span>
-              <span className="text-slate-300 font-bold group-hover:text-white transition-colors">
+              <span className="text-slate-700 font-bold group-hover:text-slate-900 transition-colors">
                 {labelClean}
               </span>
-              <span className="text-[10px] text-slate-500 font-semibold">(0 vote évaluateur — Replié)</span>
+              <span className="text-[10px] text-slate-400 font-semibold">(0 vote évaluateur — Replié)</span>
             </div>
 
-            <div className="flex items-center gap-1.5 text-indigo-400 font-black text-[11px] group-hover:text-indigo-300">
+            <div className="flex items-center gap-1.5 text-[#0077aa] font-black text-[11px] group-hover:text-[#1dc4ff]">
               <span>Déployer pour examiner</span>
               <ChevronDown className="w-4 h-4" />
             </div>
@@ -1635,20 +1677,20 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
           <div className="p-6 space-y-6">
             {/* IMPUTATION RADAR DASHBOARD (Only at N2 if sub-imputations exist) */}
             {node.niveau === 2 && treeSummary.totalImputations > 0 && (
-              <div className="p-4 rounded-2xl bg-amber-950/50 border border-amber-500/50 shadow-xl space-y-3 relative overflow-hidden">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-500/30 pb-2.5">
-                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-300">
-                    <Flame className="w-4 h-4 text-amber-400 animate-bounce" />
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 shadow-xs space-y-3 relative overflow-hidden">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-200 pb-2.5">
+                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-800">
+                    <Flame className="w-4 h-4 text-amber-600 animate-bounce" />
                     RADAR D'IMPUTATIONS DÉTECTÉES ({treeSummary.totalImputations} au total)
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     {treeSummary.countN2 > 0 && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-amber-100 text-amber-800 border border-amber-300">
                         Sous-Items N2: {treeSummary.countN2} motif(s)
                       </span>
                     )}
                     {treeSummary.countN3 > 0 && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-slate-100 text-slate-700 border border-slate-200">
                         Précisions N3: {treeSummary.countN3} précision(s)
                       </span>
                     )}
@@ -1661,10 +1703,10 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                       key={item.node.item_id}
                       type="button"
                       onClick={() => jumpToItem(item.node.item_id)}
-                      className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-amber-500/60 hover:border-amber-300 text-xs font-black text-amber-200 transition-all shadow-md flex items-center gap-2.5 cursor-pointer group"
+                      className="px-3.5 py-2 rounded-xl bg-white hover:bg-amber-100/50 border border-amber-300 text-xs font-black text-amber-900 transition-all shadow-xs flex items-center gap-2.5 cursor-pointer group"
                       title={`Accéder directement au ${item.node.niveau === 3 ? "Sous-Item N2" : "Précision N3"}`}
                     >
-                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
                       <span>[{item.node.niveau === 3 ? "Sous-Item N2" : "Précision N3"}] {cleanLibelle(item.node.libelle)}</span>
                       <span className="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-black shadow-xs">
                         {item.imputationCount} {item.imputationCount > 1 ? "imputations" : "imputation"}
@@ -1677,20 +1719,18 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
           <div className={hasGaugeVote ? "grid grid-cols-1 md:grid-cols-2 gap-6" : "grid grid-cols-1 gap-6"}>
             {/* LEFT SHOWDOWN CARD: GAUGE */}
             {hasGaugeVote && (
-              <div className="rounded-3xl p-5 bg-gradient-to-br from-indigo-950/90 via-slate-900 to-indigo-950/80 border border-indigo-500/40 shadow-xl space-y-4 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
-
-                <div className="flex items-center justify-between border-b border-indigo-500/30 pb-3">
-                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-indigo-300">
-                    <ShieldCheck className="w-5 h-5 text-indigo-400" /> ÉVALUATEUR GAUGE {gaugeNom && <span className="text-indigo-200 font-mono text-[11px] font-semibold lowercase">({gaugeNom})</span>}
+              <div className="rounded-3xl p-5 bg-slate-50 border border-slate-200 shadow-xs space-y-4 relative overflow-hidden">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-700">
+                    <ShieldCheck className="w-5 h-5 text-[#1dc4ff]" /> ÉVALUATEUR GAUGE {gaugeNom && <span className="text-slate-500 font-mono text-[11px] font-semibold lowercase">({gaugeNom})</span>}
                   </div>
                   <span
-                    className={`px-4 py-1.5 rounded-xl text-sm font-black uppercase tracking-wide shadow-md ${
+                    className={`px-4 py-1.5 rounded-xl text-sm font-black uppercase tracking-wide shadow-xs ${
                       gaugeCritere === "Oui"
-                        ? "bg-emerald-500 text-slate-950"
+                        ? "bg-emerald-500 text-white"
                         : gaugeCritere === "Non"
                         ? "bg-rose-500 text-white"
-                        : "bg-slate-700 text-slate-200"
+                        : "bg-slate-200 text-slate-700"
                     }`}
                   >
                     {gaugeCritere}
@@ -1698,7 +1738,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                 </div>
 
                 {gaugeComment && (
-                  <div className="text-xs text-indigo-100 font-medium leading-relaxed bg-indigo-950/60 p-3.5 rounded-2xl border border-indigo-800/50 whitespace-pre-line">
+                  <div className="text-xs text-slate-700 font-medium leading-relaxed bg-white p-3.5 rounded-2xl border border-slate-200 whitespace-pre-line">
                     &ldquo;{parseTimestampsInText(gaugeComment)}&rdquo;
                   </div>
                 )}
@@ -1706,20 +1746,20 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
             )}
 
             {/* RIGHT SHOWDOWN CARD: EVALUATORS MAJORITY */}
-            <div className="rounded-3xl p-5 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border border-slate-700/80 shadow-xl space-y-4 relative overflow-hidden">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-300">
-                  <Users className="w-5 h-5 text-teal-400" /> COHORTE ÉVALUATEURS
+            <div className="rounded-3xl p-5 bg-slate-50 border border-slate-200 shadow-xs space-y-4 relative overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-700">
+                  <Users className="w-5 h-5 text-[#1dc4ff]" /> COHORTE ÉVALUATEURS
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-400">Majorité :</span>
+                  <span className="text-xs font-bold text-slate-500">Majorité :</span>
                   <span
-                    className={`px-4 py-1.5 rounded-xl text-sm font-black uppercase tracking-wide shadow-md ${
+                    className={`px-4 py-1.5 rounded-xl text-sm font-black uppercase tracking-wide shadow-xs ${
                       majorityCritere === "Oui"
-                        ? "bg-emerald-500 text-slate-950"
+                        ? "bg-emerald-500 text-white"
                         : majorityCritere === "Non"
                         ? "bg-rose-500 text-white"
-                        : "bg-slate-700 text-slate-200"
+                        : "bg-slate-200 text-slate-700"
                     }`}
                   >
                     {majorityCritere} {totalVotes > 0 && `(${majorityPercent}%)`}
@@ -1727,7 +1767,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                 </div>
               </div>
 
-              <div className="text-xs text-slate-400 font-medium">
+              <div className="text-xs text-slate-500 font-medium">
                 {totalVotes} évaluateur(s) ont voté sur cet item.
               </div>
             </div>
@@ -1735,19 +1775,19 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
 
           {/* VOTE GROUPS (ONLY RENDER CRITERIA THAT HAVE > 0 VOTES TO ELIMINATE CLUTTER) */}
           <div className="space-y-4">
-            <div className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
-              <Zap className="w-4 h-4 text-amber-400" /> Détail des Répartitions par Critère :
+            <div className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-2">
+              <Zap className="w-4 h-4 text-amber-500" /> Détail des Répartitions par Critère :
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* OUI GROUP (Only if > 0 votes) */}
               {votesOui.length > 0 && (
-                <div className="rounded-2xl p-4 bg-emerald-950/40 border border-emerald-500/40 space-y-3 shadow-md">
-                  <div className="flex items-center justify-between border-b border-emerald-500/30 pb-2">
-                    <span className="font-black text-xs uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                      <Check className="w-4 h-4 text-emerald-400" /> Répondu "Oui"
+                <div className="rounded-2xl p-4 bg-emerald-50 border border-emerald-200 space-y-3 shadow-xs">
+                  <div className="flex items-center justify-between border-b border-emerald-200 pb-2">
+                    <span className="font-black text-xs uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
+                      <Check className="w-4 h-4 text-emerald-600" /> Répondu "Oui"
                     </span>
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-500 text-slate-950">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-600 text-white">
                       {votesOui.length}
                     </span>
                   </div>
@@ -1768,12 +1808,12 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
 
               {/* NON GROUP (Only if > 0 votes) */}
               {votesNon.length > 0 && (
-                <div className="rounded-2xl p-4 bg-rose-950/40 border border-rose-500/40 space-y-3 shadow-md">
-                  <div className="flex items-center justify-between border-b border-rose-500/30 pb-2">
-                    <span className="font-black text-xs uppercase tracking-wider text-rose-400 flex items-center gap-1.5">
-                      <X className="w-4 h-4 text-rose-400" /> Répondu "Non"
+                <div className="rounded-2xl p-4 bg-rose-50 border border-rose-200 space-y-3 shadow-xs">
+                  <div className="flex items-center justify-between border-b border-rose-200 pb-2">
+                    <span className="font-black text-xs uppercase tracking-wider text-rose-700 flex items-center gap-1.5">
+                      <X className="w-4 h-4 text-rose-600" /> Répondu "Non"
                     </span>
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-rose-500 text-white">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-rose-600 text-white">
                       {votesNon.length}
                     </span>
                   </div>
@@ -1794,12 +1834,12 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
 
               {/* N.A. GROUP (Only if > 0 votes) */}
               {votesNA.length > 0 && (
-                <div className="rounded-2xl p-4 bg-slate-900/80 border border-slate-700 space-y-3 shadow-md">
-                  <div className="flex items-center justify-between border-b border-slate-700 pb-2">
-                    <span className="font-black text-xs uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                      <MinusCircle className="w-4 h-4 text-slate-400" /> Répondu "N.A."
+                <div className="rounded-2xl p-4 bg-slate-50 border border-slate-200 space-y-3 shadow-xs">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <span className="font-black text-xs uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                      <MinusCircle className="w-4 h-4 text-slate-500" /> Répondu "N.A."
                     </span>
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-slate-700 text-white">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-slate-600 text-white">
                       {votesNA.length}
                     </span>
                   </div>
@@ -1822,7 +1862,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
 
           {/* SUB-ITEMS DRILL DOWN (N3 / N4 CASCADE TREE) */}
           {hasChildren && (
-            <div className="pt-4 border-t border-slate-800">
+            <div className="pt-4 border-t border-slate-200">
               <button
                 type="button"
                 onClick={() =>
@@ -1831,9 +1871,9 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                     [node.item_id]: !isExpanded,
                   }))
                 }
-                className="flex items-center gap-2 text-xs font-black text-indigo-400 hover:text-indigo-200 transition-colors cursor-pointer py-1"
+                className="flex items-center gap-2 text-xs font-black text-[#0077aa] hover:text-[#1dc4ff] transition-colors cursor-pointer py-1"
               >
-                <CornerDownRight className="w-4 h-4 text-indigo-400" />
+                <CornerDownRight className="w-4 h-4 text-[#1dc4ff]" />
                 {isExpanded
                   ? `Masquer l'arborescence cascade (${node.children.length} ${node.niveau === 2 ? "Sous-Item(s) N2" : "Précision(s) N3"})`
                   : `Déployer l'arborescence cascade (${node.children.length} ${node.niveau === 2 ? "Sous-Item(s) N2" : "Précision(s) N3"})`}
@@ -1844,7 +1884,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                 <div
                   className={
                     isCascadeView
-                      ? "relative border-l-2 border-indigo-500/40 pl-4 sm:pl-8 space-y-6 pt-4 ml-2 sm:ml-4"
+                      ? "relative border-l-2 border-[#1dc4ff]/40 pl-4 sm:pl-8 space-y-6 pt-4 ml-2 sm:ml-4"
                       : "space-y-4 pt-3"
                   }
                 >
@@ -1861,9 +1901,9 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                       {isCascadeView && (
                         <>
                           {/* Horizontal Branch Arm */}
-                          <div className="absolute -left-4 sm:-left-8 top-8 w-4 sm:w-8 h-0.5 bg-indigo-500/40" />
+                          <div className="absolute -left-4 sm:-left-8 top-8 w-4 sm:w-8 h-0.5 bg-[#1dc4ff]/40" />
                           {/* Junction Node Badge */}
-                          <div className="absolute -left-6 sm:-left-10 top-6 w-5 h-5 rounded-full bg-slate-950 border-2 border-indigo-400 flex items-center justify-center text-[10px] font-black text-indigo-300 shadow-md">
+                          <div className="absolute -left-6 sm:-left-10 top-6 w-5 h-5 rounded-full bg-white border-2 border-[#1dc4ff] flex items-center justify-center text-[10px] font-black text-[#0077aa] shadow-xs">
                             {child.niveau}
                           </div>
                         </>
@@ -1921,73 +1961,70 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
       )}
 
       {/* 1. TOP HEADER & STUDIO BAR */}
-      <section className="bg-slate-900/90 rounded-3xl p-6 sm:p-8 border border-slate-800 shadow-2xl space-y-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
+      <section className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
           <div>
-            <div className="flex items-center gap-2 flex-wrap mb-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-black uppercase tracking-wider">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-400" /> Cockpit Live Arena
+            <div className="flex items-center gap-2.5 flex-wrap mb-2">
+              <CaliSyncLogo size="sm" showText={false} />
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#1dc4ff]/10 border border-[#1dc4ff]/20 text-[#0077aa] text-xs font-black uppercase tracking-wider">
+                <Sparkles className="w-3.5 h-3.5 text-[#1dc4ff]" /> Cockpit Live
               </div>
               {/* SESSION STATUS BADGE */}
               {sessionStatut === "OPEN" && (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/20 text-red-300 border border-red-500/40 text-xs font-black uppercase tracking-wider animate-pulse">
-                  <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
-                  🔴 EN LIVE
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-xs font-black uppercase tracking-wider">
+                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                  EN LIVE
                 </div>
               )}
               {sessionStatut === "LOCKED" && (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-black uppercase tracking-wider">
-                  <Lock className="w-3 h-3 text-amber-400" />
-                  SOUMISSIONS CLOSES — ARBITRAGE EN COURS
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-black uppercase tracking-wider">
+                  <Lock className="w-3 h-3 text-amber-500" />
+                  ARBITRAGE EN COURS
                 </div>
               )}
               {allQuestionsArbitrated && !isReadOnly && (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-black uppercase tracking-wider">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-black uppercase tracking-wider">
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
                   100% ARBITRÉ — PRÊT POUR CLÔTURE
                 </div>
               )}
               {sessionStatut === "CLOSED" && (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-700/80 text-slate-300 border border-slate-600 text-xs font-black uppercase tracking-wider">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200 text-xs font-black uppercase tracking-wider">
                   <CheckCircle className="w-3 h-3 text-slate-400" />
                   SESSION ARCHIVÉE
                 </div>
               )}
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
               {data?.nom_session || "Session Live"}
               {data?.nom_conseiller && (
-                <span className="text-slate-400 font-medium text-lg block sm:inline sm:ml-2">
-                  — Connection ID : <span className="font-mono text-slate-200">{data.nom_conseiller}</span>
+                <span className="text-slate-500 font-medium text-base block sm:inline sm:ml-2">
+                  — ID : <span className="font-mono text-slate-700">{data.nom_conseiller}</span>
                 </span>
               )}
             </h1>
             {isClosed && (
-              <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-400 text-xs font-bold">
-                👁️ MODE LECTURE SEULE — Session archivée. Aucune modification possible.
+              <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold">
+                👁️ MODE LECTURE SEULE — Session archivée.
               </div>
             )}
-            {isLiveReadOnly && (
-              <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold animate-pulse">
-                🔒 MODE LECTURE SEULE EN LIVE — Arbitrage disponible après la clôture.
+            {!canArbitrate && (
+              <div className="mt-2 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#1dc4ff]/10 border border-[#1dc4ff]/20 text-[#0077aa] text-xs font-bold">
+                🔒 MODE CONSULTATION — L'arbitrage est réservé à l'Animateur, au Gauge et à l'Admin.
               </div>
             )}
-
-            {data?.url_audio && (
-              <AudioPlayer
-                audioUrl={data.url_audio}
-                title={`Audio — ${data.nom_session}${data.nom_conseiller ? ` (${data.nom_conseiller})` : ""}`}
-                floating={true}
-                defaultPosition={{ x: Math.max(20, window.innerWidth - 360), y: 90 }}
-              />
+            {isLiveReadOnly && canArbitrate && (
+              <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold">
+                🔒 MODE LECTURE SEULE — Arbitrage disponible après la clôture.
+              </div>
             )}
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2 bg-slate-950 px-4 py-2.5 rounded-2xl border border-slate-800">
-              <Users className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Soumis :</span>
-              <span className="font-black text-xl text-white">{evaluators.length}</span>
+            <div className="flex items-center gap-2 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200">
+              <Users className="w-4 h-4 text-[#1dc4ff]" />
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Soumis :</span>
+              <span className="font-black text-xl text-slate-900">{evaluators.length}</span>
             </div>
 
             {isClosed && (
@@ -2051,77 +2088,84 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
           </div>
         </div>
 
-
-        {/* Audio Player Bar */}
-        {data?.url_audio && (
-          <div className="p-4 rounded-2xl bg-slate-950 text-white flex flex-col sm:flex-row items-center justify-between gap-4 border border-slate-800 shadow-md">
-            <audio
-              ref={audioRef}
-              src={data.url_audio}
-              onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
-              onLoadedMetadata={() => audioRef.current && setDuration(audioRef.current.duration)}
-              onEnded={() => setIsPlaying(false)}
-            />
-
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={() => {
-                  if (audioRef.current) {
-                    if (isPlaying) {
-                      audioRef.current.pause();
-                      setIsPlaying(false);
-                    } else {
-                      audioRef.current.play().catch(() => {});
-                      setIsPlaying(true);
-                    }
-                  }
-                }}
-                className="w-10 h-10 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 flex items-center justify-center shadow-md cursor-pointer transition-all flex-shrink-0"
-              >
-                {isPlaying ? <Pause className="w-5 h-5 fill-slate-950" /> : <Play className="w-5 h-5 fill-slate-950" />}
-              </button>
-
-              <div className="space-y-0.5">
-                <div className="text-xs font-black flex items-center gap-1.5 text-slate-200">
-                  <Volume2 className="w-4 h-4 text-emerald-400" /> Extrait Audio de l'Appel
+        {/* ── GAUGE SESSION OVERVIEW (LIVE COCKPIT) ── */}
+        {(data?.gauge_interaction_summary || data?.gauge_evaluator_comments) && (
+          <div className="bg-white border border-[#1dc4ff]/20 rounded-2xl p-5 space-y-4 shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-[#1dc4ff]/10 text-[#1dc4ff]">
+                  <FileText className="w-4 h-4" />
                 </div>
-                <div className="text-[11px] text-slate-400 font-mono">
-                  {formatTime(currentTime)} / {formatTime(duration)}
+                <div>
+                  <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">
+                    Gauge Session Overview
+                  </h2>
+                  <p className="text-[11px] font-medium text-slate-500">
+                    Synthèse d'interaction et remarques soumises par la Gauge
+                  </p>
                 </div>
               </div>
+              {data.gauge_id && (
+                <span className="text-xs font-black px-3 py-1 rounded-full bg-[#1dc4ff]/10 text-[#0077aa] border border-[#1dc4ff]/20">
+                  Gauge : {data.gauge_id}
+                </span>
+              )}
             </div>
 
-            <div className="w-full sm:w-72 flex items-center gap-2">
-              <input
-                type="range"
-                min={0}
-                max={duration || 100}
-                value={currentTime}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  setCurrentTime(val);
-                  if (audioRef.current) audioRef.current.currentTime = val;
-                }}
-                className="w-full accent-emerald-500 cursor-pointer"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {data.gauge_interaction_summary && (
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                  <div className="text-xs font-bold text-[#0077aa] uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-[#1dc4ff]" />
+                    Interaction Summary
+                  </div>
+                  <p className="text-xs text-slate-700 leading-relaxed font-medium whitespace-pre-wrap">
+                    {data.gauge_interaction_summary}
+                  </p>
+                </div>
+              )}
+
+              {data.gauge_evaluator_comments && (
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                  <div className="text-xs font-bold text-[#0077aa] uppercase tracking-wider flex items-center gap-1.5">
+                    <MessageSquare className="w-3.5 h-3.5 text-[#1dc4ff]" />
+                    Evaluator Comments
+                  </div>
+                  <p className="text-xs text-slate-700 leading-relaxed font-medium whitespace-pre-wrap">
+                    {data.gauge_evaluator_comments}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
+        )}
+
+
+
+
+        {/* Integrated Audio Player (Google Drive & Standard) */}
+        {data?.url_audio && (
+          <AudioPlayer
+            audioUrl={data.url_audio}
+            title={`Enregistrement audio — ${data.nom_session}${data.nom_conseiller ? ` (${data.nom_conseiller})` : ""}`}
+            floating={false}
+            compact={false}
+          />
         )}
 
         {/* Avatars Grid */}
         <div className="flex flex-wrap items-center gap-3 pt-1">
           {evaluators.length === 0 ? (
-            <div className="text-xs text-slate-400 italic">
+            <div className="text-xs text-slate-500 italic">
               En attente des soumissions des évaluateurs…
             </div>
           ) : (
             evaluators.map((ev) => (
-              <div key={ev.id} className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 shadow-xs">
-                <div className="w-6 h-6 rounded-full bg-emerald-500 text-slate-950 font-black text-[10px] flex items-center justify-center">
+              <div key={ev.id} className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+                <div className="w-6 h-6 rounded-full bg-[#1dc4ff] text-slate-950 font-black text-[10px] flex items-center justify-center">
                   {getInitials(ev.nom)}
                 </div>
-                <span className="text-xs font-extrabold text-slate-200">{ev.nom.split(" ")[0]}</span>
+                <span className="text-xs font-extrabold text-slate-700">{ev.nom.split(" ")[0]}</span>
               </div>
             ))
           )}
@@ -2129,19 +2173,19 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
       </section>
 
       {/* 2. PROGRESSION */}
-      <section className="bg-slate-900/90 rounded-3xl p-6 border border-slate-800 shadow-xl flex flex-col justify-center space-y-3">
+      <section className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm flex flex-col justify-center space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-black uppercase tracking-wider text-slate-400">
-            Progression Équipes / Items (N2)
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+            Progression Équipes / Items
           </span>
-          <span className="text-xs font-black text-emerald-400">
-            Item {currentGlobalN2Index} sur {totalN2Count}
+          <span className="text-xs font-black text-[#0077aa]">
+            {currentGlobalN2Index} / {totalN2Count}
           </span>
         </div>
 
-        <div className="w-full h-3.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-300 shadow-md shadow-emerald-500/20"
+            className="h-full bg-[#1dc4ff] rounded-full transition-all duration-300"
             style={{
               width: `${totalN2Count > 0 ? (currentGlobalN2Index / totalN2Count) * 100 : 0}%`,
             }}
@@ -2168,16 +2212,16 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                     setActiveN1Index(idx);
                     setActiveN2Index(0);
                   }}
-                  className={`px-4 py-2.5 rounded-2xl text-xs font-black transition-all cursor-pointer flex items-center gap-2 flex-shrink-0 ${
+                  className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-2 flex-shrink-0 ${
                     isN1Active
-                      ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30"
-                      : "bg-slate-900 text-slate-400 border border-slate-800 hover:bg-slate-800 hover:text-white"
+                      ? "bg-[#1dc4ff] text-slate-950 shadow-md shadow-[#1dc4ff]/20"
+                      : "bg-white text-slate-600 border border-slate-200 hover:border-[#1dc4ff]/40 hover:text-slate-900"
                   }`}
                 >
                   {hasDivergenceInN1 ? (
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+                    <span className="w-2 h-2 rounded-full bg-rose-500" />
                   ) : (
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
                   )}
                   {cleanLibelle(n1.libelle)}
                 </button>
@@ -2186,9 +2230,9 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
           </div>
 
           {/* LIVE FOCUS BAR (FILTRES DYNAMIQUES DU COCKPIT) */}
-          <div className="flex items-center gap-2 overflow-x-auto p-2 bg-slate-900/90 rounded-2xl border border-slate-800 shadow-sm scrollbar-none">
-            <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5 px-2 flex-shrink-0">
-              <Layers className="w-3.5 h-3.5 text-indigo-400" /> Focus Live :
+          <div className="flex items-center gap-2 overflow-x-auto p-1.5 bg-slate-100 rounded-xl border border-slate-200 shadow-sm scrollbar-none">
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5 px-2 flex-shrink-0">
+              <Layers className="w-3.5 h-3.5 text-slate-400" /> Focus :
             </span>
             <button
               type="button"
@@ -2196,13 +2240,13 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                 setFilterMode("all");
                 setActiveN2Index(0);
               }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex-shrink-0 ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex-shrink-0 ${
                 filterMode === "all"
-                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                  : "bg-slate-950 text-slate-400 hover:text-white border border-slate-800"
+                  ? "bg-white text-slate-900 shadow-sm border border-slate-200"
+                  : "text-slate-500 hover:text-slate-800 hover:bg-white/60"
               }`}
             >
-              Tous les items ({countAll})
+              Tous ({countAll})
             </button>
             <button
               type="button"
@@ -2210,13 +2254,13 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                 setFilterMode("imputation");
                 setActiveN2Index(0);
               }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0 ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0 ${
                 filterMode === "imputation"
-                  ? "bg-rose-500 text-white shadow-md shadow-rose-500/30"
-                  : "bg-slate-950 text-rose-400 hover:bg-rose-500/10 border border-slate-800"
+                  ? "bg-rose-500 text-white shadow-sm"
+                  : "text-rose-500 hover:bg-white/60"
               }`}
             >
-              <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> 🎯 Imputations N2/N3 ({countImputations})
+              ⚡ Divergences ({countImputations})
             </button>
             <button
               type="button"
@@ -2224,33 +2268,33 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                 setFilterMode("accord");
                 setActiveN2Index(0);
               }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0 ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0 ${
                 filterMode === "accord"
-                  ? "bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30"
-                  : "bg-slate-950 text-emerald-400 hover:bg-emerald-500/10 border border-slate-800"
+                  ? "bg-emerald-500 text-white shadow-sm"
+                  : "text-emerald-600 hover:bg-white/60"
               }`}
             >
-              <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> 🟢 Accords ({countAccords})
+              ✅ Accords ({countAccords})
             </button>
           </div>
 
           {/* ITEM NAVIGATION CONTROLS */}
-          <div className="flex items-center justify-between bg-slate-900 p-4 rounded-2xl border border-slate-800 shadow-md">
+          <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
             <button
               type="button"
               onClick={handlePrevItem}
               disabled={activeN1Index === 0 && activeN2Index === 0}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-black text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-30"
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-30"
             >
               <ChevronLeft className="w-4 h-4" /> Item Précédent
             </button>
 
             <div className="flex items-center gap-4">
               <div className="text-center hidden sm:block">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                   Catégorie : {cleanLibelle(currentN1?.libelle || "")}
                 </span>
-                <div className="text-sm font-black text-white">
+                <div className="text-sm font-black text-slate-900">
                   Item N1 : {activeN2Index + 1} / {currentN2List.length}
                 </div>
               </div>
@@ -2261,12 +2305,12 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                 onClick={() => setIsCascadeView(!isCascadeView)}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer border ${
                   isCascadeView
-                    ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40 shadow-sm"
-                    : "bg-slate-800 text-slate-400 border-slate-700"
+                    ? "bg-[#1dc4ff]/10 text-[#0077aa] border-[#1dc4ff]/30 shadow-xs"
+                    : "bg-slate-100 text-slate-600 border-slate-200"
                 }`}
                 title="Activer/Désactiver l'arborescence graphique avec lignes de connexion"
               >
-                <CornerDownRight className="w-3.5 h-3.5 text-indigo-400" />
+                <CornerDownRight className="w-3.5 h-3.5 text-[#1dc4ff]" />
                 {isCascadeView ? "Mode Cascade 🌿" : "Mode Focus 🎯"}
               </button>
             </div>
@@ -2278,7 +2322,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                 activeN1Index === n1Roots.length - 1 &&
                 activeN2Index === currentN2List.length - 1
               }
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs rounded-xl transition-all shadow-md shadow-indigo-600/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-30"
+              className="px-4 py-2 bg-[#1dc4ff] hover:bg-[#009ae5] text-slate-950 font-black text-xs rounded-xl transition-all shadow-md shadow-[#1dc4ff]/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-30"
             >
               Item Suivant <ChevronRight className="w-4 h-4" />
             </button>
@@ -2288,18 +2332,18 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
           {currentN2 ? (
             renderItemCard(currentN2)
           ) : (
-            <div className="p-10 bg-slate-900 rounded-3xl border border-slate-800 text-center space-y-4 shadow-xl">
-              <div className="mx-auto w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-400">
+            <div className="p-10 bg-white rounded-3xl border border-slate-200 text-center space-y-4 shadow-sm">
+              <div className="mx-auto w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-500">
                 <Layers className="w-6 h-6" />
               </div>
               <div className="space-y-1 max-w-sm mx-auto">
-                <h4 className="text-base font-black text-white">Aucun item correspondant</h4>
-                <p className="text-xs text-slate-400 font-medium leading-relaxed">
+                <h4 className="text-base font-black text-slate-900">Aucun item correspondant</h4>
+                <p className="text-xs text-slate-500 font-medium leading-relaxed">
                   Aucun item ne correspond au filtre{" "}
-                  <strong className="text-indigo-300">
+                  <strong className="text-[#0077aa]">
                     "{filterMode === "imputation" ? "Imputations N3/N4" : filterMode === "accord" ? "Accords" : filterMode}"
                   </strong>{" "}
-                  dans la catégorie <strong className="text-white">{cleanLibelle(currentN1?.libelle || "")}</strong>.
+                  dans la catégorie <strong className="text-slate-900">{cleanLibelle(currentN1?.libelle || "")}</strong>.
                 </p>
               </div>
               <button
@@ -2308,7 +2352,7 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
                   setFilterMode("all");
                   setActiveN2Index(0);
                 }}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs rounded-xl transition-all cursor-pointer inline-flex items-center gap-2 shadow-md shadow-indigo-600/20"
+                className="px-4 py-2 bg-[#1dc4ff] hover:bg-[#009ae5] text-slate-950 font-black text-xs rounded-xl transition-all cursor-pointer inline-flex items-center gap-2 shadow-md shadow-[#1dc4ff]/20"
               >
                 Réinitialiser le filtre (Voir tous les items)
               </button>

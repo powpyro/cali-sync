@@ -1,33 +1,33 @@
 /* src/styles/design-tokens.css */
 :root,
-[data-theme="dark"] {
-  /* Surfaces & Backgrounds */
-  --bg-app: #030712; /* slate-950 / gray-950 */
-  --bg-surface: #0f172a; /* slate-900 */
-  --bg-surface-elevated: #1e293b; /* slate-800 */
-  --bg-glass: rgba(15, 23, 42, 0.75);
-  --border-glass: rgba(255, 255, 255, 0.08);
+[data-theme="light"] {
+  /* Surfaces & Backgrounds (Wave Mobile Money Clean White Aesthetic) */
+  --bg-app: #f7fafc; /* wave crisp light gray */
+  --bg-surface: #ffffff; /* pure white card */
+  --bg-surface-elevated: #f1f5f9; /* slate-100 */
+  --bg-glass: rgba(255, 255, 255, 0.95);
+  --border-glass: #e2e8f0;
 
-  /* Primary Accent: Teal / Emerald */
-  --color-primary: #14b8a6; /* teal-500 */
-  --color-primary-hover: #0d9488; /* teal-600 */
-  --color-primary-glow: rgba(20, 184, 166, 0.2);
+  /* Primary Signature Accent: Wave Cyan / Sky Blue */
+  --color-primary: #1dc4ff; /* wave signature cyan */
+  --color-primary-hover: #009ae5; /* wave cyan hover */
+  --color-primary-glow: rgba(29, 196, 255, 0.25);
 
-  /* Secondary Accent: Indigo */
-  --color-indigo: #6366f1; /* indigo-500 */
-  --color-indigo-hover: #4f46e5; /* indigo-600 */
-  --color-indigo-glow: rgba(99, 102, 241, 0.2);
+  /* Secondary Accent: Wave Navy */
+  --color-indigo: #0f172a; /* deep navy */
+  --color-indigo-hover: #1e293b;
+  --color-indigo-glow: rgba(15, 23, 42, 0.15);
 
   /* Status Colors */
-  --color-success: #10b981; /* emerald-500 */
-  --color-warning: #f59e0b; /* amber-500 */
-  --color-danger: #ef4444; /* rose-500 */
-  --color-info: #3b82f6; /* blue-500 */
+  --color-success: #10b981; /* emerald-500 (Conforme) */
+  --color-warning: #f59e0b; /* amber-500 (En cours/N.A.) */
+  --color-danger: #ff4d4d; /* coral red (Divergence/Imputé) */
+  --color-info: #1dc4ff; /* wave cyan */
 
   /* Text Colors */
-  --text-primary: #f8fafc; /* slate-50 */
-  --text-secondary: #94a3b8; /* slate-400 */
-  --text-muted: #64748b; /* slate-500 */
+  --text-primary: #0f172a; /* slate-900 */
+  --text-secondary: #475569; /* slate-600 */
+  --text-muted: #94a3b8; /* slate-400 */
 
   /* Spacing Scale */
   --space-xs: 0.25rem; /* 4px */
@@ -50,21 +50,21 @@
   --transition-spring: 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-[data-theme="light"] {
-  /* Surfaces & Backgrounds */
-  --bg-app: #f8fafc; /* slate-50 */
-  --bg-surface: #ffffff;
-  --bg-surface-elevated: #f1f5f9; /* slate-100 */
-  --bg-glass: rgba(255, 255, 255, 0.85);
-  --border-glass: rgba(0, 0, 0, 0.08);
+[data-theme="dark"] {
+  /* Wave Navy Dark Theme Overrides */
+  --bg-app: #0a1128; /* deep wave navy */
+  --bg-surface: #0f172a;
+  --bg-surface-elevated: #1e293b;
+  --bg-glass: rgba(15, 23, 42, 0.85);
+  --border-glass: rgba(255, 255, 255, 0.1);
 
   /* Primary Accent */
-  --color-primary: #0d9488; /* teal-600 */
-  --color-primary-hover: #0f766e; /* teal-700 */
-  --color-primary-glow: rgba(13, 148, 136, 0.15);
+  --color-primary: #1dc4ff;
+  --color-primary-hover: #009ae5;
+  --color-primary-glow: rgba(29, 196, 255, 0.3);
 
   /* Text Colors */
-  --text-primary: #0f172a; /* slate-900 */
-  --text-secondary: #475569; /* slate-600 */
-  --text-muted: #94a3b8; /* slate-400 */
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
 }

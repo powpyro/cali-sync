@@ -132,6 +132,23 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Check global justification
+    const trimmedJustif = (justification || "").trim();
+    if (trimmedJustif.length > 0 && trimmedJustif.length < 5) {
+      alert("La synthèse globale d'arbitrage doit contenir au moins 5 caractères.");
+      return;
+    }
+
+    // Check specific item comments
+    for (const [, comm] of Object.entries(itemComments)) {
+      const trimmedComm = (comm || "").trim();
+      if (trimmedComm.length > 0 && trimmedComm.length < 5) {
+        alert("Tout commentaire d'arbitrage renseigné doit contenir au moins 5 caractères.");
+        return;
+      }
+    }
+
     setIsSubmitting(true);
 
     const payload: ArbitrageChainPayload = {
@@ -154,29 +171,29 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/70 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/40 backdrop-blur-sm animate-fade-in">
       <div
-        className="w-full max-w-xl bg-slate-900 border-l border-slate-800 shadow-2xl h-full flex flex-col justify-between overflow-y-auto animate-slide-left"
+        className="w-full max-w-xl bg-white border-l border-slate-200 shadow-2xl h-full flex flex-col justify-between overflow-y-auto animate-slide-left"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-950/60 sticky top-0 z-10">
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-400">
+            <div className="p-2.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600">
               <Award className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-[10px] font-black uppercase tracking-wider text-amber-400">
+              <div className="text-[10px] font-black uppercase tracking-wider text-amber-700">
                 Arbitrage Multi-Imputations Simultanées
               </div>
-              <h3 className="text-base font-extrabold text-white leading-tight">
+              <h3 className="text-base font-extrabold text-slate-900 leading-tight">
                 Évaluation de Groupe en Live
               </h3>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -185,14 +202,14 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
         {/* Body Content */}
         <div className="p-6 space-y-6 flex-1">
           {/* Target Item Context */}
-          <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+            <div className="flex items-center justify-between text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
               <span>Item N1 • {node.categorie_racine_fr || "Question Principale"}</span>
-              <span className={`px-2 py-0.5 rounded-md text-[10px] ${node.criticite === "Critical" ? "bg-rose-500/20 text-rose-300 border border-rose-500/30" : "bg-slate-800 text-slate-300"}`}>
+              <span className={`px-2 py-0.5 rounded-md text-[10px] ${node.criticite === "Critical" ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-slate-100 text-slate-700"}`}>
                 {node.criticite}
               </span>
             </div>
-            <p className="text-sm font-black text-white leading-snug">
+            <p className="text-sm font-black text-slate-900 leading-snug">
               {cleanLibelle(node.libelle)}
             </p>
           </div>
@@ -201,7 +218,7 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
           <form onSubmit={handleSubmit} id="arbitrage-form" className="space-y-6">
             {/* STEP 1: ITEM N1 DECISION */}
             <div className="space-y-2.5">
-              <label className="text-xs font-black uppercase tracking-wider text-slate-300 block">
+              <label className="text-xs font-black uppercase tracking-wider text-slate-700 block">
                 Étape 1 : Décision de Consensus sur l'Item N1 :
               </label>
               <div className="grid grid-cols-3 gap-3">
@@ -219,11 +236,11 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
                       className={`py-3.5 px-3 rounded-2xl font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer border ${
                         isSelected
                           ? opt.color === "emerald"
-                            ? "bg-emerald-500 text-slate-950 border-emerald-400 shadow-lg shadow-emerald-500/30"
+                            ? "bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-600/20"
                             : opt.color === "rose"
-                            ? "bg-rose-500 text-white border-rose-400 shadow-lg shadow-rose-500/30"
-                            : "bg-slate-700 text-white border-slate-500 shadow-lg"
-                          : "bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700"
+                            ? "bg-rose-600 text-white border-rose-600 shadow-md shadow-rose-600/20"
+                            : "bg-slate-700 text-white border-slate-700 shadow-md"
+                          : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
                       }`}
                     >
                       {isSelected && <Check className="w-4 h-4" />}
@@ -236,13 +253,13 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
 
             {/* STEP 2: MOTIFS SELECTION N2 (Multi-Select Checkboxes with specific comments) */}
             {decisionN1 === "Non" && n2Children.length > 0 && (
-              <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/40 space-y-3 animate-fade-in">
+              <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200 space-y-3 animate-fade-in">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-300">
-                    <Flame className="w-4 h-4 text-amber-400" />
+                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-800">
+                    <Flame className="w-4 h-4 text-amber-600" />
                     Étape 2 : Cocher les Motifs d'Écart (Sous-Items N2) :
                   </div>
-                  <span className="text-[10px] font-extrabold text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded-md border border-amber-500/30">
+                  <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
                     {selectedN2Ids.length} sélectionné(s)
                   </span>
                 </div>
@@ -258,8 +275,8 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
                         key={n2.item_id}
                         className={`p-3.5 rounded-2xl border transition-all space-y-3 ${
                           isSelected
-                            ? "bg-amber-500/20 border-amber-400 text-white shadow-md shadow-amber-500/10"
-                            : "bg-slate-950/80 border-slate-800 text-slate-300 hover:border-slate-700"
+                            ? "bg-white border-amber-400 text-slate-900 shadow-sm"
+                            : "bg-white/80 border-slate-200 text-slate-700 hover:border-slate-300"
                         }`}
                       >
                         <div
@@ -275,7 +292,7 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
                                 e.stopPropagation();
                                 toggleN2Select(n2.item_id);
                               }}
-                              className="w-4 h-4 rounded text-amber-500 bg-slate-900 border-slate-700 focus:ring-amber-500 cursor-pointer"
+                              className="w-4 h-4 rounded text-amber-600 bg-white border-slate-300 focus:ring-amber-500 cursor-pointer"
                             />
                             <span className="text-xs font-bold leading-tight">
                               {cleanLibelle(n2.libelle)}
@@ -285,12 +302,12 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
                           {/* Votes Indicator Badges */}
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             {votesNonGauge && (
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-[#1dc4ff]/10 text-[#0077aa] border border-[#1dc4ff]/20">
                                 Gauge: Non
                               </span>
                             )}
                             {votesNonCohorte > 0 && (
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200">
                                 {votesNonCohorte} vote(s) Non
                               </span>
                             )}
@@ -300,11 +317,11 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
                         {/* SPECIFIC COMMENT FIELD FOR THIS N2 MOTIF */}
                         {isSelected && (
                           <div
-                            className="pt-2 border-t border-amber-500/30 space-y-1.5 animate-fade-in"
+                            className="pt-2 border-t border-amber-200 space-y-1.5 animate-fade-in"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <label className="text-[11px] font-extrabold text-amber-300 flex items-center gap-1">
-                              <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+                            <label className="text-[11px] font-extrabold text-amber-800 flex items-center gap-1">
+                              <MessageSquare className="w-3.5 h-3.5 text-amber-600" />
                               Commentaire spécifique au motif :
                             </label>
                             <textarea
@@ -317,7 +334,7 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
                               }
                               placeholder={`Consigner la justification spécifique pour "${cleanLibelle(n2.libelle)}"...`}
                               rows={2}
-                              className="w-full p-3 bg-slate-950/90 border border-amber-500/30 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-all resize-none"
+                              className="w-full p-3 bg-white border border-amber-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 transition-all resize-none"
                             />
                           </div>
                         )}
@@ -338,12 +355,12 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
                   return (
                     <div
                       key={n2Node.item_id}
-                      className="p-4 rounded-2xl bg-purple-950/40 border border-purple-500/40 space-y-3"
+                      className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3"
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-purple-300">
-                          <CornerDownRight className="w-4 h-4 text-purple-400" />
-                          Précisions N3 sous : <span className="text-white font-extrabold">{cleanLibelle(n2Node.libelle)}</span>
+                        <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-700">
+                          <CornerDownRight className="w-4 h-4 text-[#1dc4ff]" />
+                          Précisions N3 sous : <span className="text-slate-900 font-extrabold">{cleanLibelle(n2Node.libelle)}</span>
                         </div>
                       </div>
 
@@ -358,8 +375,8 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
                               key={n3.item_id}
                               className={`p-3.5 rounded-2xl border transition-all space-y-3 ${
                                 isSelected
-                                  ? "bg-purple-500/20 border-purple-400 text-white shadow-md shadow-purple-500/10"
-                                  : "bg-slate-950/80 border-slate-800 text-slate-300 hover:border-slate-700"
+                                  ? "bg-white border-[#1dc4ff] text-slate-900 shadow-sm"
+                                  : "bg-white/80 border-slate-200 text-slate-700 hover:border-slate-300"
                               }`}
                             >
                               <div
@@ -375,7 +392,7 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
                                       e.stopPropagation();
                                       toggleN3Select(n3.item_id);
                                     }}
-                                    className="w-4 h-4 rounded text-purple-500 bg-slate-900 border-slate-700 focus:ring-purple-500 cursor-pointer"
+                                    className="w-4 h-4 rounded text-[#1dc4ff] bg-white border-slate-300 focus:ring-[#1dc4ff] cursor-pointer"
                                   />
                                   <span className="text-xs font-bold leading-tight">
                                     {cleanLibelle(n3.libelle)}
@@ -385,12 +402,12 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
                                 {/* Votes Indicator Badges */}
                                 <div className="flex items-center gap-1.5 flex-shrink-0">
                                   {votesNonGauge && (
-                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-[#1dc4ff]/10 text-[#0077aa] border border-[#1dc4ff]/20">
                                       Gauge: Non
                                     </span>
                                   )}
                                   {votesNonCohorte > 0 && (
-                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200">
                                       {votesNonCohorte} vote(s) Non
                                     </span>
                                   )}
@@ -400,11 +417,11 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
                               {/* SPECIFIC COMMENT FIELD FOR THIS N3 PRECISION */}
                               {isSelected && (
                                 <div
-                                  className="pt-2 border-t border-purple-500/30 space-y-1.5 animate-fade-in"
+                                  className="pt-2 border-t border-slate-100 space-y-1.5 animate-fade-in"
                                   onClick={(e) => e.stopPropagation()}
                                 >
-                                  <label className="text-[11px] font-extrabold text-purple-300 flex items-center gap-1">
-                                    <MessageSquare className="w-3.5 h-3.5 text-purple-400" />
+                                  <label className="text-[11px] font-extrabold text-slate-700 flex items-center gap-1">
+                                    <MessageSquare className="w-3.5 h-3.5 text-[#1dc4ff]" />
                                     Commentaire spécifique à la précision :
                                   </label>
                                   <textarea
@@ -417,7 +434,7 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
                                     }
                                     placeholder={`Consigner la justification spécifique pour "${cleanLibelle(n3.libelle)}"...`}
                                     rows={2}
-                                    className="w-full p-3 bg-slate-950/90 border border-purple-500/30 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-400 transition-all resize-none"
+                                    className="w-full p-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#1dc4ff] transition-all resize-none"
                                   />
                                 </div>
                               )}
@@ -433,7 +450,7 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
 
             {/* SYNTHÈSE GLOBALE DE GROUPE */}
             <div className="space-y-2">
-              <label className="text-xs font-black uppercase tracking-wider text-slate-300 block">
+              <label className="text-xs font-black uppercase tracking-wider text-slate-700 block">
                 Synthèse Générale de la Décision de Groupe (Remarque globale) :
               </label>
               <textarea
@@ -441,18 +458,18 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
                 onChange={(e) => setJustification(e.target.value)}
                 placeholder="Consigner la synthèse globale validée lors du débat de calibrage..."
                 rows={3}
-                className="w-full p-4 bg-slate-950 border border-slate-800 rounded-2xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/60 transition-all resize-none"
+                className="w-full p-4 bg-white border border-slate-300 rounded-2xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#1dc4ff] transition-all resize-none"
               />
             </div>
           </form>
         </div>
 
         {/* Footer Actions */}
-        <div className="p-6 border-t border-slate-800 bg-slate-950/80 sticky bottom-0 flex items-center gap-3">
+        <div className="p-6 border-t border-slate-100 bg-white sticky bottom-0 flex items-center gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition-all cursor-pointer"
+            className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
           >
             Annuler
           </button>
@@ -460,7 +477,7 @@ export const ArbitrageDrawer: React.FC<ArbitrageDrawerProps> = ({
             type="submit"
             form="arbitrage-form"
             disabled={isSubmitting}
-            className="flex-1 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            className="flex-1 py-3 bg-[#1dc4ff] hover:bg-[#009ae5] text-slate-950 font-black text-xs rounded-xl transition-all shadow-lg shadow-[#1dc4ff]/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
           >
             {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Award className="w-4 h-4" />}
             Valider l'Arbitrage de Consensus

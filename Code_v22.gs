@@ -1,5 +1,5 @@
 // ==============================================================================
-// CALI-SYNC v2.0 — BACKEND GOOGLE APPS SCRIPT (Code.gs v7)
+// CALI-SYNC v2.0 — BACKEND GOOGLE APPS SCRIPT (Code_v22.gs)
 // Base de Données : Google Sheet "Cali-Sync_DB"
 // Support : Ouverture & Fermeture explicites, Conseiller, Consignes, Rôles
 // ==============================================================================
@@ -190,7 +190,6 @@ function traiterRequete(e) {
   if (action === "grille_session") return jsonResponse(handleGetGrilleSession(ss, req.session_id));
   if (action === "valider_pin") return jsonResponse(handleValiderPin(ss, req.session_id, req.pin));
   if (action === "lister_templates") return jsonResponse(handleListerTemplates(ss));
-  if (action === "seed_genii_template") return jsonResponse(insertGENIITemplate(ss));
   if (action === "profil") return jsonResponse(handleGetProfil(ss, req.evaluateur_id || req.identifiant));
   if (action === "cockpit") return jsonResponse(handleGetCockpit(ss, req.session_id || "SESS_2026_001"));
   if (action === "get_config_template") return jsonResponse(handleGetConfigTemplate(ss, req.template_id));
@@ -211,6 +210,10 @@ function traiterRequete(e) {
   if (action === "reinitialiser_arbitrages") return jsonResponse(handleReinitialiserArbitrages(ss, req));
   if (action === "upload_audio_drive") return jsonResponse(handleUploadAudioDrive(ss, req));
   if (action === "get_rapport_pdf") return jsonResponse(handleGetRapportPdf(ss, req.session_id));
+  if (action === "soumettre_assessment_libre") return jsonResponse(handleSoumettreAssessmentLibre(ss, req));
+  if (action === "lister_mes_assessments") return jsonResponse(handleListerMesAssessments(ss, req));
+  if (action === "get_detail_assessment") return jsonResponse(handleGetDetailAssessment(ss, req));
+  if (action === "supprimer_assessment_libre") return jsonResponse(handleSupprimerAssessmentLibre(ss, req));
 
   return jsonResponse({ success: false, message: "Action inconnue: " + action });
 }
@@ -705,40 +708,26 @@ function handleForcerOuverture(ss, sessionId) {
 }
 
 function handleListerTemplates(ss) {
-  var sheet = ss.getSheetByName("Templates_Grilles");
-  if (!sheet) {
-    initialiserBaseDeDonnees(ss);
-    sheet = ss.getSheetByName("Templates_Grilles");
-  }
+  const sheet = ss.getSheetByName("Templates_Grilles");
+  if (!sheet) return { success: true, templates: [] };
+  const data = sheet.getDataRange().getValues();
+  const templatesMap = {};
 
-  var data = sheet ? sheet.getDataRange().getValues() : [];
-  var templatesMap = {};
-
-  for (var i = 1; i < data.length; i++) {
-    var tplId = String(data[i][0] || "").trim();
-    if (!tplId) continue;
-    var nom = String(data[i][1] || tplId).trim();
-    var cat = String(data[i][2] || "Général").trim();
-    var itemId = String(data[i][3] || "").trim();
-    var itemLibelle = String(data[i][4] || itemId).trim();
-    var criticite = String(data[i][5] || "Standard").trim();
+  for (let i = 1; i < data.length; i++) {
+    const tplId = data[i][0];
+    const nom = data[i][1];
+    const cat = data[i][2];
+    const itemId = data[i][3];
+    const itemLibelle = data[i][4];
+    const criticite = data[i][5] || "Standard";
 
     if (!templatesMap[tplId]) templatesMap[tplId] = { template_id: tplId, nom: nom, categoriesMap: {} };
-    var tpl = templatesMap[tplId];
+    const tpl = templatesMap[tplId];
     if (!tpl.categoriesMap[cat]) tpl.categoriesMap[cat] = { categorie: cat, items: [] };
     tpl.categoriesMap[cat].items.push({ item_id: itemId, item_libelle: itemLibelle, criticite: criticite });
   }
 
-  // Auto-seed TPL_GENII_V1 si non présent dans Templates_Grilles
-  if (!templatesMap["TPL_GENII_V1"]) {
-    Logger.log("⚙️ Auto-seeding TPL_GENII_V1 dans Templates_Grilles & Admin_Config_Grille...");
-    insertGENIITemplate(ss);
-    return handleListerTemplates(ss); // relire après insertion
-  }
-
-  var templates = Object.values(templatesMap).map(function(t) {
-    return { template_id: t.template_id, nom: t.nom, categories: Object.values(t.categoriesMap) };
-  });
+  const templates = Object.values(templatesMap).map(t => ({ template_id: t.template_id, nom: t.nom, categories: Object.values(t.categoriesMap) }));
   return { success: true, templates: templates };
 }
 
@@ -1342,10 +1331,6 @@ function handleGetConfigTemplate(ss, templateId) {
     var libelle   = String(data[i][6] || "").trim();
     var criticite = String(data[i][7] || "Standard").trim();
     var catRacine = String(data[i][10] || "").trim();
-    // Col L (index 11): show_subitems_on — Oui pour VoC, Non pour les autres
-    var showSubitemsOn = /^(oui|yes|true|1)$/i.test(String(data[i][11] || 'Non').trim()) ? 'Oui' : 'Non';
-    // Col M (index 12): hide_na — TRUE pour masquer le bouton N/A (VoC)
-    var hideNA = /^(vrai|true|1|oui)$/i.test(String(data[i][12] || 'FALSE').trim());
 
     items.push({
       item_id: itemId,
@@ -1356,9 +1341,7 @@ function handleGetConfigTemplate(ss, templateId) {
       libelle_fr: libelle,
       criticite: criticite,
       est_terminal: estTerm,
-      commentaire_obligatoire: commOblig,
-      show_subitems_on: showSubitemsOn,
-      hide_na: hideNA
+      commentaire_obligatoire: commOblig
     });
   }
 
@@ -1507,7 +1490,7 @@ function handleSoumettreEvaluation(ss, payload) {
       var isLeafInSubmission = !parentSet[it.item_id];
       if (isLeafInSubmission) {
         var comm = String(it.commentaire || "").trim();
-        if (comm.length < 5) {
+        if (!comm) {
           commentsManquants.push(it.item_id);
         }
       }
@@ -1516,7 +1499,7 @@ function handleSoumettreEvaluation(ss, payload) {
     if (commentsManquants.length > 0) {
       return {
         success: false,
-        message: "Commentaire d'imputation obligatoire (au moins 5 caractères) manquant pour les sous-items du dernier niveau.",
+        message: "Commentaire d'imputation obligatoire manquant pour les sous-items du dernier niveau.",
         commentaires_manquants: commentsManquants
       };
     }
@@ -1528,21 +1511,6 @@ function handleSoumettreEvaluation(ss, payload) {
   var sheet = ss.getSheetByName("Log_Soumissions");
   if (!sheet) { initialiserBaseDeDonnees(ss); sheet = ss.getSheetByName("Log_Soumissions"); }
   var now = new Date().toISOString();
-
-  // Stocker les champs texte libres (Interaction Summary + Evaluator Comments)
-  // sous forme d'une ligne metadata dédiée (item_id = __HEADER__)
-  var interactionSummary = String(payload.interaction_summary || "").trim();
-  var evaluatorComments  = String(payload.evaluator_comments  || "").trim();
-
-  if (!interactionSummary || interactionSummary.length < 5) {
-    return {
-      success: false,
-      message: "Le champ 'Interaction Summary' est obligatoire et doit contenir au moins 5 caractères."
-    };
-  }
-
-  sheet.appendRow([now, sessionId, evalId, estGauge, "__HEADER__", "_meta_", "_meta_",
-    interactionSummary, evaluatorComments]);
 
   if (items.length > 0) {
     items.forEach(function(item) {
@@ -2001,27 +1969,6 @@ function handleGetCockpit(ss, sessionId) {
     }
   }
 
-  // ── Lire l'Interaction Summary et Evaluator Comments de la Gauge ──────────
-  var gaugeInteractionSummary = "";
-  var gaugeEvaluatorComments  = "";
-  if (sessionGaugeId) {
-    var cleanGaugeKey = cleanStringKey(sessionGaugeId);
-    for (var hk = 1; hk < subData.length; hk++) {
-      var hkSess    = String(subData[hk][1]).trim();
-      var hkEval    = String(subData[hk][2]).trim().toLowerCase();
-      var hkItemId  = String(subData[hk][4]).trim();
-      var hkIsGFlag = subData[hk][3] === true || String(subData[hk][3]).toUpperCase() === "TRUE";
-      var hkClean   = cleanStringKey(hkEval);
-      var hkIsGauge = hkIsGFlag
-        || (sessionGaugeId !== "" && (hkEval === sessionGaugeId ||
-            (cleanGaugeKey.length >= 3 && (hkClean.includes(cleanGaugeKey) || cleanGaugeKey.includes(hkClean)))));
-      if (hkSess !== String(sessionId).trim() || !hkIsGauge || hkItemId !== "__HEADER__") continue;
-      gaugeInteractionSummary = String(subData[hk][7] || "").trim();
-      gaugeEvaluatorComments  = String(subData[hk][8] || "").trim();
-      break;
-    }
-  }
-
   // ── 8. Retourner la réponse complète ──────────────────────────────────────
   return {
     success: true,
@@ -2034,13 +1981,10 @@ function handleGetCockpit(ss, sessionId) {
     nom_conseiller:     sessionInfo ? sessionInfo.nom_conseiller : "",
     gauge_id:           sessionInfo ? sessionInfo.gauge_id : "",
     animateur_id:       sessionAnimateurId || "",
-    gauge_items_count:  Object.keys(gaugeMap).length,
+    gauge_items_count:  Object.keys(gaugeMap).length,   // DEBUG: nombre d’éléments dans gaugeMap
     evaluateurs_soumis: Object.keys(submittedSet),
     grille_hierarchique: grilleHierarchique,
     is_read_only:       isReadOnly,
-    // Champs texte libres de la Gauge (visibles dans le Cockpit uniquement pour la Gauge)
-    gauge_interaction_summary: gaugeInteractionSummary,
-    gauge_evaluator_comments:  gaugeEvaluatorComments,
     // Données legacy (pour compatibilité)
     categories: {},
     calibration: {
@@ -2050,2135 +1994,6 @@ function handleGetCockpit(ss, sessionId) {
     }
   };
 }
-
-// ==============================================================================
-// UTILITAIRE — Insérer / Ré-initialiser le template Genii (TPL_GENII_V1)
-// Alimente à la fois Templates_Grilles (17 items N2) ET Admin_Config_Grille (127 lignes)
-// ==============================================================================
-function insertGENIITemplate(ss) {
-  if (!ss) ss = getSpreadsheet();
-  var TPL = "TPL_GENII_V1";
-  var NOM = "Grille Importée Genii (English Original)";
-
-  // ── 1. Remplir Templates_Grilles ───────────────────────────────────────────
-  var tplSheet = ss.getSheetByName("Templates_Grilles");
-  if (!tplSheet) {
-    initialiserBaseDeDonnees(ss);
-    tplSheet = ss.getSheetByName("Templates_Grilles");
-  }
-
-  if (tplSheet) {
-    var tplData = tplSheet.getDataRange().getValues();
-    // Nettoyer les anciennes lignes TPL_GENII_V1 si présentes
-    for (var i = tplData.length - 1; i >= 1; i--) {
-      if (String(tplData[i][0]).trim() === TPL) {
-        tplSheet.deleteRow(i + 1);
-      }
-    }
-    var tplRows = [
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Process Adherence",
-    "PA-Q01",
-    "Did the rep greet the customer in a professional & welcoming manner, following the welcome script?",
-    "Critical",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Process Adherence",
-    "PA-Q02",
-    "Did the rep follow the call transfer procedures?",
-    "Critical",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Process Adherence",
-    "PA-Q03",
-    "Did the rep verify the customer's identity before processing the request?",
-    "Critical",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Process Adherence",
-    "PA-Q04",
-    "Did the rep follow KYC procedures (where applicable)?",
-    "Critical",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Process Adherence",
-    "PA-Q05",
-    "Did the rep ask the necessary enhanced verification questions for a sensitive action?",
-    "Critical",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Process Adherence",
-    "PA-Q06",
-    "Did the rep provide a clear and appropriate response or solution to the problem?",
-    "Critical",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Process Adherence",
-    "PA-Q07",
-    "Did the rep follow the hold procedure?",
-    "Standard",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Process Adherence",
-    "PA-Q08",
-    "Did the rep manage the escalation in accordance with the procedure?",
-    "Standard",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Process Adherence",
-    "PA-Q09",
-    "Did the rep ask if there was any further assistance / questions?",
-    "Standard",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Process Adherence",
-    "PA-Q10",
-    "Did the rep thank the customer before ending the call?",
-    "Standard",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Communication",
-    "CO-Q01",
-    "Was the rep able to understand the customers issue/request?",
-    "Standard",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Communication",
-    "CO-Q02",
-    "Did the rep provide clear, coherent communication with the customer?",
-    "Standard",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Communication",
-    "CO-Q03",
-    "Did the rep appropriately set the customer's expectations?",
-    "Standard",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Tone & Empathy",
-    "TE-Q01",
-    "Did the rep remain professional & polite throughout the interaction?",
-    "Standard",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Tone & Empathy",
-    "TE-Q02",
-    "Did the rep show empathy throughout the interaction?",
-    "Standard",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Tone & Empathy",
-    "TE-Q03",
-    "Did the rep remain professional throughout the interaction?",
-    "Standard",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Voice of the Customer",
-    "VC-Q01",
-    "Did the customer express any dissatisfaction?",
-    "Standard",
-    1
-  ]
-];
-    if (tplRows.length > 0) {
-      tplSheet.getRange(tplSheet.getLastRow() + 1, 1, tplRows.length, tplRows[0].length).setValues(tplRows);
-    }
-    Logger.log("✅ Templates_Grilles : " + tplRows.length + " items insérés pour " + TPL);
-  }
-
-  // ── 2. Remplir Admin_Config_Grille ────────────────────────────────────────
-  var cfgSheet = ss.getSheetByName("Admin_Config_Grille");
-  if (!cfgSheet) {
-    cfgSheet = ss.insertSheet("Admin_Config_Grille");
-    cfgSheet.appendRow(["template_id","item_id","niveau","parent_id","est_terminal","commentaire_obligatoire","libelle_fr","criticite","col8","type_noeud","categorie_racine_fr","show_subitems_on","hide_na"]);
-  }
-
-  if (cfgSheet) {
-    var cfgData = cfgSheet.getDataRange().getValues();
-    // S'assurer que les en-têtes L et M existent en Ligne 1
-    if (cfgData.length > 0) {
-      var headerL = String(cfgData[0][11] || "").trim();
-      var headerM = String(cfgData[0][12] || "").trim();
-      if (!headerL) cfgSheet.getRange(1, 12).setValue("show_subitems_on");
-      if (!headerM) cfgSheet.getRange(1, 13).setValue("hide_na");
-    }
-
-    // Nettoyer les anciennes lignes TPL_GENII_V1 si présentes
-    for (var j = cfgData.length - 1; j >= 1; j--) {
-      if (String(cfgData[j][0]).trim() === TPL) {
-        cfgSheet.deleteRow(j + 1);
-      }
-    }
-    var cfgRows = [
-  [
-    "TPL_GENII_V1",
-    "PA",
-    1,
-    "",
-    "FALSE",
-    "FALSE",
-    "Process Adherence",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q01",
-    2,
-    "PA",
-    "FALSE",
-    "FALSE",
-    "Did the rep greet the customer in a professional & welcoming manner, following the welcome script?",
-    "Critical",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q01-S01",
-    3,
-    "PA-Q01",
-    "TRUE",
-    "TRUE",
-    "No greeting within the first 10 seconds",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q01-S02",
-    3,
-    "PA-Q01",
-    "TRUE",
-    "TRUE",
-    "Omitting the company introduction (e.g., \"Wave, hello...\")",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q01-S03",
-    3,
-    "PA-Q01",
-    "TRUE",
-    "TRUE",
-    "No salutation or greeting",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q01-S04",
-    3,
-    "PA-Q01",
-    "TRUE",
-    "TRUE",
-    "Use of an inappropriate or unprofessional phrasing",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q01-S05",
-    3,
-    "PA-Q01",
-    "TRUE",
-    "TRUE",
-    "Failure to introduce themself",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q01-S06",
-    3,
-    "PA-Q01",
-    "TRUE",
-    "TRUE",
-    "Cold, abrupt, or impolite greeting",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q01-S07",
-    3,
-    "PA-Q01",
-    "TRUE",
-    "TRUE",
-    "Monotone, irritated, aggressive, or unengaging tone",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q02",
-    2,
-    "PA",
-    "FALSE",
-    "FALSE",
-    "Did the rep follow the call transfer procedures?",
-    "Critical",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q02-S01",
-    3,
-    "PA-Q02",
-    "TRUE",
-    "TRUE",
-    "Failed to introduces themself appropriately",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q02-S02",
-    3,
-    "PA-Q02",
-    "TRUE",
-    "TRUE",
-    "Failed to acknowledge resumption of the call",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q03",
-    2,
-    "PA",
-    "FALSE",
-    "FALSE",
-    "Did the rep verify the customer's identity before processing the request?",
-    "Critical",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q03-S01",
-    3,
-    "PA-Q03",
-    "TRUE",
-    "TRUE",
-    "Accessed account without customer ID&V",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q03-S02",
-    3,
-    "PA-Q03",
-    "TRUE",
-    "TRUE",
-    "Shared information without customer ID&V",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q03-S03",
-    3,
-    "PA-Q03",
-    "TRUE",
-    "TRUE",
-    "Processed sensitive request with non-account holder",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q03-S04",
-    3,
-    "PA-Q03",
-    "TRUE",
-    "TRUE",
-    "Skipped mandatory verification steps",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q03-S05",
-    3,
-    "PA-Q03",
-    "TRUE",
-    "TRUE",
-    "Accepted incomplete / incorrect answer",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q03-S06",
-    3,
-    "PA-Q03",
-    "TRUE",
-    "TRUE",
-    "Provides confidential info despite failed ID&V",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q03-S07",
-    3,
-    "PA-Q03",
-    "TRUE",
-    "TRUE",
-    "Makes account changes despite failed ID&V",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q04",
-    2,
-    "PA",
-    "FALSE",
-    "FALSE",
-    "Did the rep follow KYC procedures (where applicable)?",
-    "Critical",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q04-S01",
-    3,
-    "PA-Q04",
-    "TRUE",
-    "TRUE",
-    "Continued without following KYC procedure",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q04-S02",
-    3,
-    "PA-Q04",
-    "TRUE",
-    "TRUE",
-    "Failure to reject an ID document",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q04-S03",
-    3,
-    "PA-Q04",
-    "TRUE",
-    "TRUE",
-    "Failure to perform a rename user",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q04-S04",
-    3,
-    "PA-Q04",
-    "TRUE",
-    "TRUE",
-    "Other",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q05",
-    2,
-    "PA",
-    "FALSE",
-    "FALSE",
-    "Did the rep ask the necessary enhanced verification questions for a sensitive action?",
-    "Critical",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q05-S01",
-    3,
-    "PA-Q05",
-    "TRUE",
-    "TRUE",
-    "Failed to complete required verification questions",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q05-S02",
-    3,
-    "PA-Q05",
-    "TRUE",
-    "TRUE",
-    "Omitted one / more mandatory steps",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q05-S03",
-    3,
-    "PA-Q05",
-    "TRUE",
-    "TRUE",
-    "Performed sensitive action before completing verification",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q05-S04",
-    3,
-    "PA-Q05",
-    "TRUE",
-    "TRUE",
-    "Disclosure of personal or sensitive data",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q05-S05",
-    3,
-    "PA-Q05",
-    "TRUE",
-    "TRUE",
-    "Informed customer info provided is not correct",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q06",
-    2,
-    "PA",
-    "FALSE",
-    "FALSE",
-    "Did the rep provide a clear and appropriate response or solution to the problem?",
-    "Critical",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q06-S01",
-    3,
-    "PA-Q06",
-    "TRUE",
-    "TRUE",
-    "Does not understand / misinterprets customers request",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q06-S02",
-    3,
-    "PA-Q06",
-    "TRUE",
-    "TRUE",
-    "Action does not meet the expressed need",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q06-S03",
-    3,
-    "PA-Q06",
-    "TRUE",
-    "TRUE",
-    "Provides incorrect or incomplete info",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q06-S04",
-    3,
-    "PA-Q06",
-    "TRUE",
-    "TRUE",
-    "Irrelevant assistance (does not resolve the problem)",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q06-S05",
-    3,
-    "PA-Q06",
-    "TRUE",
-    "TRUE",
-    "Closed exchange without addressing customers main request",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q06-S06",
-    3,
-    "PA-Q06",
-    "TRUE",
-    "TRUE",
-    "Transferred call instead of handling it",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q07",
-    2,
-    "PA",
-    "FALSE",
-    "FALSE",
-    "Did the rep follow the hold procedure?",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q07-S01",
-    3,
-    "PA-Q07",
-    "TRUE",
-    "TRUE",
-    "Placed customer on hold without warning / reason",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q07-S02",
-    3,
-    "PA-Q07",
-    "TRUE",
-    "TRUE",
-    "On hold for > 60 sec. without update",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q07-S03",
-    3,
-    "PA-Q07",
-    "TRUE",
-    "TRUE",
-    "Resumes the call without thanking the customer",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q07-S04",
-    3,
-    "PA-Q07",
-    "TRUE",
-    "TRUE",
-    "Placed on hold immediately after greeting and ID&V",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q08",
-    2,
-    "PA",
-    "FALSE",
-    "FALSE",
-    "Did the rep manage the escalation in accordance with the procedure?",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q08-S01",
-    3,
-    "PA-Q08",
-    "TRUE",
-    "TRUE",
-    "Clear reason for escalation not provided",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q08-S02",
-    3,
-    "PA-Q08",
-    "TRUE",
-    "TRUE",
-    "Clear owner for escalation not provided",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q08-S03",
-    3,
-    "PA-Q08",
-    "TRUE",
-    "TRUE",
-    "Clear timeline for escalation not provided",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q08-S04",
-    3,
-    "PA-Q08",
-    "TRUE",
-    "TRUE",
-    "Unnecessary escalation",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q08-S05",
-    3,
-    "PA-Q08",
-    "TRUE",
-    "TRUE",
-    "Fraud / scam report not escalated via the right channel",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q09",
-    2,
-    "PA",
-    "FALSE",
-    "FALSE",
-    "Did the rep ask if there was any further assistance / questions?",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q09-S01",
-    3,
-    "PA-Q09",
-    "TRUE",
-    "TRUE",
-    "Failed to thank the customer before hanging up",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q09-S02",
-    3,
-    "PA-Q09",
-    "TRUE",
-    "TRUE",
-    "Failed to check for any other questions",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q10",
-    2,
-    "PA",
-    "FALSE",
-    "FALSE",
-    "Did the rep thank the customer before ending the call?",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q10-S01",
-    3,
-    "PA-Q10",
-    "TRUE",
-    "TRUE",
-    "Ended abruptly without any courtesy phrase",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q10-S02",
-    3,
-    "PA-Q10",
-    "TRUE",
-    "TRUE",
-    "Ended without naming the customer",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "PA-Q10-S03",
-    3,
-    "PA-Q10",
-    "TRUE",
-    "TRUE",
-    "Ended without naming the company",
-    "Standard",
-    "",
-    "",
-    "Process Adherence",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO",
-    1,
-    "",
-    "FALSE",
-    "FALSE",
-    "Communication",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q01",
-    2,
-    "CO",
-    "FALSE",
-    "FALSE",
-    "Was the rep able to understand the customers issue/request?",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q01-S01",
-    3,
-    "CO-Q01",
-    "TRUE",
-    "TRUE",
-    "Jumped to conclusions without verifying info",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q01-S02",
-    3,
-    "CO-Q01",
-    "TRUE",
-    "TRUE",
-    "Failed to ask clarifying questions where needed",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q01-S03",
-    3,
-    "CO-Q01",
-    "TRUE",
-    "TRUE",
-    "Relies on assumptions rather than info provided",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q01-S04",
-    3,
-    "CO-Q01",
-    "TRUE",
-    "TRUE",
-    "Lack of listening / asks for the same info repeatedly",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q02",
-    2,
-    "CO",
-    "FALSE",
-    "FALSE",
-    "Did the rep provide clear, coherent communication with the customer?",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q02-S01",
-    3,
-    "CO-Q02",
-    "TRUE",
-    "TRUE",
-    "Failed to obtain info needed to understand situation",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q02-S02",
-    3,
-    "CO-Q02",
-    "TRUE",
-    "TRUE",
-    "Irrelevant questions asked",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q02-S03",
-    3,
-    "CO-Q02",
-    "TRUE",
-    "TRUE",
-    "Communicated poorly / unclear",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q02-S04",
-    3,
-    "CO-Q02",
-    "TRUE",
-    "TRUE",
-    "Used or didn't clarify complex language",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q02-S05",
-    3,
-    "CO-Q02",
-    "TRUE",
-    "TRUE",
-    "Hesitant, disorganized or contradictory info",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q02-S06",
-    3,
-    "CO-Q02",
-    "TRUE",
-    "TRUE",
-    "Jumps from one topic to another",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q02-S07",
-    3,
-    "CO-Q02",
-    "TRUE",
-    "TRUE",
-    "Pronunciation is hard to understand",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q02-S08",
-    3,
-    "CO-Q02",
-    "TRUE",
-    "TRUE",
-    "Grammar or sentence-construction errors",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q02-S09",
-    3,
-    "CO-Q02",
-    "TRUE",
-    "TRUE",
-    "Articulation / pace that hinders comprehension",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q03",
-    2,
-    "CO",
-    "FALSE",
-    "FALSE",
-    "Did the rep appropriately set the customer's expectations?",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q03-S01",
-    3,
-    "CO-Q03",
-    "TRUE",
-    "TRUE",
-    "Next steps not communicated when needed",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q03-S02",
-    3,
-    "CO-Q03",
-    "TRUE",
-    "TRUE",
-    "Timelines not stated / vague",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q03-S03",
-    3,
-    "CO-Q03",
-    "TRUE",
-    "TRUE",
-    "Provides incorrect / unrealistic timelines or info",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q03-S04",
-    3,
-    "CO-Q03",
-    "TRUE",
-    "TRUE",
-    "Created false expectations / promises",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "CO-Q03-S05",
-    3,
-    "CO-Q03",
-    "TRUE",
-    "TRUE",
-    "Fails to inform customer of important conditions",
-    "Standard",
-    "",
-    "",
-    "Communication",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE",
-    1,
-    "",
-    "FALSE",
-    "FALSE",
-    "Tone & Empathy",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q01",
-    2,
-    "TE",
-    "FALSE",
-    "FALSE",
-    "Did the rep remain professional & polite throughout the interaction?",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q01-S01",
-    3,
-    "TE-Q01",
-    "TRUE",
-    "TRUE",
-    "Responds in an impolite, disrespectful manner",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q01-S02",
-    3,
-    "TE-Q01",
-    "TRUE",
-    "TRUE",
-    "Gets into a conflict with the customer",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q01-S03",
-    3,
-    "TE-Q01",
-    "TRUE",
-    "TRUE",
-    "Tone is perceived as disrespectful / unprofessional",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q01-S04",
-    3,
-    "TE-Q01",
-    "TRUE",
-    "TRUE",
-    "Directly / indirectly blames the customers",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q01-S05",
-    3,
-    "TE-Q01",
-    "TRUE",
-    "TRUE",
-    "Uses guilt-inducing / demoralizing tone",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q01-S06",
-    3,
-    "TE-Q01",
-    "TRUE",
-    "TRUE",
-    "Criticizing / judgemental / blaming phrasing",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q01-S07",
-    3,
-    "TE-Q01",
-    "TRUE",
-    "TRUE",
-    "Emphasizes customers mistake",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q01-S08",
-    3,
-    "TE-Q01",
-    "TRUE",
-    "TRUE",
-    "Impatient, curt, abrupt or irritated",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q01-S09",
-    3,
-    "TE-Q01",
-    "TRUE",
-    "TRUE",
-    "Responds aggressively or defensively",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q02",
-    2,
-    "TE",
-    "FALSE",
-    "FALSE",
-    "Did the rep show empathy throughout the interaction?",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q02-S01",
-    3,
-    "TE-Q02",
-    "TRUE",
-    "TRUE",
-    "No acknowledgement of issue (straight to solution)",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q02-S02",
-    3,
-    "TE-Q02",
-    "TRUE",
-    "TRUE",
-    "Ignores to acknowledge inconvenience expressed",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q02-S03",
-    3,
-    "TE-Q02",
-    "TRUE",
-    "TRUE",
-    "Ignores clear expression of dissatisfaction",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q02-S04",
-    3,
-    "TE-Q02",
-    "TRUE",
-    "TRUE",
-    "Cold, condescending, or inappropriate tone",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q02-S05",
-    3,
-    "TE-Q02",
-    "TRUE",
-    "TRUE",
-    "Uses overly familiar or disrespectful language.",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q02-S06",
-    3,
-    "TE-Q02",
-    "TRUE",
-    "TRUE",
-    "Uses a sarcastic, ironic, or mocking tone",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q02-S07",
-    3,
-    "TE-Q02",
-    "TRUE",
-    "TRUE",
-    "Condescending attitude or belittling customer",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q02-S08",
-    3,
-    "TE-Q02",
-    "TRUE",
-    "TRUE",
-    "Negative / disparaging remarks",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q02-S09",
-    3,
-    "TE-Q02",
-    "TRUE",
-    "TRUE",
-    "Dismisses emotions expressed by customer",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q02-S10",
-    3,
-    "TE-Q02",
-    "TRUE",
-    "TRUE",
-    "Changes subject when inappropriate",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q03",
-    2,
-    "TE",
-    "FALSE",
-    "FALSE",
-    "Did the rep remain professional throughout the interaction?",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q03-S01",
-    3,
-    "TE-Q03",
-    "TRUE",
-    "TRUE",
-    "Abusive behavior",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q03-S02",
-    3,
-    "TE-Q03",
-    "TRUE",
-    "TRUE",
-    "Insulting behaviour",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q03-S03",
-    3,
-    "TE-Q03",
-    "TRUE",
-    "TRUE",
-    "Discriminatory behaviour",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "TE-Q03-S04",
-    3,
-    "TE-Q03",
-    "TRUE",
-    "TRUE",
-    "Created a conflict situation",
-    "Standard",
-    "",
-    "",
-    "Tone & Empathy",
-    "Non",
-    "FALSE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC",
-    1,
-    "",
-    "FALSE",
-    "FALSE",
-    "Voice of the Customer",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01",
-    2,
-    "VC",
-    "FALSE",
-    "FALSE",
-    "Did the customer express any dissatisfaction?",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01-S01",
-    3,
-    "VC-Q01",
-    "FALSE",
-    "FALSE",
-    "Product / service",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01-S01-D01",
-    4,
-    "VC-Q01-S01",
-    "TRUE",
-    "TRUE",
-    "Deposit",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01-S01-D02",
-    4,
-    "VC-Q01-S01",
-    "TRUE",
-    "TRUE",
-    "Withdrawal",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01-S01-D03",
-    4,
-    "VC-Q01-S01",
-    "TRUE",
-    "TRUE",
-    "Transfer",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01-S01-D04",
-    4,
-    "VC-Q01-S01",
-    "TRUE",
-    "TRUE",
-    "Bill payment (CIE/ SODECI/ CIE PREPAYE)",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01-S01-D05",
-    4,
-    "VC-Q01-S01",
-    "TRUE",
-    "TRUE",
-    "Bank to wallet",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01-S01-D06",
-    4,
-    "VC-Q01-S01",
-    "TRUE",
-    "TRUE",
-    "Re-subscription canal / start times",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01-S01-D07",
-    4,
-    "VC-Q01-S01",
-    "TRUE",
-    "TRUE",
-    "Payment of HKB bridge fees",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01-S01-D08",
-    4,
-    "VC-Q01-S01",
-    "TRUE",
-    "TRUE",
-    "Badge reloads (FER)",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01-S01-D09",
-    4,
-    "VC-Q01-S01",
-    "TRUE",
-    "TRUE",
-    "CNPS contribution",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01-S01-D10",
-    4,
-    "VC-Q01-S01",
-    "TRUE",
-    "TRUE",
-    "Merchant payment",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01-S01-D11",
-    4,
-    "VC-Q01-S01",
-    "TRUE",
-    "TRUE",
-    "Lebalma (GM)",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01-S01-D12",
-    4,
-    "VC-Q01-S01",
-    "TRUE",
-    "TRUE",
-    "Kondaneh (GM)",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01-S01-D13",
-    4,
-    "VC-Q01-S01",
-    "TRUE",
-    "TRUE",
-    "Other",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01-S02",
-    3,
-    "VC-Q01",
-    "TRUE",
-    "TRUE",
-    "Telephonic Technical Experience",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01-S03",
-    3,
-    "VC-Q01",
-    "TRUE",
-    "TRUE",
-    "Representative Conduct / Behavior",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01-S04",
-    3,
-    "VC-Q01",
-    "TRUE",
-    "TRUE",
-    "Process",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01-S05",
-    3,
-    "VC-Q01",
-    "TRUE",
-    "TRUE",
-    "Client Effort",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01-S06",
-    3,
-    "VC-Q01",
-    "TRUE",
-    "TRUE",
-    "Brand",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ],
-  [
-    "TPL_GENII_V1",
-    "VC-Q01-S07",
-    3,
-    "VC-Q01",
-    "TRUE",
-    "TRUE",
-    "Department",
-    "Standard",
-    "",
-    "",
-    "Voice of the Customer",
-    "Oui",
-    "TRUE"
-  ]
-];
-    if (cfgRows.length > 0) {
-      cfgSheet.getRange(cfgSheet.getLastRow() + 1, 1, cfgRows.length, cfgRows[0].length).setValues(cfgRows);
-    }
-    Logger.log("✅ Admin_Config_Grille : " + cfgRows.length + " lignes insérées pour " + TPL);
-  }
-
-  return {
-    success: true,
-    message: "Template " + TPL + " inséré avec succès dans Templates_Grilles (" + (typeof tplRows !== 'undefined' ? tplRows.length : 17) + " items) et Admin_Config_Grille (" + (typeof cfgRows !== 'undefined' ? cfgRows.length : 127) + " lignes).",
-    template_id: TPL
-  };
-}
-
 
 // ==============================================================================
 // HELPER — Vérifier si la date limite de clôture d'une session n'est pas encore atteinte
@@ -4210,23 +2025,6 @@ function isSessionBeforeDeadline(ss, sessionId) {
 // ==============================================================================
 // HANDLER — Enregistrer une décision finale d'arbitrage sur un item
 // ==============================================================================
-// HELPER — Récupérer le rôle d'un utilisateur depuis Evaluateurs
-function getUserRole(ss, identifiant) {
-  if (!identifiant) return "";
-  var cleanId = String(identifiant).trim().toLowerCase();
-  if (cleanId === "admin" || cleanId === "oumar.toure") return "admin";
-  var evalSheet = ss.getSheetByName("Evaluateurs");
-  if (!evalSheet) return "evaluateur";
-  var evalData = evalSheet.getDataRange().getValues();
-  for (var i = 1; i < evalData.length; i++) {
-    var id = String(evalData[i][0] || "").trim().toLowerCase();
-    if (id === cleanId) {
-      return String(evalData[i][4] || "evaluateur").trim().toLowerCase();
-    }
-  }
-  return "evaluateur";
-}
-
 function handleEnregistrerDecisionFinale(ss, payload) {
   var sessionId   = payload.session_id;
   var itemId      = payload.item_id;
@@ -4236,15 +2034,6 @@ function handleEnregistrerDecisionFinale(ss, payload) {
 
   if (!sessionId || !itemId || !decision) {
     return { success: false, message: "Paramètres requis : session_id, item_id, decision." };
-  }
-
-  var callerRole = getUserRole(ss, animateurId);
-  if (callerRole === "evaluateur") {
-    return { success: false, message: "Droits insuffisants : Les évaluateurs ne peuvent pas enregistrer d'arbitrage. Action réservée à l'Animateur, au Gauge et à l'Admin." };
-  }
-
-  if (justification && String(justification).trim().length > 0 && String(justification).trim().length < 5) {
-    return { success: false, message: "La justification d'arbitrage doit contenir au moins 5 caractères." };
   }
 
   if (isSessionBeforeDeadline(ss, sessionId)) {
@@ -4293,13 +2082,6 @@ function handleEnregistrerDecisionsBatch(ss, payload) {
   }
   if (!items || items.length === 0) {
     return { success: false, message: "Paramètre requis : items est vide ou manquant." };
-  }
-
-  for (var b = 0; b < items.length; b++) {
-    var bComm = String(items[b].justification || "").trim();
-    if (bComm.length > 0 && bComm.length < 5) {
-      return { success: false, message: "Toutes les justifications d'arbitrage renseignées doivent contenir au moins 5 caractères." };
-    }
   }
 
   if (isSessionBeforeDeadline(ss, sessionId)) {
@@ -5428,3 +3210,191 @@ function auditGeneralCategory() {
   }
 }
 
+
+
+// ==============================================================================
+// GESTION DES ASSESSMENTS LIBRES & ENTRAÎNEMENTS AUTONOMES
+// ==============================================================================
+function getOrCreateAssessmentsLibresSheet(ss) {
+  var sheet = ss.getSheetByName("Assessments_Libres");
+  if (!sheet) {
+    sheet = ss.insertSheet("Assessments_Libres");
+    var headers = [
+      "assessment_id",
+      "date_creation",
+      "evaluateur_id",
+      "template_id",
+      "template_nom",
+      "titre",
+      "nom_conseiller",
+      "audio_url",
+      "consignes",
+      "score",
+      "statut",
+      "interaction_summary",
+      "evaluator_comments",
+      "reponses_json",
+      "commentaires_json"
+    ];
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length).setBackground("#1dc4ff").setFontColor("#0f172a").setFontWeight("bold");
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function handleSoumettreAssessmentLibre(ss, req) {
+  try {
+    var sheet = getOrCreateAssessmentsLibresSheet(ss);
+    var assessmentId = req.assessment_id || ("ASSESS_" + Date.now());
+    var dateCreation = req.date_creation || new Date().toISOString();
+    var evalId = req.evaluateur_id || "";
+    var templateId = req.template_id || "";
+    var templateNom = req.template_nom || templateId;
+    var titre = req.titre || "Assessment Libre";
+    var conseiller = req.nom_conseiller || "";
+    var audioUrl = req.audio_url || "";
+    var consignes = req.consignes || "";
+    var score = Number(req.score || 0);
+    var statut = req.statut || "COMPLETED";
+    var interactionSummary = req.interaction_summary || "";
+    var evaluatorComments = req.evaluator_comments || "";
+    var reponsesJson = JSON.stringify(req.reponses || {});
+    var commentairesJson = JSON.stringify(req.commentaires || {});
+
+    var data = sheet.getDataRange().getValues();
+    var rowFound = -1;
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(assessmentId)) {
+        rowFound = i + 1;
+        break;
+      }
+    }
+
+    var rowData = [
+      assessmentId,
+      dateCreation,
+      evalId,
+      templateId,
+      templateNom,
+      titre,
+      conseiller,
+      audioUrl,
+      consignes,
+      score,
+      statut,
+      interactionSummary,
+      evaluatorComments,
+      reponsesJson,
+      commentairesJson
+    ];
+
+    if (rowFound > 0) {
+      sheet.getRange(rowFound, 1, 1, rowData.length).setValues([rowData]);
+    } else {
+      sheet.appendRow(rowData);
+    }
+
+    return { success: true, message: "Assessment enregistré avec succès dans Google Sheets", assessment_id: assessmentId };
+  } catch (err) {
+    return { success: false, message: "Erreur enregistrement assessment: " + err.toString() };
+  }
+}
+
+function handleListerMesAssessments(ss, req) {
+  try {
+    var sheet = getOrCreateAssessmentsLibresSheet(ss);
+    var evalId = req.evaluateur_id || req.identifiant || "";
+    var data = sheet.getDataRange().getValues();
+    if (data.length <= 1) return { success: true, assessments: [] };
+
+    var assessments = [];
+
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      var rowEvalId = String(row[2] || "");
+      if (!evalId || rowEvalId === evalId || rowEvalId.toLowerCase() === evalId.toLowerCase()) {
+        assessments.push({
+          assessment_id: String(row[0] || ""),
+          date_creation: String(row[1] || ""),
+          evaluateur_id: rowEvalId,
+          template_id: String(row[3] || ""),
+          template_nom: String(row[4] || ""),
+          titre: String(row[5] || ""),
+          nom_conseiller: String(row[6] || ""),
+          audio_url: String(row[7] || ""),
+          consignes: String(row[8] || ""),
+          score: Number(row[9] || 0),
+          statut: String(row[10] || "COMPLETED"),
+          interaction_summary: String(row[11] || ""),
+          evaluator_comments: String(row[12] || ""),
+          reponses: row[13] ? JSON.parse(row[13]) : {},
+          commentaires: row[14] ? JSON.parse(row[14]) : {}
+        });
+      }
+    }
+
+    assessments.sort(function(a, b) {
+      return new Date(b.date_creation).getTime() - new Date(a.date_creation).getTime();
+    });
+
+    return { success: true, assessments: assessments };
+  } catch (err) {
+    return { success: false, message: "Erreur liste assessments: " + err.toString() };
+  }
+}
+
+function handleGetDetailAssessment(ss, req) {
+  try {
+    var sheet = getOrCreateAssessmentsLibresSheet(ss);
+    var assessmentId = req.assessment_id;
+    var data = sheet.getDataRange().getValues();
+
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(assessmentId)) {
+        var row = data[i];
+        return {
+          success: true,
+          assessment: {
+            assessment_id: String(row[0] || ""),
+            date_creation: String(row[1] || ""),
+            evaluateur_id: String(row[2] || ""),
+            template_id: String(row[3] || ""),
+            template_nom: String(row[4] || ""),
+            titre: String(row[5] || ""),
+            nom_conseiller: String(row[6] || ""),
+            audio_url: String(row[7] || ""),
+            consignes: String(row[8] || ""),
+            score: Number(row[9] || 0),
+            statut: String(row[10] || "COMPLETED"),
+            interaction_summary: String(row[11] || ""),
+            evaluator_comments: String(row[12] || ""),
+            reponses: row[13] ? JSON.parse(row[13]) : {},
+            commentaires: row[14] ? JSON.parse(row[14]) : {}
+          }
+        };
+      }
+    }
+    return { success: false, message: "Assessment non trouvé" };
+  } catch (err) {
+    return { success: false, message: "Erreur récupération assessment: " + err.toString() };
+  }
+}
+
+function handleSupprimerAssessmentLibre(ss, req) {
+  try {
+    var sheet = getOrCreateAssessmentsLibresSheet(ss);
+    var assessmentId = req.assessment_id;
+    var data = sheet.getDataRange().getValues();
+
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(assessmentId)) {
+        sheet.deleteRow(i + 1);
+        return { success: true, message: "Assessment supprimé avec succès" };
+      }
+    }
+    return { success: false, message: "Assessment introuvable" };
+  } catch (err) {
+    return { success: false, message: "Erreur suppression assessment: " + err.toString() };
+  }
+}

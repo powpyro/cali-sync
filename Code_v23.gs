@@ -1,7 +1,7 @@
 // ==============================================================================
-// CALI-SYNC v2.0 — BACKEND GOOGLE APPS SCRIPT (Code.gs v7)
+// CALI-SYNC v2.0 — BACKEND GOOGLE APPS SCRIPT (Code_v23.gs)
 // Base de Données : Google Sheet "Cali-Sync_DB"
-// Support : Ouverture & Fermeture explicites, Conseiller, Consignes, Rôles
+// Support : Outils Administratifs (Suppression Sessions & Dialogues de sécurité, Annulation Demandes, Suppression Évaluateurs)
 // ==============================================================================
 
 const SPREADSHEET_NAME = "Cali-Sync_DB";
@@ -190,7 +190,6 @@ function traiterRequete(e) {
   if (action === "grille_session") return jsonResponse(handleGetGrilleSession(ss, req.session_id));
   if (action === "valider_pin") return jsonResponse(handleValiderPin(ss, req.session_id, req.pin));
   if (action === "lister_templates") return jsonResponse(handleListerTemplates(ss));
-  if (action === "seed_genii_template") return jsonResponse(insertGENIITemplate(ss));
   if (action === "profil") return jsonResponse(handleGetProfil(ss, req.evaluateur_id || req.identifiant));
   if (action === "cockpit") return jsonResponse(handleGetCockpit(ss, req.session_id || "SESS_2026_001"));
   if (action === "get_config_template") return jsonResponse(handleGetConfigTemplate(ss, req.template_id));
@@ -211,6 +210,14 @@ function traiterRequete(e) {
   if (action === "reinitialiser_arbitrages") return jsonResponse(handleReinitialiserArbitrages(ss, req));
   if (action === "upload_audio_drive") return jsonResponse(handleUploadAudioDrive(ss, req));
   if (action === "get_rapport_pdf") return jsonResponse(handleGetRapportPdf(ss, req.session_id));
+  if (action === "soumettre_assessment_libre") return jsonResponse(handleSoumettreAssessmentLibre(ss, req));
+  if (action === "lister_mes_assessments") return jsonResponse(handleListerMesAssessments(ss, req));
+  if (action === "get_detail_assessment") return jsonResponse(handleGetDetailAssessment(ss, req));
+  if (action === "supprimer_assessment_libre") return jsonResponse(handleSupprimerAssessmentLibre(ss, req));
+  if (action === "supprimer_session") return jsonResponse(handleSupprimerSession(ss, req.session_id));
+  if (action === "annuler_demande_calibrage") return jsonResponse(handleAnnulerDemandeCalibrage(ss, req.demande_id));
+  if (action === "supprimer_evaluateur") return jsonResponse(handleSupprimerEvaluateur(ss, req.target_identifiant));
+  if (action === "restaurer_grille_genii_complete") return jsonResponse(handleRestaurerGrilleGeniiComplete(ss, req));
 
   return jsonResponse({ success: false, message: "Action inconnue: " + action });
 }
@@ -705,40 +712,26 @@ function handleForcerOuverture(ss, sessionId) {
 }
 
 function handleListerTemplates(ss) {
-  var sheet = ss.getSheetByName("Templates_Grilles");
-  if (!sheet) {
-    initialiserBaseDeDonnees(ss);
-    sheet = ss.getSheetByName("Templates_Grilles");
-  }
+  const sheet = ss.getSheetByName("Templates_Grilles");
+  if (!sheet) return { success: true, templates: [] };
+  const data = sheet.getDataRange().getValues();
+  const templatesMap = {};
 
-  var data = sheet ? sheet.getDataRange().getValues() : [];
-  var templatesMap = {};
-
-  for (var i = 1; i < data.length; i++) {
-    var tplId = String(data[i][0] || "").trim();
-    if (!tplId) continue;
-    var nom = String(data[i][1] || tplId).trim();
-    var cat = String(data[i][2] || "Général").trim();
-    var itemId = String(data[i][3] || "").trim();
-    var itemLibelle = String(data[i][4] || itemId).trim();
-    var criticite = String(data[i][5] || "Standard").trim();
+  for (let i = 1; i < data.length; i++) {
+    const tplId = data[i][0];
+    const nom = data[i][1];
+    const cat = data[i][2];
+    const itemId = data[i][3];
+    const itemLibelle = data[i][4];
+    const criticite = data[i][5] || "Standard";
 
     if (!templatesMap[tplId]) templatesMap[tplId] = { template_id: tplId, nom: nom, categoriesMap: {} };
-    var tpl = templatesMap[tplId];
+    const tpl = templatesMap[tplId];
     if (!tpl.categoriesMap[cat]) tpl.categoriesMap[cat] = { categorie: cat, items: [] };
     tpl.categoriesMap[cat].items.push({ item_id: itemId, item_libelle: itemLibelle, criticite: criticite });
   }
 
-  // Auto-seed TPL_GENII_V1 si non présent dans Templates_Grilles
-  if (!templatesMap["TPL_GENII_V1"]) {
-    Logger.log("⚙️ Auto-seeding TPL_GENII_V1 dans Templates_Grilles & Admin_Config_Grille...");
-    insertGENIITemplate(ss);
-    return handleListerTemplates(ss); // relire après insertion
-  }
-
-  var templates = Object.values(templatesMap).map(function(t) {
-    return { template_id: t.template_id, nom: t.nom, categories: Object.values(t.categoriesMap) };
-  });
+  const templates = Object.values(templatesMap).map(t => ({ template_id: t.template_id, nom: t.nom, categories: Object.values(t.categoriesMap) }));
   return { success: true, templates: templates };
 }
 
@@ -1342,10 +1335,6 @@ function handleGetConfigTemplate(ss, templateId) {
     var libelle   = String(data[i][6] || "").trim();
     var criticite = String(data[i][7] || "Standard").trim();
     var catRacine = String(data[i][10] || "").trim();
-    // Col L (index 11): show_subitems_on — Oui pour VoC, Non pour les autres
-    var showSubitemsOn = /^(oui|yes|true|1)$/i.test(String(data[i][11] || 'Non').trim()) ? 'Oui' : 'Non';
-    // Col M (index 12): hide_na — TRUE pour masquer le bouton N/A (VoC)
-    var hideNA = /^(vrai|true|1|oui)$/i.test(String(data[i][12] || 'FALSE').trim());
 
     items.push({
       item_id: itemId,
@@ -1356,9 +1345,7 @@ function handleGetConfigTemplate(ss, templateId) {
       libelle_fr: libelle,
       criticite: criticite,
       est_terminal: estTerm,
-      commentaire_obligatoire: commOblig,
-      show_subitems_on: showSubitemsOn,
-      hide_na: hideNA
+      commentaire_obligatoire: commOblig
     });
   }
 
@@ -1507,7 +1494,7 @@ function handleSoumettreEvaluation(ss, payload) {
       var isLeafInSubmission = !parentSet[it.item_id];
       if (isLeafInSubmission) {
         var comm = String(it.commentaire || "").trim();
-        if (comm.length < 5) {
+        if (!comm) {
           commentsManquants.push(it.item_id);
         }
       }
@@ -1516,7 +1503,7 @@ function handleSoumettreEvaluation(ss, payload) {
     if (commentsManquants.length > 0) {
       return {
         success: false,
-        message: "Commentaire d'imputation obligatoire (au moins 5 caractères) manquant pour les sous-items du dernier niveau.",
+        message: "Commentaire d'imputation obligatoire manquant pour les sous-items du dernier niveau.",
         commentaires_manquants: commentsManquants
       };
     }
@@ -1528,21 +1515,6 @@ function handleSoumettreEvaluation(ss, payload) {
   var sheet = ss.getSheetByName("Log_Soumissions");
   if (!sheet) { initialiserBaseDeDonnees(ss); sheet = ss.getSheetByName("Log_Soumissions"); }
   var now = new Date().toISOString();
-
-  // Stocker les champs texte libres (Interaction Summary + Evaluator Comments)
-  // sous forme d'une ligne metadata dédiée (item_id = __HEADER__)
-  var interactionSummary = String(payload.interaction_summary || "").trim();
-  var evaluatorComments  = String(payload.evaluator_comments  || "").trim();
-
-  if (!interactionSummary || interactionSummary.length < 5) {
-    return {
-      success: false,
-      message: "Le champ 'Interaction Summary' est obligatoire et doit contenir au moins 5 caractères."
-    };
-  }
-
-  sheet.appendRow([now, sessionId, evalId, estGauge, "__HEADER__", "_meta_", "_meta_",
-    interactionSummary, evaluatorComments]);
 
   if (items.length > 0) {
     items.forEach(function(item) {
@@ -2001,27 +1973,6 @@ function handleGetCockpit(ss, sessionId) {
     }
   }
 
-  // ── Lire l'Interaction Summary et Evaluator Comments de la Gauge ──────────
-  var gaugeInteractionSummary = "";
-  var gaugeEvaluatorComments  = "";
-  if (sessionGaugeId) {
-    var cleanGaugeKey = cleanStringKey(sessionGaugeId);
-    for (var hk = 1; hk < subData.length; hk++) {
-      var hkSess    = String(subData[hk][1]).trim();
-      var hkEval    = String(subData[hk][2]).trim().toLowerCase();
-      var hkItemId  = String(subData[hk][4]).trim();
-      var hkIsGFlag = subData[hk][3] === true || String(subData[hk][3]).toUpperCase() === "TRUE";
-      var hkClean   = cleanStringKey(hkEval);
-      var hkIsGauge = hkIsGFlag
-        || (sessionGaugeId !== "" && (hkEval === sessionGaugeId ||
-            (cleanGaugeKey.length >= 3 && (hkClean.includes(cleanGaugeKey) || cleanGaugeKey.includes(hkClean)))));
-      if (hkSess !== String(sessionId).trim() || !hkIsGauge || hkItemId !== "__HEADER__") continue;
-      gaugeInteractionSummary = String(subData[hk][7] || "").trim();
-      gaugeEvaluatorComments  = String(subData[hk][8] || "").trim();
-      break;
-    }
-  }
-
   // ── 8. Retourner la réponse complète ──────────────────────────────────────
   return {
     success: true,
@@ -2034,13 +1985,10 @@ function handleGetCockpit(ss, sessionId) {
     nom_conseiller:     sessionInfo ? sessionInfo.nom_conseiller : "",
     gauge_id:           sessionInfo ? sessionInfo.gauge_id : "",
     animateur_id:       sessionAnimateurId || "",
-    gauge_items_count:  Object.keys(gaugeMap).length,
+    gauge_items_count:  Object.keys(gaugeMap).length,   // DEBUG: nombre d’éléments dans gaugeMap
     evaluateurs_soumis: Object.keys(submittedSet),
     grille_hierarchique: grilleHierarchique,
     is_read_only:       isReadOnly,
-    // Champs texte libres de la Gauge (visibles dans le Cockpit uniquement pour la Gauge)
-    gauge_interaction_summary: gaugeInteractionSummary,
-    gauge_evaluator_comments:  gaugeEvaluatorComments,
     // Données legacy (pour compatibilité)
     categories: {},
     calibration: {
@@ -2052,214 +2000,1522 @@ function handleGetCockpit(ss, sessionId) {
 }
 
 // ==============================================================================
-// UTILITAIRE — Insérer / Ré-initialiser le template Genii (TPL_GENII_V1)
-// Alimente à la fois Templates_Grilles (17 items N2) ET Admin_Config_Grille (127 lignes)
+// HELPER — Vérifier si la date limite de clôture d'une session n'est pas encore atteinte
 // ==============================================================================
-function insertGENIITemplate(ss) {
-  if (!ss) ss = getSpreadsheet();
-  var TPL = "TPL_GENII_V1";
-  var NOM = "Grille Importée Genii (English Original)";
-
-  // ── 1. Remplir Templates_Grilles ───────────────────────────────────────────
-  var tplSheet = ss.getSheetByName("Templates_Grilles");
-  if (!tplSheet) {
-    initialiserBaseDeDonnees(ss);
-    tplSheet = ss.getSheetByName("Templates_Grilles");
-  }
-
-  if (tplSheet) {
-    var tplData = tplSheet.getDataRange().getValues();
-    // Nettoyer les anciennes lignes TPL_GENII_V1 si présentes
-    for (var i = tplData.length - 1; i >= 1; i--) {
-      if (String(tplData[i][0]).trim() === TPL) {
-        tplSheet.deleteRow(i + 1);
+function isSessionBeforeDeadline(ss, sessionId) {
+  var sessSheet = ss.getSheetByName("Sessions");
+  if (sessSheet) {
+    var sessData = sessSheet.getDataRange().getValues();
+    for (var i = 1; i < sessData.length; i++) {
+      if (sessData[i][0] === sessionId) {
+        var status = sessData[i][2];
+        if (status === "CLOSED" || status === "LOCKED") {
+          return false;
+        }
+        if (sessData[i][7]) {
+          var closeTime = new Date(sessData[i][7]).getTime();
+          var nowTime = new Date().getTime();
+          if (nowTime < closeTime) {
+            return true;
+          }
+        }
+        break;
       }
     }
-    var tplRows = [
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Process Adherence",
-    "PA-Q01",
-    "Did the rep greet the customer in a professional & welcoming manner, following the welcome script?",
-    "Critical",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Process Adherence",
-    "PA-Q02",
-    "Did the rep follow the call transfer procedures?",
-    "Critical",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Process Adherence",
-    "PA-Q03",
-    "Did the rep verify the customer's identity before processing the request?",
-    "Critical",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Process Adherence",
-    "PA-Q04",
-    "Did the rep follow KYC procedures (where applicable)?",
-    "Critical",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Process Adherence",
-    "PA-Q05",
-    "Did the rep ask the necessary enhanced verification questions for a sensitive action?",
-    "Critical",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Process Adherence",
-    "PA-Q06",
-    "Did the rep provide a clear and appropriate response or solution to the problem?",
-    "Critical",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Process Adherence",
-    "PA-Q07",
-    "Did the rep follow the hold procedure?",
-    "Standard",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Process Adherence",
-    "PA-Q08",
-    "Did the rep manage the escalation in accordance with the procedure?",
-    "Standard",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Process Adherence",
-    "PA-Q09",
-    "Did the rep ask if there was any further assistance / questions?",
-    "Standard",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Process Adherence",
-    "PA-Q10",
-    "Did the rep thank the customer before ending the call?",
-    "Standard",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Communication",
-    "CO-Q01",
-    "Was the rep able to understand the customers issue/request?",
-    "Standard",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Communication",
-    "CO-Q02",
-    "Did the rep provide clear, coherent communication with the customer?",
-    "Standard",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Communication",
-    "CO-Q03",
-    "Did the rep appropriately set the customer's expectations?",
-    "Standard",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Tone & Empathy",
-    "TE-Q01",
-    "Did the rep remain professional & polite throughout the interaction?",
-    "Standard",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Tone & Empathy",
-    "TE-Q02",
-    "Did the rep show empathy throughout the interaction?",
-    "Standard",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Tone & Empathy",
-    "TE-Q03",
-    "Did the rep remain professional throughout the interaction?",
-    "Standard",
-    1
-  ],
-  [
-    "TPL_GENII_V1",
-    "Grille Genii (Original English)",
-    "Voice of the Customer",
-    "VC-Q01",
-    "Did the customer express any dissatisfaction?",
-    "Standard",
-    1
-  ]
-];
-    if (tplRows.length > 0) {
-      tplSheet.getRange(tplSheet.getLastRow() + 1, 1, tplRows.length, tplRows[0].length).setValues(tplRows);
+  }
+  return false;
+}
+
+// ==============================================================================
+// HANDLER — Enregistrer une décision finale d'arbitrage sur un item
+// ==============================================================================
+function handleEnregistrerDecisionFinale(ss, payload) {
+  var sessionId   = payload.session_id;
+  var itemId      = payload.item_id;
+  var decision    = payload.decision;        // "Oui" | "Non" | "N.A."
+  var justification = payload.justification || "";
+  var animateurId = payload.animateur_id || "admin";
+
+  if (!sessionId || !itemId || !decision) {
+    return { success: false, message: "Paramètres requis : session_id, item_id, decision." };
+  }
+
+  if (isSessionBeforeDeadline(ss, sessionId)) {
+    return { success: false, message: "Arbitrage bloqué : La date de clôture de la session n'est pas encore atteinte." };
+  }
+
+  var sheet = ss.getSheetByName("Historique_Arbitrages");
+  if (!sheet) {
+    initialiserBaseDeDonnees(ss);
+    sheet = ss.getSheetByName("Historique_Arbitrages");
+  }
+
+  // Supprimer une éventuelle décision précédente sur le même item/session
+  var data = sheet.getDataRange().getValues();
+  for (var i = data.length - 1; i >= 1; i--) {
+    if (String(data[i][1]).trim() === String(sessionId).trim() &&
+        String(data[i][3]).trim() === String(itemId).trim()) {
+      sheet.deleteRow(i + 1);
     }
-    Logger.log("✅ Templates_Grilles : " + tplRows.length + " items insérés pour " + TPL);
   }
 
-  // ── 2. Remplir Admin_Config_Grille ────────────────────────────────────────
+  // Enregistrer la nouvelle décision
+  sheet.appendRow([
+    new Date().toISOString(),
+    sessionId,
+    "",            // categorie (non utilisé ici)
+    itemId,        // item_nom sert de item_id
+    decision,      // decision_arbitrage
+    justification, // nouvelle_consigne / justification
+    animateurId
+  ]);
+
+  return { success: true, message: "Décision finale enregistrée.", item_id: itemId, decision: decision };
+}
+
+// ==============================================================================
+// HANDLER — Enregistrer un lot (batch) de décisions d'arbitrage en 1 seule transaction
+// ==============================================================================
+function handleEnregistrerDecisionsBatch(ss, payload) {
+  var sessionId   = payload.session_id;
+  var items       = payload.items || [];
+  var animateurId = payload.animateur_id || "admin";
+
+  if (!sessionId) {
+    return { success: false, message: "Paramètre requis : session_id manquant." };
+  }
+  if (!items || items.length === 0) {
+    return { success: false, message: "Paramètre requis : items est vide ou manquant." };
+  }
+
+  if (isSessionBeforeDeadline(ss, sessionId)) {
+    return { success: false, message: "Arbitrage bloqué : La date de clôture de la session n'est pas encore atteinte." };
+  }
+
+  var sheet = ss.getSheetByName("Historique_Arbitrages");
+  if (!sheet) {
+    initialiserBaseDeDonnees(ss);
+    sheet = ss.getSheetByName("Historique_Arbitrages");
+  }
+
+  // Créer un dictionnaire des item_id à mettre à jour
+  var targetItemIds = {};
+  items.forEach(function(it) {
+    if (it.item_id) targetItemIds[String(it.item_id).trim()] = true;
+  });
+
+  // Supprimer les anciennes décisions pour ces items en allant de bas en haut
+  // (évite le décalage d'index lors de deleteRow)
+  var allData = sheet.getDataRange().getValues();
+  var rowsToDelete = [];
+  for (var i = allData.length - 1; i >= 1; i--) {
+    if (String(allData[i][1]).trim() === String(sessionId).trim() &&
+        targetItemIds[String(allData[i][3]).trim()]) {
+      rowsToDelete.push(i + 1); // 1-indexed
+    }
+  }
+  // Supprimer du bas vers le haut pour éviter le décalage
+  rowsToDelete.forEach(function(rowNum) {
+    sheet.deleteRow(rowNum);
+  });
+
+  // Préparer toutes les nouvelles lignes
+  var now = new Date().toISOString();
+  var newRows = [];
+  items.forEach(function(it) {
+    if (!it.item_id || !it.decision) return;
+    newRows.push([
+      now,
+      String(sessionId).trim(),
+      "",
+      String(it.item_id).trim(),
+      String(it.decision).trim(),
+      String(it.justification || "").trim(),
+      String(animateurId).trim()
+    ]);
+  });
+
+  // Écrire tout le bloc en 1 seule opération atomique
+  if (newRows.length > 0) {
+    var startRow = sheet.getLastRow() + 1;
+    sheet.getRange(startRow, 1, newRows.length, 7).setValues(newRows);
+  }
+
+  Logger.log("[Batch] Session=" + sessionId + " | " + newRows.length + " arbitrage(s) écrits.");
+  return {
+    success: true,
+    message: newRows.length + " arbitrage(s) enregistré(s) avec succès.",
+    count: newRows.length
+  };
+}
+
+// ==============================================================================
+// HANDLER — Réinitialiser / Effacer tous les arbitrages enregistrés d'une session
+// ==============================================================================
+function handleReinitialiserArbitrages(ss, payload) {
+  var sessionId = payload.session_id;
+  if (!sessionId) {
+    return { success: false, message: "Paramètre requis : session_id manquant." };
+  }
+
+  if (isSessionBeforeDeadline(ss, sessionId)) {
+    return { success: false, message: "Arbitrage bloqué : La date de clôture de la session n'est pas encore atteinte." };
+  }
+
+  var sheet = ss.getSheetByName("Historique_Arbitrages");
+  if (!sheet) {
+    return { success: true, message: "Aucun arbitrage à réinitialiser.", count: 0 };
+  }
+
+  var allData = sheet.getDataRange().getValues();
+  var rowsToDelete = [];
+  for (var i = allData.length - 1; i >= 1; i--) {
+    if (String(allData[i][1]).trim() === String(sessionId).trim()) {
+      rowsToDelete.push(i + 1); // 1-indexed
+    }
+  }
+
+  // Supprimer du bas vers le haut pour éviter le décalage d'index
+  rowsToDelete.forEach(function(rowNum) {
+    sheet.deleteRow(rowNum);
+  });
+
+  Logger.log("[Reset Arbitrages] Session=" + sessionId + " | " + rowsToDelete.length + " ligne(s) effacée(s).");
+  return {
+    success: true,
+    message: rowsToDelete.length + " arbitrage(s) réinitialisé(s) pour la session.",
+    count: rowsToDelete.length
+  };
+}
+
+function handleGetProfil(ss, evaluateurId) {
+  const subSheet = ss.getSheetByName("Log_Soumissions");
+  const subData = subSheet ? subSheet.getDataRange().getValues() : [];
+  let totalSubs = 0;
+  const sessionsSet = new Set();
+
+  for (let i = 1; i < subData.length; i++) {
+    if (String(subData[i][2]).trim().toLowerCase() === String(evaluateurId).trim().toLowerCase()) {
+      totalSubs++;
+      sessionsSet.add(subData[i][1]);
+    }
+  }
+  return { success: true, data: { identifiant: evaluateurId, nombre_total_evaluations_soumises: totalSubs, nombre_sessions_participes: sessionsSet.size, nombre_sessions_ratees: 0, nombre_sessions_animees: 0 } };
+}
+
+function handleValiderHorsSession(ss, payload) {
+  const sessionId = payload.session_id;
+  const decision = payload.decision_admin;
+  const sheet = ss.getSheetByName("Sessions");
+  if (!sheet) return { success: false, message: "Feuille sessions introuvable." };
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === sessionId) {
+      sheet.getRange(i + 1, 3).setValue(decision === "APPROUVE" ? "OPEN" : "CLOSED");
+      return { success: true, message: "Décision enregistrée." };
+    }
+  }
+  return { success: false, message: "Session introuvable." };
+}
+
+function handleEnregistrerArbitrage(ss, payload) {
+  let sheet = ss.getSheetByName("Historique_Arbitrages");
+  if (!sheet) { initialiserBaseDeDonnees(ss); sheet = ss.getSheetByName("Historique_Arbitrages"); }
+  sheet.appendRow([new Date().toISOString(), payload.session_id, payload.categorie, payload.item_nom, payload.decision_arbitrage, payload.nouvelle_consigne, payload.animateur_id]);
+  return { success: true, message: "Arbitrage enregistré." };
+}
+
+function handleCloturerSession(ss, payload) {
+  const sessionId = payload.session_id;
+  const force = payload.force === true || String(payload.force).toLowerCase() === "true";
+  const sheet = ss.getSheetByName("Sessions");
+  if (!sheet) return { success: false, message: "Feuille sessions introuvable." };
+
+  // Vérifier si tous les items de la grille ont été arbitrés
+  if (!force) {
+    const cockpitData = handleGetCockpit(ss, sessionId);
+    if (cockpitData && cockpitData.grille_hierarchique) {
+      // Extraire toutes les questions d'évaluation (les enfants N2 des catégories N1)
+      var allQuestions = [];
+      cockpitData.grille_hierarchique.forEach(function(root) {
+        if (root.type_noeud === "categorie" || (root.children && root.children.length > 0)) {
+          if (root.children) {
+            root.children.forEach(function(child) { allQuestions.push(child); });
+          }
+        } else {
+          allQuestions.push(root);
+        }
+      });
+
+      const unarbitrated = allQuestions.filter(function(q) {
+        return !q.decision_finale;
+      });
+
+      if (unarbitrated.length > 0) {
+        return {
+          success: false,
+          message: "Clôture impossible : " + unarbitrated.length + " item(s) sur " + allQuestions.length + " ne sont pas encore arbitrés.",
+          unarbitrated_count: unarbitrated.length
+        };
+      }
+    }
+  }
+
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === sessionId) {
+      sheet.getRange(i + 1, 3).setValue("CLOSED");
+      // Try to generate the PDF report. If it fails, still return success for the cloture.
+      let pdfUrl = null;
+      try {
+        pdfUrl = genererRapportCalibrage(ss, sessionId);
+      } catch(e) {
+        Logger.log("Erreur génération rapport: " + e.toString());
+      }
+      const result = { success: true, message: "Session clôturée." };
+      if (pdfUrl) result.pdf_url = pdfUrl;
+      return result;
+    }
+  }
+  return { success: false, message: "Session introuvable." };
+}
+
+// ==============================================================================
+// HANDLER — Récupérer l'URL du rapport PDF d'une session clôturée
+// ==============================================================================
+function handleGetRapportPdf(ss, sessionId) {
+  if (!sessionId) return { success: false, message: "session_id requis." };
+  const sheet = ss.getSheetByName("Sessions");
+  if (!sheet) return { success: false, message: "Feuille sessions introuvable." };
+
+  // Générer un rapport PDF mis à jour avec la structure v14
+  try {
+    const pdfUrl = genererRapportCalibrage(ss, sessionId);
+    if (pdfUrl) return { success: true, pdf_url: pdfUrl };
+    return { success: false, message: "Génération du rapport en cours, réessayez dans quelques instants." };
+  } catch(e) {
+    var errText = e.toString();
+    if (errText.indexOf("DocumentApp") !== -1 || errText.indexOf("auth/documents") !== -1 || errText.indexOf("autorisé") !== -1) {
+      return {
+        success: false,
+        message: "Autorisation Google Docs requise ! Dans l'éditeur Google Apps Script (script.google.com), sélectionnez la fonction 'autoriserGoogleDocsPermissions' dans la barre du haut et cliquez sur 'Exécuter' une seule fois pour valider l'accès à Google Docs."
+      };
+    }
+    return { success: false, message: "Erreur lors de la génération du rapport: " + errText };
+  }
+}
+
+// ==============================================================================
+// CORE — Générer le rapport PDF de calibrage complet dans Google Drive
+// Retourne l'URL du PDF ou null en cas d'échec.
+// ==============================================================================
+function genererRapportCalibrage(ss, sessionId) {
+
+  // ── 1. Récupérer la structure complète ─────────────────────────────────────
+  var resStruct = handleGetCockpit(ss, sessionId);
+  if (!resStruct || !resStruct.success) {
+    Logger.log("Impossible de récupérer la structure pour la session " + sessionId);
+    return null;
+  }
+
+  var sessionInfo = {
+    session_id:     resStruct.session_id     || sessionId,
+    nom_session:    resStruct.nom_session     || sessionId,
+    statut:         resStruct.statut          || "CLOSED",
+    heure_fin:      resStruct.heure_fin       || "",
+    nom_conseiller: resStruct.nom_conseiller  || "",
+    url_audio:      resStruct.url_audio       || ""
+  };
+  var categories  = resStruct.grille_hierarchique  || [];
+  var evaluateurs = resStruct.evaluateurs_soumis   || [];
+  var gaugeId     = resStruct.gauge_id             || "";
+
+  // ── 2. HELPERS ──────────────────────────────────────────────────────────────
+
+  // Nettoie un libellé qui contient des métadonnées DB (ex: "Label,English,Critical,VRAI,VRAI,,,")
+  function cleanLabel(raw) {
+    if (!raw) return "";
+    var s = String(raw).trim();
+    var idx = s.indexOf(",");
+    if (idx > 2) {
+      var first = s.substring(0, idx).trim();
+      var after = s.substring(idx + 1).split(",")[0].trim().toLowerCase();
+      var meta = ["vrai","faux","true","false","critical","standard","oui","non","yes","no","eliminatoire","terminal","0","1","2"];
+      if (meta.indexOf(after) >= 0 || /^\d+$/.test(after) || after.length === 0) {
+        return first;
+      }
+    }
+    return s;
+  }
+
+  // Barre de progression Unicode ▓░
+  function mkBar(filled, total, width) {
+    if (!total || total === 0) return "";
+    var n = Math.min(width, Math.round((filled / total) * width));
+    var bar = "";
+    for (var i = 0; i < n; i++) bar += "\u2593";
+    for (var i = n; i < width; i++) bar += "\u2591";
+    return bar;
+  }
+
+  // Ajoute un paragraphe stylé
+  function addLine(body, text, opts) {
+    opts = opts || {};
+    var p = body.appendParagraph(text);
+    if (opts.heading)  p.setHeading(opts.heading);
+    if (opts.bold)     p.setBold(true);
+    if (opts.italic)   p.setItalic(true);
+    if (opts.size)     p.setFontSize(opts.size);
+    if (opts.align)    p.setAlignment(opts.align);
+    if (opts.indent)   p.setIndentStart(opts.indent);
+    if (opts.spB)      p.setSpacingBefore(opts.spB);
+    if (opts.spA)      p.setSpacingAfter(opts.spA);
+    if (opts.color)    p.editAsText().setForegroundColor(opts.color);
+    return p;
+  }
+
+  // Ajoute un paragraphe avec la fin colorée à partir de charStart
+  function addLineColored(body, text, charStart, color, opts) {
+    opts = opts || {};
+    var p = body.appendParagraph(text);
+    if (opts.bold)   p.setBold(true);
+    if (opts.italic) p.setItalic(true);
+    if (opts.size)   p.setFontSize(opts.size);
+    if (opts.spB)    p.setSpacingBefore(opts.spB);
+    if (opts.spA)    p.setSpacingAfter(opts.spA);
+    if (charStart >= 0 && charStart < text.length) {
+      p.editAsText().setForegroundColor(charStart, text.length - 1, color);
+    }
+    return p;
+  }
+
+  // ── 3. Calcul des statistiques ─────────────────────────────────────────────
+  var nbOui = 0, nbNon = 0, nbNA = 0, nbNonArb = 0, nbCritNon = 0;
+  var catStats = [];
+
+  categories.forEach(function(cat) {
+    var qs = cat.children || [];
+    var cO = 0, cN = 0, cNA = 0;
+    qs.forEach(function(q) {
+      if (!q.decision_finale || !q.decision_finale.decision) { nbNonArb++; return; }
+      var dec = String(q.decision_finale.decision).trim();
+      if (dec === "Oui")  { nbOui++; cO++; }
+      else if (dec === "Non") {
+        nbNon++; cN++;
+        if (q.criticite === "Critical" || q.criticite === "Terminal" || q.criticite === "Eliminatoire") nbCritNon++;
+      }
+      else if (dec === "N.A.") { nbNA++; cNA++; }
+    });
+    catStats.push({ name: cleanLabel(cat.libelle || ""), oui: cO, non: cN, na: cNA });
+  });
+
+  var totalArb   = nbOui + nbNon + nbNA;
+  var tauxGlobal = totalArb > 0 ? Math.round((nbOui / totalArb) * 100) : 0;
+
+  // ── 4. Formater les métadonnées de session ─────────────────────────────────
+  var dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy 'à' HH:mm");
+
+  // Nettoyer le nom du conseiller (connection_id → format lisible)
+  var conseillerDisplay = sessionInfo.nom_conseiller || "—";
+  if (/^\d{8,}/.test(conseillerDisplay)) {
+    var parts = conseillerDisplay.split("|");
+    conseillerDisplay = (parts[1] ? "Appel du " + parts[1] + " — " : "") + "ID " + parts[0].substring(0, 12) + "...";
+  }
+
+  // ── 5. Créer le document Google ───────────────────────────────────────────
+  var docTitle = "Rapport_Calibrage_" + (sessionInfo.session_id || sessionId);
+  var doc  = DocumentApp.create(docTitle);
+  var body = doc.getBody();
+  body.setMarginTop(40);
+  body.setMarginBottom(40);
+  body.setMarginLeft(56);
+  body.setMarginRight(56);
+
+  // ═══════════════════════════════════════════════════════════════
+  // SECTION 1 — TITRE PRINCIPAL
+  // ═══════════════════════════════════════════════════════════════
+  var titlePara = body.appendParagraph("RAPPORT DE CALIBRAGE QUALITÉ");
+  titlePara.setHeading(DocumentApp.ParagraphHeading.HEADING1);
+  titlePara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  titlePara.setFontSize(17);
+  titlePara.setSpacingAfter(2);
+
+  var subTitle = body.appendParagraph(sessionInfo.nom_session || sessionInfo.session_id);
+  subTitle.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  subTitle.setFontSize(12);
+  subTitle.setBold(true);
+  subTitle.setSpacingAfter(14);
+
+  // Tableau identité session ─────────────────────────────────────
+  var evalListStr = evaluateurs.length > 0 ? evaluateurs.join("  •  ") : "Aucun";
+  var headerData = [
+    ["Session ID",       sessionInfo.session_id || sessionId],
+    ["Conseiller évalué",conseillerDisplay],
+    ["Date de clôture",  dateStr],
+    ["Calibreur / Gauge",gaugeId || "Aucun"],
+    ["Évaluateurs (" + evaluateurs.length + ")", evalListStr]
+  ];
+  var hTable = body.appendTable(headerData);
+  for (var r = 0; r < headerData.length; r++) {
+    var c0 = hTable.getCell(r, 0);
+    var c1 = hTable.getCell(r, 1);
+    c0.setBackgroundColor("#f1f3f4");
+    c0.setPaddingTop(4); c0.setPaddingBottom(4); c0.setPaddingLeft(8); c0.setPaddingRight(8);
+    c1.setPaddingTop(4); c1.setPaddingBottom(4); c1.setPaddingLeft(8); c1.setPaddingRight(8);
+    c0.editAsText().setFontSize(9).setBold(true).setForegroundColor("#5f6368");
+    c1.editAsText().setFontSize(9);
+  }
+  body.appendParagraph("").setSpacingAfter(4);
+  body.appendHorizontalRule();
+
+  // ═══════════════════════════════════════════════════════════════
+  // SECTION 2 — RÉSUMÉ EXÉCUTIF
+  // ═══════════════════════════════════════════════════════════════
+  addLine(body, "RÉSUMÉ EXÉCUTIF", {
+    heading: DocumentApp.ParagraphHeading.HEADING2, spB: 14, spA: 8
+  });
+
+  // Barre de progression + taux
+  var barStr  = mkBar(nbOui, totalArb, 22);
+  var barLine = barStr + "   " + tauxGlobal + "% de conformité";
+  var barColor = tauxGlobal >= 80 ? "#1e8e3e" : tauxGlobal >= 60 ? "#e37400" : "#c5221f";
+  var barPara = body.appendParagraph(barLine);
+  barPara.setFontSize(13);
+  barPara.setBold(true);
+  barPara.setSpacingAfter(4);
+  if (barStr.length > 0) {
+    barPara.editAsText().setForegroundColor(0, barStr.length - 1, barColor);
+  }
+
+  // KPIs
+  var kpiText = "  ✅  " + nbOui + " Conformes      ❌  " + nbNon + " Imputés      ⚪  " + nbNA + " N.A.";
+  var kpiPara = body.appendParagraph(kpiText);
+  kpiPara.setFontSize(10);
+  kpiPara.setSpacingAfter(6);
+
+  // Alerte items critiques imputés
+  if (nbCritNon > 0) {
+    var critText = "⚠   " + nbCritNon + " item(s) CRITIQUE(S) non conforme(s) — Attention particulière requise";
+    addLine(body, critText, { size: 10, bold: true, color: "#c5221f", spA: 6 });
+  }
+
+  // Items non arbitrés
+  if (nbNonArb > 0) {
+    addLine(body, "ℹ   " + nbNonArb + " item(s) sans décision finale (en attente d'arbitrage)", {
+      size: 9, italic: true, color: "#757575", spA: 6
+    });
+  }
+
+  // Tableau récapitulatif par catégorie ─────────────────────────
+  addLine(body, "Récapitulatif par catégorie :", { size: 9, bold: true, spB: 8, spA: 4 });
+
+  var catTableData = [["Catégorie", "✅ Conformes", "❌ Imputés", "Taux"]];
+  catStats.forEach(function(cs) {
+    var arb  = cs.oui + cs.non;
+    var taux = arb > 0 ? Math.round((cs.oui / arb) * 100) + "%" : "—";
+    catTableData.push([cs.name, String(cs.oui), String(cs.non), taux]);
+  });
+
+  var cTable = body.appendTable(catTableData);
+  // En-tête tableau
+  for (var ch = 0; ch < 4; ch++) {
+    var hc = cTable.getCell(0, ch);
+    hc.setBackgroundColor("#e8eaed");
+    hc.setPaddingTop(4); hc.setPaddingBottom(4); hc.setPaddingLeft(6); hc.setPaddingRight(6);
+    hc.editAsText().setFontSize(9).setBold(true).setForegroundColor("#3c4043");
+  }
+  // Lignes de données
+  for (var cr = 1; cr < catTableData.length; cr++) {
+    var cs3 = catStats[cr - 1];
+    var arb3 = cs3.oui + cs3.non;
+    for (var cc = 0; cc < 4; cc++) {
+      var dc = cTable.getCell(cr, cc);
+      dc.setPaddingTop(3); dc.setPaddingBottom(3); dc.setPaddingLeft(6); dc.setPaddingRight(6);
+      dc.editAsText().setFontSize(9);
+    }
+    // Colorer taux
+    var tauxVal = arb3 > 0 ? cs3.oui / arb3 : 1;
+    var tauxColor = tauxVal >= 0.8 ? "#1e8e3e" : tauxVal >= 0.6 ? "#e37400" : "#c5221f";
+    cTable.getCell(cr, 3).editAsText().setForegroundColor(tauxColor).setBold(true);
+    // Colorer Non si > 0
+    if (cs3.non > 0) {
+      cTable.getCell(cr, 2).editAsText().setForegroundColor("#c5221f").setBold(true);
+    }
+  }
+  body.appendParagraph("").setSpacingAfter(4);
+  body.appendHorizontalRule();
+
+  // ═══════════════════════════════════════════════════════════════
+  // SECTION 3 — DÉTAIL PAR CATÉGORIE
+  // ═══════════════════════════════════════════════════════════════
+  addLine(body, "DÉTAIL DES ARBITRAGES PAR CATÉGORIE", {
+    heading: DocumentApp.ParagraphHeading.HEADING2, spB: 14, spA: 6
+  });
+
+  // ─── Rendu d'une question N2 ─────────────────────────────────
+  function renderN2Question(body, q, qIdx) {
+    var qLabel = cleanLabel(q.libelle || q.item_id || "");
+    var isCrit = q.criticite === "Critical" || q.criticite === "Terminal" || q.criticite === "Eliminatoire";
+    var decObj = q.decision_finale;
+    var decStr = decObj ? String(decObj.decision || "").trim() : "";
+    var justif = decObj ? String(decObj.justification || "").trim() : "";
+
+    // Libellé question (N2)
+    var critBadge = isCrit ? "  ★ CRITIQUE" : "";
+    var qText = "  " + (qIdx + 1) + ".  " + qLabel + critBadge;
+    var qPara  = body.appendParagraph(qText);
+    qPara.setFontSize(10);
+    qPara.setBold(true);
+    qPara.setSpacingBefore(11);
+    qPara.setSpacingAfter(2);
+    if (isCrit && critBadge) {
+      var criStart = qText.indexOf(critBadge);
+      if (criStart > 0) qPara.editAsText().setForegroundColor(criStart, qText.length - 1, "#c5221f");
+    }
+
+    // Verdict (coloré)
+    var vIcon, vText, vColor;
+    if (decStr === "Oui")  { vIcon = "\u2705"; vText = "OUI \u2014 Conforme";      vColor = "#1e8e3e"; }
+    else if (decStr === "Non")  { vIcon = "\u274C"; vText = "NON \u2014 Imput\u00e9";   vColor = "#c5221f"; }
+    else if (decStr === "N.A.") { vIcon = "\u26AA"; vText = "N.A. \u2014 Non applicable"; vColor = "#757575"; }
+    else                        { vIcon = "\u26A0";  vText = "Non arbitr\u00e9";          vColor = "#e37400"; }
+
+    var vFull  = "       " + vIcon + "  " + vText;
+    var vStart = vFull.indexOf(vIcon);
+    addLineColored(body, vFull, vStart, vColor, { bold: true, size: 10, spA: 2 });
+
+    // Justification arbitrage (uniquement si NON + texte)
+    if (decStr === "Non" && justif) {
+      var jText = "       \uD83D\uDCAC  " + justif;
+      addLine(body, jText, { size: 9, italic: true, color: "#1a73e8", spA: 4 });
+    }
+
+    // Sous-items (UNIQUEMENT si décision = NON) ──────────────────
+    if (decStr === "Non") {
+      var subItems = q.children || [];
+
+      // Filtrer les N3 imputés
+      var imputedN3 = subItems.filter(function(sub) {
+        if (sub.decision_finale && sub.decision_finale.decision === "Non") return true;
+        if (sub.gauge && sub.gauge.critere === "Non") return true;
+        if (sub.votes_par_critere && sub.votes_par_critere["Non"] && sub.votes_par_critere["Non"].length > 0) return true;
+        return false;
+      });
+
+      if (imputedN3.length > 0) {
+        var pPin = body.appendParagraph("       \uD83D\uDCCC  Motifs d'imputation retenus :");
+        pPin.setFontSize(9);
+        pPin.setBold(true);
+        pPin.setSpacingAfter(2);
+        pPin.editAsText().setForegroundColor("#c5221f");
+
+        imputedN3.forEach(function(sub) {
+          var subLabel = cleanLabel(sub.libelle || sub.item_id || "");
+
+          // Commentaire N3 : préférer gauge > décision > premier vote Non
+          var subComm = "";
+          if (sub.gauge && sub.gauge.commentaire && sub.gauge.commentaire.trim()) {
+            subComm = sub.gauge.commentaire.trim();
+          } else if (sub.decision_finale && sub.decision_finale.justification) {
+            subComm = sub.decision_finale.justification.trim();
+          } else if (sub.votes_par_critere && sub.votes_par_critere["Non"]) {
+            var vwc = sub.votes_par_critere["Non"].filter(function(v) { return v.commentaire && v.commentaire.trim(); });
+            if (vwc.length > 0) subComm = vwc[0].commentaire.trim();
+          }
+
+          var n3Para = body.appendParagraph("          \u2013  " + subLabel);
+          n3Para.setFontSize(9);
+          n3Para.setSpacingAfter(1);
+
+          if (subComm) {
+            addLine(body, "              \uD83D\uDCAC  " + subComm, {
+              size: 9, italic: true, color: "#5f6368", spA: 2
+            });
+          }
+
+          // N4 — précisions sous le N3 ──────────────────────────
+          var n4Items  = sub.children || [];
+          var impN4    = n4Items.filter(function(n4) {
+            if (n4.gauge && n4.gauge.critere === "Non") return true;
+            if (n4.votes_par_critere && n4.votes_par_critere["Non"] && n4.votes_par_critere["Non"].length > 0) return true;
+            return false;
+          });
+
+          impN4.forEach(function(n4) {
+            var n4Label = cleanLabel(n4.libelle || n4.item_id || "");
+            var n4Comm  = "";
+            if (n4.gauge && n4.gauge.commentaire && n4.gauge.commentaire.trim()) {
+              n4Comm = n4.gauge.commentaire.trim();
+            } else if (n4.votes_par_critere && n4.votes_par_critere["Non"]) {
+              var v4c = n4.votes_par_critere["Non"].filter(function(v) { return v.commentaire && v.commentaire.trim(); });
+              if (v4c.length > 0) n4Comm = v4c[0].commentaire.trim();
+            }
+
+            var n4Text = "               \u2514\u2500  " + n4Label + (n4Comm ? " :  \u201C" + n4Comm + "\u201D" : "");
+            addLine(body, n4Text, { size: 8, italic: true, color: "#3c4043", spA: 2 });
+          });
+        });
+      }
+    }
+
+    // Avis calibreur/Gauge ────────────────────────────────────────
+    if (q.gauge && q.gauge.critere && gaugeId) {
+      var gNom   = q.gauge.nom || gaugeId;
+      var gCrit  = q.gauge.critere;
+      var gComm  = "";
+
+      // Récupérer récursivement les commentaires des descendants si vide au N2
+      function collectDeepGaugeComment(node) {
+        if (node.gauge && node.gauge.commentaire && node.gauge.commentaire.trim()) return node.gauge.commentaire.trim();
+        var kids = node.children || [];
+        for (var ki = 0; ki < kids.length; ki++) {
+          var r = collectDeepGaugeComment(kids[ki]);
+          if (r) return r;
+        }
+        return "";
+      }
+      gComm = q.gauge.commentaire ? q.gauge.commentaire.trim() : collectDeepGaugeComment(q);
+
+      var gIcon  = gCrit === "Oui" ? "\u2705" : gCrit === "Non" ? "\u274C" : "\u26AA";
+      var gText  = "       \uD83C\uDFAF  Avis calibreur (" + gNom + ") : " + gIcon + " " + gCrit;
+      if (gComm) gText += "  \u2014  \u201C" + gComm + "\u201D";
+
+      addLine(body, gText, { size: 9, italic: true, color: "#7b1fa2", spA: 2 });
+
+      // Divergence flagging
+      if (decStr && decStr !== gCrit && decStr !== "") {
+        addLine(body, "              \u26A1  Divergence : calibreur \u2260 d\u00e9cision finale", {
+          size: 8, bold: true, color: "#e37400", spA: 2
+        });
+      }
+    }
+
+    body.appendParagraph("").setSpacingAfter(2);
+  }
+
+  // ─── Rendu de chaque catégorie N1 ────────────────────────────
+  categories.forEach(function(cat, catIdx) {
+    var catName = cleanLabel(cat.libelle || cat.item_id || "Catégorie").toUpperCase();
+    var qs      = cat.children || [];
+    var cs4     = catStats[catIdx] || { oui: 0, non: 0, na: 0 };
+    var arb4    = cs4.oui + cs4.non;
+    var taux4   = arb4 > 0 ? Math.round((cs4.oui / arb4) * 100) : null;
+    var tc4     = taux4 !== null ? (taux4 >= 80 ? "#1e8e3e" : taux4 >= 60 ? "#e37400" : "#c5221f") : "#757575";
+
+    // En-tête catégorie
+    var catPara = body.appendParagraph("\u25B6  " + catName);
+    catPara.setHeading(DocumentApp.ParagraphHeading.HEADING3);
+    catPara.setFontSize(11);
+    catPara.setSpacingBefore(20);
+    catPara.setSpacingAfter(2);
+
+    // Stats sous le titre catégorie
+    var catSubText = "    (" + cs4.oui + " / " + arb4 + " conformes" + (taux4 !== null ? "  \u2014  " + taux4 + "%" : "") + ")";
+    addLine(body, catSubText, { size: 9, italic: true, color: tc4, spA: 5 });
+
+    if (qs.length === 0) {
+      addLine(body, "    (Aucune question arbitrée dans cette catégorie)", {
+        size: 9, italic: true, color: "#757575"
+      });
+      return;
+    }
+
+    qs.forEach(function(q, qIdx) {
+      renderN2Question(body, q, qIdx);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // SECTION 4 — PIED DE RAPPORT
+  // ═══════════════════════════════════════════════════════════════
+  body.appendHorizontalRule();
+  body.appendParagraph("").setSpacingAfter(6);
+
+  addLine(body, "Rapport généré le " + dateStr + " via CaliSync v2.0", {
+    size: 8, italic: true, color: "#9aa0a6",
+    align: DocumentApp.HorizontalAlignment.CENTER, spB: 8
+  });
+  addLine(body, "Session : " + (sessionInfo.session_id || sessionId) + "  \u2014  Taux de conformité global : " + tauxGlobal + "%", {
+    size: 8, color: "#9aa0a6",
+    align: DocumentApp.HorizontalAlignment.CENTER
+  });
+
+  // ── Export PDF dans Google Drive ──────────────────────────────
+  doc.saveAndClose();
+  var docId   = doc.getId();
+  var docFile = DriveApp.getFileById(docId);
+
+  var folder = null;
+  var folderIter = DriveApp.getFoldersByName("CaliSync_Rapports");
+  if (folderIter.hasNext()) {
+    folder = folderIter.next();
+  } else {
+    folder = DriveApp.createFolder("CaliSync_Rapports");
+  }
+
+  var pdfBlob = docFile.getAs("application/pdf").setName(docTitle + ".pdf");
+  var pdfFile = folder.createFile(pdfBlob);
+  pdfFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  var pdfUrl = pdfFile.getUrl();
+
+  try { docFile.setTrashed(true); } catch(e) {}
+
+  // Enregistrer l'URL dans Sessions (colonne 15)
+  var sessSheet = ss.getSheetByName("Sessions");
+  if (sessSheet) {
+    var sessData = sessSheet.getDataRange().getValues();
+    for (var si = 1; si < sessData.length; si++) {
+      if (String(sessData[si][0]).trim() === String(sessionId).trim()) {
+        sessSheet.getRange(si + 1, 15).setValue(pdfUrl);
+        break;
+      }
+    }
+  }
+
+  return pdfUrl;
+}
+
+
+
+
+function updateSessionStatuses(ss) {
+  const sheet = ss.getSheetByName("Sessions");
+  if (!sheet) return;
+  const data = sheet.getDataRange().getValues();
+  const now = new Date();
+
+  for (let i = 1; i < data.length; i++) {
+    const statut = data[i][2];
+    const ouvertureStr = data[i][5];
+    const finStr = data[i][7];
+
+    if (statut === "GAUGE_DONE" && ouvertureStr) {
+      const ouverture = new Date(ouvertureStr);
+      if (now >= ouverture) sheet.getRange(i + 1, 3).setValue("OPEN");
+    }
+
+    if (statut === "OPEN" && finStr) {
+      const fin = new Date(finStr);
+      if (now >= fin) sheet.getRange(i + 1, 3).setValue("LOCKED");
+    }
+  }
+}
+
+function getSubmittedEvaluators(subData, sessionId) {
+  const setEvals = new Set();
+  for (let i = 1; i < subData.length; i++) {
+    if (subData[i][1] === sessionId && (subData[i][3] === false || String(subData[i][3]).toUpperCase() === "FALSE")) {
+      setEvals.add(subData[i][2]);
+    }
+  }
+  return Array.from(setEvals);
+}
+
+function hasGaugeSubmitted(subData, sessionId) {
+  for (let i = 1; i < subData.length; i++) {
+    if (subData[i][1] === sessionId && (subData[i][3] === true || String(subData[i][3]).toUpperCase() === "TRUE")) return true;
+  }
+  return false;
+}
+
+function handleGetMesSessions(ss, req) {
+  var evaluateurId = req.evaluateur_id;
+  if (!evaluateurId) return { success: false, message: "evaluateur_id requis." };
+
+  var cleanId = String(evaluateurId).trim().toLowerCase();
+
+  // 1. Trouver toutes les sessions où l'utilisateur a soumis
+  var submittedSessionIds = {};
+  var subSheet = ss.getSheetByName("Log_Soumissions");
+  if (subSheet) {
+    var subData = subSheet.getDataRange().getValues();
+    for (var i = 1; i < subData.length; i++) {
+      if (String(subData[i][2]).trim().toLowerCase() === cleanId) {
+        submittedSessionIds[String(subData[i][1]).trim()] = true;
+      }
+    }
+  }
+
+  // 2. Récupérer les sessions correspondantes
+  var sessionsSheet = ss.getSheetByName("Sessions");
+  if (!sessionsSheet) return { success: true, sessions: [] };
+
+  var data = sessionsSheet.getDataRange().getValues();
+  var sessions = [];
+
+  for (var i = 1; i < data.length; i++) {
+    var sessionId = String(data[i][0]).trim();
+    var animId = String(data[i][10] || "").trim().toLowerCase();
+    var gaugeId = String(data[i][11] || "").trim().toLowerCase();
+    var hasSubmitted = submittedSessionIds[sessionId] === true;
+
+    // L'utilisateur doit être animateur, gauge, ou avoir soumis une évaluation
+    if (animId === cleanId || gaugeId === cleanId || hasSubmitted) {
+      var roles = [];
+      if (animId === cleanId) roles.push("Animateur");
+      if (gaugeId === cleanId) roles.push("Gauge");
+      if (hasSubmitted && gaugeId !== cleanId) roles.push("Évaluateur");
+
+      sessions.push({
+        session_id: sessionId,
+        nom_session: data[i][1],
+        statut: data[i][2],
+        template_id: data[i][4],
+        heure_ouverture: data[i][5],
+        duree_minutes: data[i][6],
+        heure_fin: data[i][7],
+        url_audio: data[i][8],
+        animateur_id: data[i][10] || "",
+        gauge_id: data[i][11] || "",
+        nom_conseiller: data[i][12] || "",
+        consignes: data[i][13] || "",
+        roles: roles,
+        has_submitted: hasSubmitted
+      });
+    }
+  }
+
+  return { success: true, sessions: sessions };
+}
+
+function handleGetMaSoumission(ss, req) {
+  var sessionId = req.session_id;
+  var evaluateurId = req.evaluateur_id;
+  if (!sessionId || !evaluateurId) {
+    return { success: false, message: "session_id et evaluateur_id requis." };
+  }
+  var sheet = ss.getSheetByName("Log_Soumissions");
+  if (!sheet) return { success: true, answers: {}, comments: {} };
+  var data = sheet.getDataRange().getValues();
+  var answers = {};
+  var comments = {};
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][1]).trim() === String(sessionId).trim() &&
+        String(data[i][2]).trim().toLowerCase() === String(evaluateurId).trim().toLowerCase()) {
+      var itemId = data[i][4];
+      var statut = data[i][7];
+      var comm = data[i][8];
+      answers[itemId] = statut;
+      if (comm) {
+        comments[itemId] = comm;
+      }
+    }
+  }
+  return { success: true, answers: answers, comments: comments };
+}
+
+function handleUploadAudioDrive(ss, body) {
+  const base64Data = body.base64_data || body.base64Data;
+  const fileName = body.file_name || body.fileName || ("calisync_audio_" + new Date().getTime() + ".mp3");
+  const mimeType = body.mime_type || body.mimeType || "audio/mp3";
+
+  if (!base64Data) return { success: false, message: "Données audio manquantes." };
+
+  try {
+    const bytes = Utilities.base64Decode(base64Data);
+    const blob = Utilities.newBlob(bytes, mimeType, fileName);
+    const file = DriveApp.createFile(blob);
+    try {
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch(e) {
+      // Fallback
+    }
+    const fileId = file.getId();
+    const downloadUrl = "https://drive.google.com/uc?export=download&id=" + fileId;
+    return {
+      success: true,
+      file_id: fileId,
+      url_audio: downloadUrl,
+      view_url: file.getUrl(),
+      message: "Audio téléversé avec succès sur Google Drive !"
+    };
+  } catch(err) {
+    return { success: false, message: "Erreur lors de l'upload vers Google Drive : " + err.toString() };
+  }
+}
+
+function jsonResponse(data) {
+  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
+}
+
+// ==============================================================================
+// CORRECTION RÉTROACTIVE — Marquer est_gauge=TRUE dans Log_Soumissions
+// Appelez cette fonction UNE SEULE FOIS depuis l'éditeur GAS pour corriger
+// toutes les soumissions existantes dont le flag est_gauge est manquant.
+// ==============================================================================
+function corrigerEstGaugeRetroactif() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sessSheet = ss.getSheetByName("Sessions");
+  var subSheet  = ss.getSheetByName("Log_Soumissions");
+  if (!sessSheet || !subSheet) {
+    Logger.log("Feuilles manquantes.");
+    return;
+  }
+
+  var sessData = sessSheet.getDataRange().getValues();
+  var subData  = subSheet.getDataRange().getValues();
+
+  // Construire index: session_id → { gaugeId, animId }
+  var sessIndex = {};
+  for (var i = 1; i < sessData.length; i++) {
+    var sid     = String(sessData[i][0]).trim();
+    var gaugeId = String(sessData[i][11] || "").trim().toLowerCase();
+    var animId  = String(sessData[i][10] || "").trim().toLowerCase();
+    if (!gaugeId && animId) gaugeId = animId;
+    sessIndex[sid] = { gaugeId: gaugeId, animId: animId };
+  }
+
+  var corrected = 0;
+  for (var k = 1; k < subData.length; k++) {
+    // Si déjà TRUE, passer
+    if (subData[k][3] === true || String(subData[k][3]).toUpperCase() === "TRUE") continue;
+
+    var rSessId = String(subData[k][1]).trim();
+    var rEvalId = String(subData[k][2]).trim().toLowerCase();
+
+    var sess = sessIndex[rSessId];
+    if (!sess) continue;
+
+    var ec  = cleanStringKey(rEvalId);
+    var gc  = cleanStringKey(sess.gaugeId);
+    var ac  = cleanStringKey(sess.animId);
+
+    var isGauge =
+      (sess.gaugeId !== "" && (
+        rEvalId === sess.gaugeId ||
+        (gc.length >= 3 && (ec.includes(gc) || gc.includes(ec)))
+      )) ||
+      (sess.animId !== "" && (
+        rEvalId === sess.animId ||
+        (ac.length >= 3 && (ec.includes(ac) || ac.includes(ec)))
+      ));
+
+    if (isGauge) {
+      subSheet.getRange(k + 1, 4).setValue(true);
+      corrected++;
+      Logger.log("Corrigé ligne " + (k + 1) + " : session=" + rSessId + " eval=" + rEvalId);
+    }
+  }
+
+  Logger.log("✅ Correction terminée — " + corrected + " ligne(s) mise(s) à jour.");
+}
+
+// ==============================================================================
+// RÉPARATION DONNÉES CORROMPUES — À exécuter UNE SEULE FOIS depuis l'éditeur GAS
+// Corrige les dommages causés par le fallback cross-session du 12/08 :
+//  1. Réinitialise est_gauge=FALSE pour les lignes dont l'évaluateur n'est PAS
+//     le gauge_id de la session indiquée.
+//  2. Tente de restaurer le session_id correct pour les lignes migrées à tort.
+// ==============================================================================
+function repairerDonneesCorrupted() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sessSheet = ss.getSheetByName("Sessions");
+  var subSheet  = ss.getSheetByName("Log_Soumissions");
+  if (!sessSheet || !subSheet) { Logger.log("Feuilles manquantes."); return; }
+
+  var sessData = sessSheet.getDataRange().getValues();
+  var subData  = subSheet.getDataRange().getValues();
+
+  // Index 1: session_id → gauge_id (col 12)
+  var sessGaugeIndex = {};
+  // Index 2: gauge_id → [session_id, ...] pour retrouver la bonne session
+  var gaugeToSessions = {};
+  for (var i = 1; i < sessData.length; i++) {
+    var sid    = String(sessData[i][0]).trim();
+    var gid    = String(sessData[i][11] || "").trim().toLowerCase();
+    var aid    = String(sessData[i][10] || "").trim().toLowerCase();
+    // Pour les vieilles sessions sans gauge_id explicite, ne pas inclure animId
+    sessGaugeIndex[sid] = gid;
+    if (gid) {
+      if (!gaugeToSessions[gid]) gaugeToSessions[gid] = [];
+      gaugeToSessions[gid].push(sid);
+    }
+  }
+
+  var resetCount   = 0;
+  var restoredCount = 0;
+
+  for (var k = 1; k < subData.length; k++) {
+    var rowSessId = String(subData[k][1]).trim();
+    var rowEvalId = String(subData[k][2]).trim().toLowerCase();
+    var isGauge   = subData[k][3] === true || String(subData[k][3]).toUpperCase() === "TRUE";
+    if (!isGauge) continue; // On ne traite que les lignes est_gauge=TRUE
+
+    // Vérifier que l'évaluateur est bien la gauge de la session indiquée
+    var expectedGauge = sessGaugeIndex[rowSessId] || "";
+    var ec = cleanStringKey(rowEvalId);
+    var gc = cleanStringKey(expectedGauge);
+
+    var isLegit = expectedGauge !== "" && (
+      rowEvalId === expectedGauge ||
+      (gc.length >= 3 && (ec.includes(gc) || gc.includes(ec)))
+    );
+
+    if (isLegit) continue; // Ligne correcte, ne rien toucher
+
+    // ── Ligne corrompue : tenter de restaurer le bon session_id ──────────────
+    var correctSessId = null;
+    var possibleSessions = gaugeToSessions[rowEvalId] || [];
+    // Chercher aussi via fuzzy match
+    if (possibleSessions.length === 0) {
+      Object.keys(gaugeToSessions).forEach(function(gKey) {
+        var gcKey = cleanStringKey(gKey);
+        if (gcKey.length >= 3 && (ec.includes(gcKey) || gcKey.includes(ec))) {
+          possibleSessions = possibleSessions.concat(gaugeToSessions[gKey]);
+        }
+      });
+    }
+
+    if (possibleSessions.length === 1) {
+      correctSessId = possibleSessions[0];
+    } else if (possibleSessions.length > 1) {
+      // Plusieurs sessions possibles — choisir la plus récente
+      correctSessId = possibleSessions[possibleSessions.length - 1];
+    }
+
+    if (correctSessId && correctSessId !== rowSessId) {
+      subSheet.getRange(k + 1, 2).setValue(correctSessId);
+      Logger.log("[REPAIR] L" + (k+1) + " session_id restauré: " + rowSessId + " → " + correctSessId + " (eval=" + rowEvalId + ")");
+      restoredCount++;
+    } else {
+      // Impossible de retrouver la bonne session → réinitialiser est_gauge
+      subSheet.getRange(k + 1, 4).setValue(false);
+      Logger.log("[REPAIR] L" + (k+1) + " est_gauge remis à FALSE (eval=" + rowEvalId + ", sess=" + rowSessId + " n'a pas cette gauge)");
+      resetCount++;
+    }
+  }
+
+  Logger.log("✅ Réparation terminée — " + restoredCount + " session(s) restaurée(s), " + resetCount + " flag(s) réinitialisé(s).");
+}
+// ==============================================================================
+// DIAGNOSTIC — À exécuter manuellement depuis Apps Script Editor
+// Remplacez TARGET_SESSION_ID par l'ID réel de la session à inspecter.
+// ==============================================================================
+function diagnostiqueSessionGauge() {
+  var TARGET_SESSION_ID = "REMPLACER_PAR_SESSION_ID"; // ex: "SESS_2026_1234"
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  var sessSheet = ss.getSheetByName("Sessions");
+  var sessData  = sessSheet ? sessSheet.getDataRange().getValues() : [];
+  var sessRow   = null;
+  for (var i = 1; i < sessData.length; i++) {
+    if (String(sessData[i][0]).trim() === String(TARGET_SESSION_ID).trim()) {
+      sessRow = sessData[i]; break;
+    }
+  }
+
+  if (!sessRow) {
+    Logger.log("❌ Session introuvable: " + TARGET_SESSION_ID);
+    Logger.log("Sessions existantes:");
+    for (var j = 1; j < Math.min(sessData.length, 11); j++) {
+      Logger.log("  " + sessData[j][0] + " | " + sessData[j][1] + " | " + sessData[j][2]);
+    }
+    return;
+  }
+
+  Logger.log("=== SESSION ===");
+  Logger.log("session_id   : " + sessRow[0]);
+  Logger.log("nom_session  : " + sessRow[1]);
+  Logger.log("statut       : " + sessRow[2]);
+  Logger.log("animateur_id : " + sessRow[10]);
+  Logger.log("gauge_id     : " + sessRow[11]);
+
+  var gaugeId = String(sessRow[11] || "").trim().toLowerCase();
+  var subSheet = ss.getSheetByName("Log_Soumissions");
+  var subData  = subSheet ? subSheet.getDataRange().getValues() : [];
+  var countBySessId = 0, countGaugeSessId = 0, countGaugeByEvalId = 0;
+
+  for (var k = 1; k < subData.length; k++) {
+    var rSessId  = String(subData[k][1]).trim();
+    var rEvalId  = String(subData[k][2]).trim().toLowerCase();
+    var rIsGauge = subData[k][3] === true || String(subData[k][3]).toUpperCase() === "TRUE" || String(subData[k][3]).toUpperCase() === "VRAI";
+    if (rSessId === TARGET_SESSION_ID) { countBySessId++; if (rIsGauge) countGaugeSessId++; }
+    if (gaugeId && rEvalId === gaugeId && rIsGauge) {
+      countGaugeByEvalId++;
+      Logger.log("[GAUGE ROW] sess=" + rSessId + " | est_gauge=" + subData[k][3] + " | item=" + subData[k][4]);
+    }
+  }
+
+  Logger.log("\n=== LOG_SOUMISSIONS ===");
+  Logger.log("Lignes pour sessionId     : " + countBySessId);
+  Logger.log("  dont est_gauge=TRUE     : " + countGaugeSessId);
+  Logger.log("Lignes gauge (par evalId) : " + countGaugeByEvalId);
+
+  var demSheet = ss.getSheetByName("Demandes_Calibrage");
+  var demData  = demSheet ? demSheet.getDataRange().getValues() : [];
+  Logger.log("\n=== DEMANDES_CALIBRAGE ===");
+  for (var d = 1; d < demData.length; d++) {
+    if (String(demData[d][1]).trim().toLowerCase() === gaugeId) {
+      Logger.log("  demande_id=" + demData[d][0] + " | statut=" + demData[d][8]);
+    }
+  }
+
+  if (!gaugeId) Logger.log("\n⚠️ gauge_id VIDE — pas de gauge configurée.");
+  else if (countGaugeByEvalId === 0) Logger.log("\n⚠️ Aucun item gauge trouvé pour gauge_id='" + gaugeId + "' — la Gauge n'a pas soumis.");
+  else if (countGaugeSessId === 0) Logger.log("\n⚠️ Items gauge par evalId=" + countGaugeByEvalId + " MAIS pas par sessionId → migration ratée.");
+  else Logger.log("\n✅ " + countGaugeSessId + " items gauge liés à la session. Le Cockpit doit les afficher.");
+}
+
+// ==============================================================================
+// DIAGNOSTIC — Audit de l'origine de la catégorie "Général"
+// Exécutez cette fonction depuis l'éditeur Apps Script pour localiser la source.
+// ==============================================================================
+function auditGeneralCategory() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  Logger.log("=== AUDIT CATÉGORIE GÉNÉRAL ===");
+
+  // 1. Inspecter Admin_Config_Grille
   var cfgSheet = ss.getSheetByName("Admin_Config_Grille");
-  if (!cfgSheet) {
-    cfgSheet = ss.insertSheet("Admin_Config_Grille");
-    cfgSheet.appendRow(["template_id","item_id","niveau","parent_id","est_terminal","commentaire_obligatoire","libelle_fr","criticite","col8","type_noeud","categorie_racine_fr","show_subitems_on","hide_na"]);
-  }
-
   if (cfgSheet) {
     var cfgData = cfgSheet.getDataRange().getValues();
-    // S'assurer que les en-têtes L et M existent en Ligne 1
-    if (cfgData.length > 0) {
-      var headerL = String(cfgData[0][11] || "").trim();
-      var headerM = String(cfgData[0][12] || "").trim();
-      if (!headerL) cfgSheet.getRange(1, 12).setValue("show_subitems_on");
-      if (!headerM) cfgSheet.getRange(1, 13).setValue("hide_na");
-    }
+    var foundCfg = 0;
+    for (var i = 1; i < cfgData.length; i++) {
+      var tplId = String(cfgData[i][0]).trim();
+      var itemId = String(cfgData[i][1]).trim();
+      var niveau = String(cfgData[i][2]).trim();
+      var parentId = String(cfgData[i][3]).trim();
+      var libelle = String(cfgData[i][6] || "").trim();
+      var catRacine = String(cfgData[i][10] || "").trim();
 
-    // Nettoyer les anciennes lignes TPL_GENII_V1 si présentes
-    for (var j = cfgData.length - 1; j >= 1; j--) {
-      if (String(cfgData[j][0]).trim() === TPL) {
-        cfgSheet.deleteRow(j + 1);
+      if (niveau === "1" && (!libelle || libelle.toLowerCase() === "général" || libelle.toLowerCase() === "general")) {
+        Logger.log("⚠️ [Admin_Config_Grille Ligne " + (i+1) + "] N1 avec libellé vide/général : tpl=" + tplId + " | item_id=" + itemId + " | libelle='" + libelle + "'");
+        foundCfg++;
+      }
+      if (niveau === "2" && (!catRacine || catRacine.toLowerCase() === "général" || catRacine.toLowerCase() === "general")) {
+        Logger.log("⚠️ [Admin_Config_Grille Ligne " + (i+1) + "] N2 sans categorie_racine : tpl=" + tplId + " | item_id=" + itemId + " | parent_id=" + parentId + " | libelle='" + libelle + "'");
+        foundCfg++;
       }
     }
-    var cfgRows = [
+    if (foundCfg === 0) Logger.log("✅ Admin_Config_Grille : Aucune anomalie 'Général' détectée.");
+  } else {
+    Logger.log("❌ Feuille Admin_Config_Grille introuvable.");
+  }
+
+  // 2. Inspecter Log_Soumissions
+  var subSheet = ss.getSheetByName("Log_Soumissions");
+  if (subSheet) {
+    var subData = subSheet.getDataRange().getValues();
+    var foundSub = 0;
+    for (var k = 1; k < subData.length; k++) {
+      var sessId = String(subData[k][1]).trim();
+      var itemId = String(subData[k][4]).trim();
+      var cat = String(subData[k][5] || "").trim();
+
+      if (!cat || cat.toLowerCase() === "général" || cat.toLowerCase() === "general") {
+        if (foundSub < 15) {
+          Logger.log("⚠️ [Log_Soumissions Ligne " + (k+1) + "] Catégorie vide/général : session=" + sessId + " | item_id=" + itemId);
+        }
+        foundSub++;
+      }
+    }
+    Logger.log("Total lignes Log_Soumissions avec catégorie vide/général : " + foundSub);
+  } else {
+    Logger.log("❌ Feuille Log_Soumissions introuvable.");
+  }
+}
+
+
+
+// ==============================================================================
+// GESTION DES ASSESSMENTS LIBRES & ENTRAÎNEMENTS AUTONOMES
+// ==============================================================================
+function getOrCreateAssessmentsLibresSheet(ss) {
+  var sheet = ss.getSheetByName("Assessments_Libres");
+  if (!sheet) {
+    sheet = ss.insertSheet("Assessments_Libres");
+    var headers = [
+      "assessment_id",
+      "date_creation",
+      "evaluateur_id",
+      "template_id",
+      "template_nom",
+      "titre",
+      "nom_conseiller",
+      "audio_url",
+      "consignes",
+      "score",
+      "statut",
+      "interaction_summary",
+      "evaluator_comments",
+      "reponses_json",
+      "commentaires_json"
+    ];
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length).setBackground("#1dc4ff").setFontColor("#0f172a").setFontWeight("bold");
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function handleSoumettreAssessmentLibre(ss, req) {
+  try {
+    var sheet = getOrCreateAssessmentsLibresSheet(ss);
+    var assessmentId = req.assessment_id || ("ASSESS_" + Date.now());
+    var dateCreation = req.date_creation || new Date().toISOString();
+    var evalId = req.evaluateur_id || "";
+    var templateId = req.template_id || "";
+    var templateNom = req.template_nom || templateId;
+    var titre = req.titre || "Assessment Libre";
+    var conseiller = req.nom_conseiller || "";
+    var audioUrl = req.audio_url || "";
+    var consignes = req.consignes || "";
+    var score = Number(req.score || 0);
+    var statut = req.statut || "COMPLETED";
+    var interactionSummary = req.interaction_summary || "";
+    var evaluatorComments = req.evaluator_comments || "";
+    var reponsesJson = JSON.stringify(req.reponses || {});
+    var commentairesJson = JSON.stringify(req.commentaires || {});
+
+    var data = sheet.getDataRange().getValues();
+    var rowFound = -1;
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(assessmentId)) {
+        rowFound = i + 1;
+        break;
+      }
+    }
+
+    var rowData = [
+      assessmentId,
+      dateCreation,
+      evalId,
+      templateId,
+      templateNom,
+      titre,
+      conseiller,
+      audioUrl,
+      consignes,
+      score,
+      statut,
+      interactionSummary,
+      evaluatorComments,
+      reponsesJson,
+      commentairesJson
+    ];
+
+    if (rowFound > 0) {
+      sheet.getRange(rowFound, 1, 1, rowData.length).setValues([rowData]);
+    } else {
+      sheet.appendRow(rowData);
+    }
+
+    return { success: true, message: "Assessment enregistré avec succès dans Google Sheets", assessment_id: assessmentId };
+  } catch (err) {
+    return { success: false, message: "Erreur enregistrement assessment: " + err.toString() };
+  }
+}
+
+function handleListerMesAssessments(ss, req) {
+  try {
+    var sheet = getOrCreateAssessmentsLibresSheet(ss);
+    var evalId = req.evaluateur_id || req.identifiant || "";
+    var data = sheet.getDataRange().getValues();
+    if (data.length <= 1) return { success: true, assessments: [] };
+
+    var assessments = [];
+
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      var rowEvalId = String(row[2] || "");
+      if (!evalId || rowEvalId === evalId || rowEvalId.toLowerCase() === evalId.toLowerCase()) {
+        assessments.push({
+          assessment_id: String(row[0] || ""),
+          date_creation: String(row[1] || ""),
+          evaluateur_id: rowEvalId,
+          template_id: String(row[3] || ""),
+          template_nom: String(row[4] || ""),
+          titre: String(row[5] || ""),
+          nom_conseiller: String(row[6] || ""),
+          audio_url: String(row[7] || ""),
+          consignes: String(row[8] || ""),
+          score: Number(row[9] || 0),
+          statut: String(row[10] || "COMPLETED"),
+          interaction_summary: String(row[11] || ""),
+          evaluator_comments: String(row[12] || ""),
+          reponses: row[13] ? JSON.parse(row[13]) : {},
+          commentaires: row[14] ? JSON.parse(row[14]) : {}
+        });
+      }
+    }
+
+    assessments.sort(function(a, b) {
+      return new Date(b.date_creation).getTime() - new Date(a.date_creation).getTime();
+    });
+
+    return { success: true, assessments: assessments };
+  } catch (err) {
+    return { success: false, message: "Erreur liste assessments: " + err.toString() };
+  }
+}
+
+function handleGetDetailAssessment(ss, req) {
+  try {
+    var sheet = getOrCreateAssessmentsLibresSheet(ss);
+    var assessmentId = req.assessment_id;
+    var data = sheet.getDataRange().getValues();
+
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(assessmentId)) {
+        var row = data[i];
+        return {
+          success: true,
+          assessment: {
+            assessment_id: String(row[0] || ""),
+            date_creation: String(row[1] || ""),
+            evaluateur_id: String(row[2] || ""),
+            template_id: String(row[3] || ""),
+            template_nom: String(row[4] || ""),
+            titre: String(row[5] || ""),
+            nom_conseiller: String(row[6] || ""),
+            audio_url: String(row[7] || ""),
+            consignes: String(row[8] || ""),
+            score: Number(row[9] || 0),
+            statut: String(row[10] || "COMPLETED"),
+            interaction_summary: String(row[11] || ""),
+            evaluator_comments: String(row[12] || ""),
+            reponses: row[13] ? JSON.parse(row[13]) : {},
+            commentaires: row[14] ? JSON.parse(row[14]) : {}
+          }
+        };
+      }
+    }
+    return { success: false, message: "Assessment non trouvé" };
+  } catch (err) {
+    return { success: false, message: "Erreur récupération assessment: " + err.toString() };
+  }
+}
+
+function handleSupprimerAssessmentLibre(ss, req) {
+  try {
+    var sheet = getOrCreateAssessmentsLibresSheet(ss);
+    var assessmentId = req.assessment_id;
+    var data = sheet.getDataRange().getValues();
+
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(assessmentId)) {
+        sheet.deleteRow(i + 1);
+        return { success: true, message: "Assessment supprimé avec succès" };
+      }
+    }
+    return { success: false, message: "Assessment introuvable" };
+  } catch (err) {
+    return { success: false, message: "Erreur suppression assessment: " + err.toString() };
+  }
+}
+
+function handleSupprimerSession(ss, sessionId) {
+  try {
+    if (!sessionId) return { success: false, message: "ID de session manquant." };
+    
+    // 1. Supprimer de "Sessions" et "Admin_Sessions"
+    var sheetNames = ["Sessions", "Admin_Sessions"];
+    sheetNames.forEach(function(sName) {
+      var s = ss.getSheetByName(sName);
+      if (s) {
+        var data = s.getDataRange().getValues();
+        for (var i = data.length - 1; i >= 1; i--) {
+          if (String(data[i][0]).trim() === String(sessionId).trim()) {
+            s.deleteRow(i + 1);
+          }
+        }
+      }
+    });
+
+    // 2. Supprimer les évaluations associées dans "Log_Soumissions" et "Evaluations"
+    var logNames = ["Log_Soumissions", "Evaluations"];
+    logNames.forEach(function(lName) {
+      var s = ss.getSheetByName(lName);
+      if (s) {
+        var data = s.getDataRange().getValues();
+        for (var j = data.length - 1; j >= 1; j--) {
+          var rowSessId1 = String(data[j][1] || "").trim();
+          var rowSessId0 = String(data[j][0] || "").trim();
+          if (rowSessId1 === String(sessionId).trim() || rowSessId0 === String(sessionId).trim()) {
+            s.deleteRow(j + 1);
+          }
+        }
+      }
+    });
+
+    // 3. Supprimer les arbitrages associés
+    var arbNames = ["Historique_Arbitrages", "Arbitrages", "Decisions_Finales"];
+    arbNames.forEach(function(aName) {
+      var s = ss.getSheetByName(aName);
+      if (s) {
+        var data = s.getDataRange().getValues();
+        for (var k = data.length - 1; k >= 1; k--) {
+          var rowSessId1 = String(data[k][1] || "").trim();
+          var rowSessId0 = String(data[k][0] || "").trim();
+          if (rowSessId1 === String(sessionId).trim() || rowSessId0 === String(sessionId).trim()) {
+            s.deleteRow(k + 1);
+          }
+        }
+      }
+    });
+
+    return { success: true, message: "Session et données associées supprimées avec succès." };
+  } catch (err) {
+    return { success: false, message: "Erreur suppression session: " + err.toString() };
+  }
+}
+
+function handleAnnulerDemandeCalibrage(ss, demandeId) {
+  try {
+    if (!demandeId) return { success: false, message: "ID de demande manquant." };
+    var sheet = ss.getSheetByName("Demandes_Calibrage");
+    if (!sheet) return { success: false, message: "Feuille Demandes_Calibrage introuvable." };
+    
+    var data = sheet.getDataRange().getValues();
+    for (var i = data.length - 1; i >= 1; i--) {
+      if (String(data[i][0]).trim() === String(demandeId).trim()) {
+        sheet.deleteRow(i + 1);
+        return { success: true, message: "Demande de calibrage annulée avec succès." };
+      }
+    }
+    return { success: false, message: "Demande introuvable." };
+  } catch (err) {
+    return { success: false, message: "Erreur annulation demande: " + err.toString() };
+  }
+}
+
+function handleSupprimerEvaluateur(ss, targetIdentifiant) {
+  try {
+    if (!targetIdentifiant) return { success: false, message: "Identifiant manquant." };
+    var evalSheets = ["Registre_Evaluateurs", "Admin_Evaluateurs"];
+    var found = false;
+    evalSheets.forEach(function(sName) {
+      var sheet = ss.getSheetByName(sName);
+      if (sheet) {
+        var data = sheet.getDataRange().getValues();
+        for (var i = data.length - 1; i >= 1; i--) {
+          if (String(data[i][0]).trim().toLowerCase() === String(targetIdentifiant).trim().toLowerCase()) {
+            sheet.deleteRow(i + 1);
+            found = true;
+          }
+        }
+      }
+    });
+    
+    if (found) {
+      return { success: true, message: "Collaborateur supprimé avec succès." };
+    } else {
+      return { success: false, message: "Collaborateur introuvable." };
+    }
+  } catch (err) {
+    return { success: false, message: "Erreur suppression collaborateur: " + err.toString() };
+  }
+}
+
+// ==============================================================================
+// HANDLER — Restaurer la Grille Officielle Genii Complète (100% - 10/10 Process)
+// ==============================================================================
+function handleRestaurerGrilleGeniiComplete(ss, payload) {
+  try {
+    var tplId = (payload && payload.template_id) ? String(payload.template_id).trim() : "TPL_GENII_OFFICIAL";
+    if (!tplId) tplId = "TPL_GENII_OFFICIAL";
+    var nomTemplate = (payload && payload.nom) ? String(payload.nom).trim() : "Grille Genii Officielle (100% - 10 Process)";
+
+    var rawRows = [
   [
     "TPL_GENII_V1",
     "PA",
@@ -4166,1265 +5422,99 @@ function insertGENIITemplate(ss) {
     "TRUE"
   ]
 ];
-    if (cfgRows.length > 0) {
-      cfgSheet.getRange(cfgSheet.getLastRow() + 1, 1, cfgRows.length, cfgRows[0].length).setValues(cfgRows);
+
+    // 1. Nettoyer Templates_Grilles et Admin_Config_Grille pour ce template
+    var tplSheet = ss.getSheetByName("Templates_Grilles");
+    if (!tplSheet) {
+      initialiserBaseDeDonnees(ss);
+      tplSheet = ss.getSheetByName("Templates_Grilles");
     }
-    Logger.log("✅ Admin_Config_Grille : " + cfgRows.length + " lignes insérées pour " + TPL);
-  }
-
-  return {
-    success: true,
-    message: "Template " + TPL + " inséré avec succès dans Templates_Grilles (" + (typeof tplRows !== 'undefined' ? tplRows.length : 17) + " items) et Admin_Config_Grille (" + (typeof cfgRows !== 'undefined' ? cfgRows.length : 127) + " lignes).",
-    template_id: TPL
-  };
-}
-
-
-// ==============================================================================
-// HELPER — Vérifier si la date limite de clôture d'une session n'est pas encore atteinte
-// ==============================================================================
-function isSessionBeforeDeadline(ss, sessionId) {
-  var sessSheet = ss.getSheetByName("Sessions");
-  if (sessSheet) {
-    var sessData = sessSheet.getDataRange().getValues();
-    for (var i = 1; i < sessData.length; i++) {
-      if (sessData[i][0] === sessionId) {
-        var status = sessData[i][2];
-        if (status === "CLOSED" || status === "LOCKED") {
-          return false;
+    if (tplSheet) {
+      var tplData = tplSheet.getDataRange().getValues();
+      for (var i = tplData.length - 1; i >= 1; i--) {
+        if (String(tplData[i][0]).trim() === tplId) {
+          tplSheet.deleteRow(i + 1);
         }
-        if (sessData[i][7]) {
-          var closeTime = new Date(sessData[i][7]).getTime();
-          var nowTime = new Date().getTime();
-          if (nowTime < closeTime) {
-            return true;
-          }
+      }
+    }
+
+    var cfgSheet = ss.getSheetByName("Admin_Config_Grille");
+    if (!cfgSheet) {
+      cfgSheet = ss.insertSheet("Admin_Config_Grille");
+      cfgSheet.appendRow(["template_id", "item_id", "niveau", "parent_id", "est_terminal", "commentaire_obligatoire", "libelle", "criticite", "poids", "type_noeud", "categorie_racine_fr"]);
+    }
+    if (cfgSheet) {
+      var cfgData = cfgSheet.getDataRange().getValues();
+      for (var j = cfgData.length - 1; j >= 1; j--) {
+        if (String(cfgData[j][0]).trim() === tplId) {
+          cfgSheet.deleteRow(j + 1);
         }
-        break;
       }
     }
-  }
-  return false;
-}
 
-// ==============================================================================
-// HANDLER — Enregistrer une décision finale d'arbitrage sur un item
-// ==============================================================================
-// HELPER — Récupérer le rôle d'un utilisateur depuis Evaluateurs
-function getUserRole(ss, identifiant) {
-  if (!identifiant) return "";
-  var cleanId = String(identifiant).trim().toLowerCase();
-  if (cleanId === "admin" || cleanId === "oumar.toure") return "admin";
-  var evalSheet = ss.getSheetByName("Evaluateurs");
-  if (!evalSheet) return "evaluateur";
-  var evalData = evalSheet.getDataRange().getValues();
-  for (var i = 1; i < evalData.length; i++) {
-    var id = String(evalData[i][0] || "").trim().toLowerCase();
-    if (id === cleanId) {
-      return String(evalData[i][4] || "evaluateur").trim().toLowerCase();
-    }
-  }
-  return "evaluateur";
-}
+    // 2. Écrire dans Admin_Config_Grille
+    var cfgRowsToAdd = [];
+    var tplRowsToAdd = [];
 
-function handleEnregistrerDecisionFinale(ss, payload) {
-  var sessionId   = payload.session_id;
-  var itemId      = payload.item_id;
-  var decision    = payload.decision;        // "Oui" | "Non" | "N.A."
-  var justification = payload.justification || "";
-  var animateurId = payload.animateur_id || "admin";
+    rawRows.forEach(function(r) {
+      var itemId    = r[1];
+      var niveau    = parseInt(r[2], 10) || 2;
+      var parentId  = r[3] || "";
+      var estTerm   = r[4] || "FALSE";
+      var commOblig = r[5] || "FALSE";
+      var libelle   = r[6] || "";
+      var criticite = r[7] || "Standard";
+      var catRacine = r[10] || "Process Adherence";
+      var typeNoeud = r[8] || (niveau === 1 ? "categorie" : niveau === 2 ? "question" : "sous_critere");
 
-  if (!sessionId || !itemId || !decision) {
-    return { success: false, message: "Paramètres requis : session_id, item_id, decision." };
-  }
+      cfgRowsToAdd.push([
+        tplId,
+        itemId,
+        niveau,
+        parentId,
+        estTerm,
+        commOblig,
+        libelle,
+        criticite,
+        1,
+        typeNoeud,
+        catRacine
+      ]);
 
-  var callerRole = getUserRole(ss, animateurId);
-  if (callerRole === "evaluateur") {
-    return { success: false, message: "Droits insuffisants : Les évaluateurs ne peuvent pas enregistrer d'arbitrage. Action réservée à l'Animateur, au Gauge et à l'Admin." };
-  }
-
-  if (justification && String(justification).trim().length > 0 && String(justification).trim().length < 5) {
-    return { success: false, message: "La justification d'arbitrage doit contenir au moins 5 caractères." };
-  }
-
-  if (isSessionBeforeDeadline(ss, sessionId)) {
-    return { success: false, message: "Arbitrage bloqué : La date de clôture de la session n'est pas encore atteinte." };
-  }
-
-  var sheet = ss.getSheetByName("Historique_Arbitrages");
-  if (!sheet) {
-    initialiserBaseDeDonnees(ss);
-    sheet = ss.getSheetByName("Historique_Arbitrages");
-  }
-
-  // Supprimer une éventuelle décision précédente sur le même item/session
-  var data = sheet.getDataRange().getValues();
-  for (var i = data.length - 1; i >= 1; i--) {
-    if (String(data[i][1]).trim() === String(sessionId).trim() &&
-        String(data[i][3]).trim() === String(itemId).trim()) {
-      sheet.deleteRow(i + 1);
-    }
-  }
-
-  // Enregistrer la nouvelle décision
-  sheet.appendRow([
-    new Date().toISOString(),
-    sessionId,
-    "",            // categorie (non utilisé ici)
-    itemId,        // item_nom sert de item_id
-    decision,      // decision_arbitrage
-    justification, // nouvelle_consigne / justification
-    animateurId
-  ]);
-
-  return { success: true, message: "Décision finale enregistrée.", item_id: itemId, decision: decision };
-}
-
-// ==============================================================================
-// HANDLER — Enregistrer un lot (batch) de décisions d'arbitrage en 1 seule transaction
-// ==============================================================================
-function handleEnregistrerDecisionsBatch(ss, payload) {
-  var sessionId   = payload.session_id;
-  var items       = payload.items || [];
-  var animateurId = payload.animateur_id || "admin";
-
-  if (!sessionId) {
-    return { success: false, message: "Paramètre requis : session_id manquant." };
-  }
-  if (!items || items.length === 0) {
-    return { success: false, message: "Paramètre requis : items est vide ou manquant." };
-  }
-
-  for (var b = 0; b < items.length; b++) {
-    var bComm = String(items[b].justification || "").trim();
-    if (bComm.length > 0 && bComm.length < 5) {
-      return { success: false, message: "Toutes les justifications d'arbitrage renseignées doivent contenir au moins 5 caractères." };
-    }
-  }
-
-  if (isSessionBeforeDeadline(ss, sessionId)) {
-    return { success: false, message: "Arbitrage bloqué : La date de clôture de la session n'est pas encore atteinte." };
-  }
-
-  var sheet = ss.getSheetByName("Historique_Arbitrages");
-  if (!sheet) {
-    initialiserBaseDeDonnees(ss);
-    sheet = ss.getSheetByName("Historique_Arbitrages");
-  }
-
-  // Créer un dictionnaire des item_id à mettre à jour
-  var targetItemIds = {};
-  items.forEach(function(it) {
-    if (it.item_id) targetItemIds[String(it.item_id).trim()] = true;
-  });
-
-  // Supprimer les anciennes décisions pour ces items en allant de bas en haut
-  // (évite le décalage d'index lors de deleteRow)
-  var allData = sheet.getDataRange().getValues();
-  var rowsToDelete = [];
-  for (var i = allData.length - 1; i >= 1; i--) {
-    if (String(allData[i][1]).trim() === String(sessionId).trim() &&
-        targetItemIds[String(allData[i][3]).trim()]) {
-      rowsToDelete.push(i + 1); // 1-indexed
-    }
-  }
-  // Supprimer du bas vers le haut pour éviter le décalage
-  rowsToDelete.forEach(function(rowNum) {
-    sheet.deleteRow(rowNum);
-  });
-
-  // Préparer toutes les nouvelles lignes
-  var now = new Date().toISOString();
-  var newRows = [];
-  items.forEach(function(it) {
-    if (!it.item_id || !it.decision) return;
-    newRows.push([
-      now,
-      String(sessionId).trim(),
-      "",
-      String(it.item_id).trim(),
-      String(it.decision).trim(),
-      String(it.justification || "").trim(),
-      String(animateurId).trim()
-    ]);
-  });
-
-  // Écrire tout le bloc en 1 seule opération atomique
-  if (newRows.length > 0) {
-    var startRow = sheet.getLastRow() + 1;
-    sheet.getRange(startRow, 1, newRows.length, 7).setValues(newRows);
-  }
-
-  Logger.log("[Batch] Session=" + sessionId + " | " + newRows.length + " arbitrage(s) écrits.");
-  return {
-    success: true,
-    message: newRows.length + " arbitrage(s) enregistré(s) avec succès.",
-    count: newRows.length
-  };
-}
-
-// ==============================================================================
-// HANDLER — Réinitialiser / Effacer tous les arbitrages enregistrés d'une session
-// ==============================================================================
-function handleReinitialiserArbitrages(ss, payload) {
-  var sessionId = payload.session_id;
-  if (!sessionId) {
-    return { success: false, message: "Paramètre requis : session_id manquant." };
-  }
-
-  if (isSessionBeforeDeadline(ss, sessionId)) {
-    return { success: false, message: "Arbitrage bloqué : La date de clôture de la session n'est pas encore atteinte." };
-  }
-
-  var sheet = ss.getSheetByName("Historique_Arbitrages");
-  if (!sheet) {
-    return { success: true, message: "Aucun arbitrage à réinitialiser.", count: 0 };
-  }
-
-  var allData = sheet.getDataRange().getValues();
-  var rowsToDelete = [];
-  for (var i = allData.length - 1; i >= 1; i--) {
-    if (String(allData[i][1]).trim() === String(sessionId).trim()) {
-      rowsToDelete.push(i + 1); // 1-indexed
-    }
-  }
-
-  // Supprimer du bas vers le haut pour éviter le décalage d'index
-  rowsToDelete.forEach(function(rowNum) {
-    sheet.deleteRow(rowNum);
-  });
-
-  Logger.log("[Reset Arbitrages] Session=" + sessionId + " | " + rowsToDelete.length + " ligne(s) effacée(s).");
-  return {
-    success: true,
-    message: rowsToDelete.length + " arbitrage(s) réinitialisé(s) pour la session.",
-    count: rowsToDelete.length
-  };
-}
-
-function handleGetProfil(ss, evaluateurId) {
-  const subSheet = ss.getSheetByName("Log_Soumissions");
-  const subData = subSheet ? subSheet.getDataRange().getValues() : [];
-  let totalSubs = 0;
-  const sessionsSet = new Set();
-
-  for (let i = 1; i < subData.length; i++) {
-    if (String(subData[i][2]).trim().toLowerCase() === String(evaluateurId).trim().toLowerCase()) {
-      totalSubs++;
-      sessionsSet.add(subData[i][1]);
-    }
-  }
-  return { success: true, data: { identifiant: evaluateurId, nombre_total_evaluations_soumises: totalSubs, nombre_sessions_participes: sessionsSet.size, nombre_sessions_ratees: 0, nombre_sessions_animees: 0 } };
-}
-
-function handleValiderHorsSession(ss, payload) {
-  const sessionId = payload.session_id;
-  const decision = payload.decision_admin;
-  const sheet = ss.getSheetByName("Sessions");
-  if (!sheet) return { success: false, message: "Feuille sessions introuvable." };
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === sessionId) {
-      sheet.getRange(i + 1, 3).setValue(decision === "APPROUVE" ? "OPEN" : "CLOSED");
-      return { success: true, message: "Décision enregistrée." };
-    }
-  }
-  return { success: false, message: "Session introuvable." };
-}
-
-function handleEnregistrerArbitrage(ss, payload) {
-  let sheet = ss.getSheetByName("Historique_Arbitrages");
-  if (!sheet) { initialiserBaseDeDonnees(ss); sheet = ss.getSheetByName("Historique_Arbitrages"); }
-  sheet.appendRow([new Date().toISOString(), payload.session_id, payload.categorie, payload.item_nom, payload.decision_arbitrage, payload.nouvelle_consigne, payload.animateur_id]);
-  return { success: true, message: "Arbitrage enregistré." };
-}
-
-function handleCloturerSession(ss, payload) {
-  const sessionId = payload.session_id;
-  const force = payload.force === true || String(payload.force).toLowerCase() === "true";
-  const sheet = ss.getSheetByName("Sessions");
-  if (!sheet) return { success: false, message: "Feuille sessions introuvable." };
-
-  // Vérifier si tous les items de la grille ont été arbitrés
-  if (!force) {
-    const cockpitData = handleGetCockpit(ss, sessionId);
-    if (cockpitData && cockpitData.grille_hierarchique) {
-      // Extraire toutes les questions d'évaluation (les enfants N2 des catégories N1)
-      var allQuestions = [];
-      cockpitData.grille_hierarchique.forEach(function(root) {
-        if (root.type_noeud === "categorie" || (root.children && root.children.length > 0)) {
-          if (root.children) {
-            root.children.forEach(function(child) { allQuestions.push(child); });
-          }
-        } else {
-          allQuestions.push(root);
-        }
-      });
-
-      const unarbitrated = allQuestions.filter(function(q) {
-        return !q.decision_finale;
-      });
-
-      if (unarbitrated.length > 0) {
-        return {
-          success: false,
-          message: "Clôture impossible : " + unarbitrated.length + " item(s) sur " + allQuestions.length + " ne sont pas encore arbitrés.",
-          unarbitrated_count: unarbitrated.length
-        };
+      // Si c'est une question N2, l'ajouter également à Templates_Grilles
+      if (niveau === 2) {
+        tplRowsToAdd.push([
+          tplId,
+          nomTemplate,
+          catRacine,
+          itemId,
+          libelle,
+          criticite,
+          1
+        ]);
       }
-    }
-  }
-
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === sessionId) {
-      sheet.getRange(i + 1, 3).setValue("CLOSED");
-      // Try to generate the PDF report. If it fails, still return success for the cloture.
-      let pdfUrl = null;
-      try {
-        pdfUrl = genererRapportCalibrage(ss, sessionId);
-      } catch(e) {
-        Logger.log("Erreur génération rapport: " + e.toString());
-      }
-      const result = { success: true, message: "Session clôturée." };
-      if (pdfUrl) result.pdf_url = pdfUrl;
-      return result;
-    }
-  }
-  return { success: false, message: "Session introuvable." };
-}
-
-// ==============================================================================
-// HANDLER — Récupérer l'URL du rapport PDF d'une session clôturée
-// ==============================================================================
-function handleGetRapportPdf(ss, sessionId) {
-  if (!sessionId) return { success: false, message: "session_id requis." };
-  const sheet = ss.getSheetByName("Sessions");
-  if (!sheet) return { success: false, message: "Feuille sessions introuvable." };
-
-  // Générer un rapport PDF mis à jour avec la structure v14
-  try {
-    const pdfUrl = genererRapportCalibrage(ss, sessionId);
-    if (pdfUrl) return { success: true, pdf_url: pdfUrl };
-    return { success: false, message: "Génération du rapport en cours, réessayez dans quelques instants." };
-  } catch(e) {
-    var errText = e.toString();
-    if (errText.indexOf("DocumentApp") !== -1 || errText.indexOf("auth/documents") !== -1 || errText.indexOf("autorisé") !== -1) {
-      return {
-        success: false,
-        message: "Autorisation Google Docs requise ! Dans l'éditeur Google Apps Script (script.google.com), sélectionnez la fonction 'autoriserGoogleDocsPermissions' dans la barre du haut et cliquez sur 'Exécuter' une seule fois pour valider l'accès à Google Docs."
-      };
-    }
-    return { success: false, message: "Erreur lors de la génération du rapport: " + errText };
-  }
-}
-
-// ==============================================================================
-// CORE — Générer le rapport PDF de calibrage complet dans Google Drive
-// Retourne l'URL du PDF ou null en cas d'échec.
-// ==============================================================================
-function genererRapportCalibrage(ss, sessionId) {
-
-  // ── 1. Récupérer la structure complète ─────────────────────────────────────
-  var resStruct = handleGetCockpit(ss, sessionId);
-  if (!resStruct || !resStruct.success) {
-    Logger.log("Impossible de récupérer la structure pour la session " + sessionId);
-    return null;
-  }
-
-  var sessionInfo = {
-    session_id:     resStruct.session_id     || sessionId,
-    nom_session:    resStruct.nom_session     || sessionId,
-    statut:         resStruct.statut          || "CLOSED",
-    heure_fin:      resStruct.heure_fin       || "",
-    nom_conseiller: resStruct.nom_conseiller  || "",
-    url_audio:      resStruct.url_audio       || ""
-  };
-  var categories  = resStruct.grille_hierarchique  || [];
-  var evaluateurs = resStruct.evaluateurs_soumis   || [];
-  var gaugeId     = resStruct.gauge_id             || "";
-
-  // ── 2. HELPERS ──────────────────────────────────────────────────────────────
-
-  // Nettoie un libellé qui contient des métadonnées DB (ex: "Label,English,Critical,VRAI,VRAI,,,")
-  function cleanLabel(raw) {
-    if (!raw) return "";
-    var s = String(raw).trim();
-    var idx = s.indexOf(",");
-    if (idx > 2) {
-      var first = s.substring(0, idx).trim();
-      var after = s.substring(idx + 1).split(",")[0].trim().toLowerCase();
-      var meta = ["vrai","faux","true","false","critical","standard","oui","non","yes","no","eliminatoire","terminal","0","1","2"];
-      if (meta.indexOf(after) >= 0 || /^\d+$/.test(after) || after.length === 0) {
-        return first;
-      }
-    }
-    return s;
-  }
-
-  // Barre de progression Unicode ▓░
-  function mkBar(filled, total, width) {
-    if (!total || total === 0) return "";
-    var n = Math.min(width, Math.round((filled / total) * width));
-    var bar = "";
-    for (var i = 0; i < n; i++) bar += "\u2593";
-    for (var i = n; i < width; i++) bar += "\u2591";
-    return bar;
-  }
-
-  // Ajoute un paragraphe stylé
-  function addLine(body, text, opts) {
-    opts = opts || {};
-    var p = body.appendParagraph(text);
-    if (opts.heading)  p.setHeading(opts.heading);
-    if (opts.bold)     p.setBold(true);
-    if (opts.italic)   p.setItalic(true);
-    if (opts.size)     p.setFontSize(opts.size);
-    if (opts.align)    p.setAlignment(opts.align);
-    if (opts.indent)   p.setIndentStart(opts.indent);
-    if (opts.spB)      p.setSpacingBefore(opts.spB);
-    if (opts.spA)      p.setSpacingAfter(opts.spA);
-    if (opts.color)    p.editAsText().setForegroundColor(opts.color);
-    return p;
-  }
-
-  // Ajoute un paragraphe avec la fin colorée à partir de charStart
-  function addLineColored(body, text, charStart, color, opts) {
-    opts = opts || {};
-    var p = body.appendParagraph(text);
-    if (opts.bold)   p.setBold(true);
-    if (opts.italic) p.setItalic(true);
-    if (opts.size)   p.setFontSize(opts.size);
-    if (opts.spB)    p.setSpacingBefore(opts.spB);
-    if (opts.spA)    p.setSpacingAfter(opts.spA);
-    if (charStart >= 0 && charStart < text.length) {
-      p.editAsText().setForegroundColor(charStart, text.length - 1, color);
-    }
-    return p;
-  }
-
-  // ── 3. Calcul des statistiques ─────────────────────────────────────────────
-  var nbOui = 0, nbNon = 0, nbNA = 0, nbNonArb = 0, nbCritNon = 0;
-  var catStats = [];
-
-  categories.forEach(function(cat) {
-    var qs = cat.children || [];
-    var cO = 0, cN = 0, cNA = 0;
-    qs.forEach(function(q) {
-      if (!q.decision_finale || !q.decision_finale.decision) { nbNonArb++; return; }
-      var dec = String(q.decision_finale.decision).trim();
-      if (dec === "Oui")  { nbOui++; cO++; }
-      else if (dec === "Non") {
-        nbNon++; cN++;
-        if (q.criticite === "Critical" || q.criticite === "Terminal" || q.criticite === "Eliminatoire") nbCritNon++;
-      }
-      else if (dec === "N.A.") { nbNA++; cNA++; }
     });
-    catStats.push({ name: cleanLabel(cat.libelle || ""), oui: cO, non: cN, na: cNA });
-  });
 
-  var totalArb   = nbOui + nbNon + nbNA;
-  var tauxGlobal = totalArb > 0 ? Math.round((nbOui / totalArb) * 100) : 0;
-
-  // ── 4. Formater les métadonnées de session ─────────────────────────────────
-  var dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy 'à' HH:mm");
-
-  // Nettoyer le nom du conseiller (connection_id → format lisible)
-  var conseillerDisplay = sessionInfo.nom_conseiller || "—";
-  if (/^\d{8,}/.test(conseillerDisplay)) {
-    var parts = conseillerDisplay.split("|");
-    conseillerDisplay = (parts[1] ? "Appel du " + parts[1] + " — " : "") + "ID " + parts[0].substring(0, 12) + "...";
-  }
-
-  // ── 5. Créer le document Google ───────────────────────────────────────────
-  var docTitle = "Rapport_Calibrage_" + (sessionInfo.session_id || sessionId);
-  var doc  = DocumentApp.create(docTitle);
-  var body = doc.getBody();
-  body.setMarginTop(40);
-  body.setMarginBottom(40);
-  body.setMarginLeft(56);
-  body.setMarginRight(56);
-
-  // ═══════════════════════════════════════════════════════════════
-  // SECTION 1 — TITRE PRINCIPAL
-  // ═══════════════════════════════════════════════════════════════
-  var titlePara = body.appendParagraph("RAPPORT DE CALIBRAGE QUALITÉ");
-  titlePara.setHeading(DocumentApp.ParagraphHeading.HEADING1);
-  titlePara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-  titlePara.setFontSize(17);
-  titlePara.setSpacingAfter(2);
-
-  var subTitle = body.appendParagraph(sessionInfo.nom_session || sessionInfo.session_id);
-  subTitle.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-  subTitle.setFontSize(12);
-  subTitle.setBold(true);
-  subTitle.setSpacingAfter(14);
-
-  // Tableau identité session ─────────────────────────────────────
-  var evalListStr = evaluateurs.length > 0 ? evaluateurs.join("  •  ") : "Aucun";
-  var headerData = [
-    ["Session ID",       sessionInfo.session_id || sessionId],
-    ["Conseiller évalué",conseillerDisplay],
-    ["Date de clôture",  dateStr],
-    ["Calibreur / Gauge",gaugeId || "Aucun"],
-    ["Évaluateurs (" + evaluateurs.length + ")", evalListStr]
-  ];
-  var hTable = body.appendTable(headerData);
-  for (var r = 0; r < headerData.length; r++) {
-    var c0 = hTable.getCell(r, 0);
-    var c1 = hTable.getCell(r, 1);
-    c0.setBackgroundColor("#f1f3f4");
-    c0.setPaddingTop(4); c0.setPaddingBottom(4); c0.setPaddingLeft(8); c0.setPaddingRight(8);
-    c1.setPaddingTop(4); c1.setPaddingBottom(4); c1.setPaddingLeft(8); c1.setPaddingRight(8);
-    c0.editAsText().setFontSize(9).setBold(true).setForegroundColor("#5f6368");
-    c1.editAsText().setFontSize(9);
-  }
-  body.appendParagraph("").setSpacingAfter(4);
-  body.appendHorizontalRule();
-
-  // ═══════════════════════════════════════════════════════════════
-  // SECTION 2 — RÉSUMÉ EXÉCUTIF
-  // ═══════════════════════════════════════════════════════════════
-  addLine(body, "RÉSUMÉ EXÉCUTIF", {
-    heading: DocumentApp.ParagraphHeading.HEADING2, spB: 14, spA: 8
-  });
-
-  // Barre de progression + taux
-  var barStr  = mkBar(nbOui, totalArb, 22);
-  var barLine = barStr + "   " + tauxGlobal + "% de conformité";
-  var barColor = tauxGlobal >= 80 ? "#1e8e3e" : tauxGlobal >= 60 ? "#e37400" : "#c5221f";
-  var barPara = body.appendParagraph(barLine);
-  barPara.setFontSize(13);
-  barPara.setBold(true);
-  barPara.setSpacingAfter(4);
-  if (barStr.length > 0) {
-    barPara.editAsText().setForegroundColor(0, barStr.length - 1, barColor);
-  }
-
-  // KPIs
-  var kpiText = "  ✅  " + nbOui + " Conformes      ❌  " + nbNon + " Imputés      ⚪  " + nbNA + " N.A.";
-  var kpiPara = body.appendParagraph(kpiText);
-  kpiPara.setFontSize(10);
-  kpiPara.setSpacingAfter(6);
-
-  // Alerte items critiques imputés
-  if (nbCritNon > 0) {
-    var critText = "⚠   " + nbCritNon + " item(s) CRITIQUE(S) non conforme(s) — Attention particulière requise";
-    addLine(body, critText, { size: 10, bold: true, color: "#c5221f", spA: 6 });
-  }
-
-  // Items non arbitrés
-  if (nbNonArb > 0) {
-    addLine(body, "ℹ   " + nbNonArb + " item(s) sans décision finale (en attente d'arbitrage)", {
-      size: 9, italic: true, color: "#757575", spA: 6
-    });
-  }
-
-  // Tableau récapitulatif par catégorie ─────────────────────────
-  addLine(body, "Récapitulatif par catégorie :", { size: 9, bold: true, spB: 8, spA: 4 });
-
-  var catTableData = [["Catégorie", "✅ Conformes", "❌ Imputés", "Taux"]];
-  catStats.forEach(function(cs) {
-    var arb  = cs.oui + cs.non;
-    var taux = arb > 0 ? Math.round((cs.oui / arb) * 100) + "%" : "—";
-    catTableData.push([cs.name, String(cs.oui), String(cs.non), taux]);
-  });
-
-  var cTable = body.appendTable(catTableData);
-  // En-tête tableau
-  for (var ch = 0; ch < 4; ch++) {
-    var hc = cTable.getCell(0, ch);
-    hc.setBackgroundColor("#e8eaed");
-    hc.setPaddingTop(4); hc.setPaddingBottom(4); hc.setPaddingLeft(6); hc.setPaddingRight(6);
-    hc.editAsText().setFontSize(9).setBold(true).setForegroundColor("#3c4043");
-  }
-  // Lignes de données
-  for (var cr = 1; cr < catTableData.length; cr++) {
-    var cs3 = catStats[cr - 1];
-    var arb3 = cs3.oui + cs3.non;
-    for (var cc = 0; cc < 4; cc++) {
-      var dc = cTable.getCell(cr, cc);
-      dc.setPaddingTop(3); dc.setPaddingBottom(3); dc.setPaddingLeft(6); dc.setPaddingRight(6);
-      dc.editAsText().setFontSize(9);
-    }
-    // Colorer taux
-    var tauxVal = arb3 > 0 ? cs3.oui / arb3 : 1;
-    var tauxColor = tauxVal >= 0.8 ? "#1e8e3e" : tauxVal >= 0.6 ? "#e37400" : "#c5221f";
-    cTable.getCell(cr, 3).editAsText().setForegroundColor(tauxColor).setBold(true);
-    // Colorer Non si > 0
-    if (cs3.non > 0) {
-      cTable.getCell(cr, 2).editAsText().setForegroundColor("#c5221f").setBold(true);
-    }
-  }
-  body.appendParagraph("").setSpacingAfter(4);
-  body.appendHorizontalRule();
-
-  // ═══════════════════════════════════════════════════════════════
-  // SECTION 3 — DÉTAIL PAR CATÉGORIE
-  // ═══════════════════════════════════════════════════════════════
-  addLine(body, "DÉTAIL DES ARBITRAGES PAR CATÉGORIE", {
-    heading: DocumentApp.ParagraphHeading.HEADING2, spB: 14, spA: 6
-  });
-
-  // ─── Rendu d'une question N2 ─────────────────────────────────
-  function renderN2Question(body, q, qIdx) {
-    var qLabel = cleanLabel(q.libelle || q.item_id || "");
-    var isCrit = q.criticite === "Critical" || q.criticite === "Terminal" || q.criticite === "Eliminatoire";
-    var decObj = q.decision_finale;
-    var decStr = decObj ? String(decObj.decision || "").trim() : "";
-    var justif = decObj ? String(decObj.justification || "").trim() : "";
-
-    // Libellé question (N2)
-    var critBadge = isCrit ? "  ★ CRITIQUE" : "";
-    var qText = "  " + (qIdx + 1) + ".  " + qLabel + critBadge;
-    var qPara  = body.appendParagraph(qText);
-    qPara.setFontSize(10);
-    qPara.setBold(true);
-    qPara.setSpacingBefore(11);
-    qPara.setSpacingAfter(2);
-    if (isCrit && critBadge) {
-      var criStart = qText.indexOf(critBadge);
-      if (criStart > 0) qPara.editAsText().setForegroundColor(criStart, qText.length - 1, "#c5221f");
+    if (cfgRowsToAdd.length > 0 && cfgSheet) {
+      var startRowCfg = cfgSheet.getLastRow() + 1;
+      cfgSheet.getRange(startRowCfg, 1, cfgRowsToAdd.length, 11).setValues(cfgRowsToAdd);
     }
 
-    // Verdict (coloré)
-    var vIcon, vText, vColor;
-    if (decStr === "Oui")  { vIcon = "\u2705"; vText = "OUI \u2014 Conforme";      vColor = "#1e8e3e"; }
-    else if (decStr === "Non")  { vIcon = "\u274C"; vText = "NON \u2014 Imput\u00e9";   vColor = "#c5221f"; }
-    else if (decStr === "N.A.") { vIcon = "\u26AA"; vText = "N.A. \u2014 Non applicable"; vColor = "#757575"; }
-    else                        { vIcon = "\u26A0";  vText = "Non arbitr\u00e9";          vColor = "#e37400"; }
-
-    var vFull  = "       " + vIcon + "  " + vText;
-    var vStart = vFull.indexOf(vIcon);
-    addLineColored(body, vFull, vStart, vColor, { bold: true, size: 10, spA: 2 });
-
-    // Justification arbitrage (uniquement si NON + texte)
-    if (decStr === "Non" && justif) {
-      var jText = "       \uD83D\uDCAC  " + justif;
-      addLine(body, jText, { size: 9, italic: true, color: "#1a73e8", spA: 4 });
+    if (tplRowsToAdd.length > 0 && tplSheet) {
+      var startRowTpl = tplSheet.getLastRow() + 1;
+      tplSheet.getRange(startRowTpl, 1, tplRowsToAdd.length, 7).setValues(tplRowsToAdd);
     }
 
-    // Sous-items (UNIQUEMENT si décision = NON) ──────────────────
-    if (decStr === "Non") {
-      var subItems = q.children || [];
-
-      // Filtrer les N3 imputés
-      var imputedN3 = subItems.filter(function(sub) {
-        if (sub.decision_finale && sub.decision_finale.decision === "Non") return true;
-        if (sub.gauge && sub.gauge.critere === "Non") return true;
-        if (sub.votes_par_critere && sub.votes_par_critere["Non"] && sub.votes_par_critere["Non"].length > 0) return true;
-        return false;
-      });
-
-      if (imputedN3.length > 0) {
-        var pPin = body.appendParagraph("       \uD83D\uDCCC  Motifs d'imputation retenus :");
-        pPin.setFontSize(9);
-        pPin.setBold(true);
-        pPin.setSpacingAfter(2);
-        pPin.editAsText().setForegroundColor("#c5221f");
-
-        imputedN3.forEach(function(sub) {
-          var subLabel = cleanLabel(sub.libelle || sub.item_id || "");
-
-          // Commentaire N3 : préférer gauge > décision > premier vote Non
-          var subComm = "";
-          if (sub.gauge && sub.gauge.commentaire && sub.gauge.commentaire.trim()) {
-            subComm = sub.gauge.commentaire.trim();
-          } else if (sub.decision_finale && sub.decision_finale.justification) {
-            subComm = sub.decision_finale.justification.trim();
-          } else if (sub.votes_par_critere && sub.votes_par_critere["Non"]) {
-            var vwc = sub.votes_par_critere["Non"].filter(function(v) { return v.commentaire && v.commentaire.trim(); });
-            if (vwc.length > 0) subComm = vwc[0].commentaire.trim();
-          }
-
-          var n3Para = body.appendParagraph("          \u2013  " + subLabel);
-          n3Para.setFontSize(9);
-          n3Para.setSpacingAfter(1);
-
-          if (subComm) {
-            addLine(body, "              \uD83D\uDCAC  " + subComm, {
-              size: 9, italic: true, color: "#5f6368", spA: 2
-            });
-          }
-
-          // N4 — précisions sous le N3 ──────────────────────────
-          var n4Items  = sub.children || [];
-          var impN4    = n4Items.filter(function(n4) {
-            if (n4.gauge && n4.gauge.critere === "Non") return true;
-            if (n4.votes_par_critere && n4.votes_par_critere["Non"] && n4.votes_par_critere["Non"].length > 0) return true;
-            return false;
-          });
-
-          impN4.forEach(function(n4) {
-            var n4Label = cleanLabel(n4.libelle || n4.item_id || "");
-            var n4Comm  = "";
-            if (n4.gauge && n4.gauge.commentaire && n4.gauge.commentaire.trim()) {
-              n4Comm = n4.gauge.commentaire.trim();
-            } else if (n4.votes_par_critere && n4.votes_par_critere["Non"]) {
-              var v4c = n4.votes_par_critere["Non"].filter(function(v) { return v.commentaire && v.commentaire.trim(); });
-              if (v4c.length > 0) n4Comm = v4c[0].commentaire.trim();
-            }
-
-            var n4Text = "               \u2514\u2500  " + n4Label + (n4Comm ? " :  \u201C" + n4Comm + "\u201D" : "");
-            addLine(body, n4Text, { size: 8, italic: true, color: "#3c4043", spA: 2 });
-          });
-        });
-      }
-    }
-
-    // Avis calibreur/Gauge ────────────────────────────────────────
-    if (q.gauge && q.gauge.critere && gaugeId) {
-      var gNom   = q.gauge.nom || gaugeId;
-      var gCrit  = q.gauge.critere;
-      var gComm  = "";
-
-      // Récupérer récursivement les commentaires des descendants si vide au N2
-      function collectDeepGaugeComment(node) {
-        if (node.gauge && node.gauge.commentaire && node.gauge.commentaire.trim()) return node.gauge.commentaire.trim();
-        var kids = node.children || [];
-        for (var ki = 0; ki < kids.length; ki++) {
-          var r = collectDeepGaugeComment(kids[ki]);
-          if (r) return r;
-        }
-        return "";
-      }
-      gComm = q.gauge.commentaire ? q.gauge.commentaire.trim() : collectDeepGaugeComment(q);
-
-      var gIcon  = gCrit === "Oui" ? "\u2705" : gCrit === "Non" ? "\u274C" : "\u26AA";
-      var gText  = "       \uD83C\uDFAF  Avis calibreur (" + gNom + ") : " + gIcon + " " + gCrit;
-      if (gComm) gText += "  \u2014  \u201C" + gComm + "\u201D";
-
-      addLine(body, gText, { size: 9, italic: true, color: "#7b1fa2", spA: 2 });
-
-      // Divergence flagging
-      if (decStr && decStr !== gCrit && decStr !== "") {
-        addLine(body, "              \u26A1  Divergence : calibreur \u2260 d\u00e9cision finale", {
-          size: 8, bold: true, color: "#e37400", spA: 2
-        });
-      }
-    }
-
-    body.appendParagraph("").setSpacingAfter(2);
-  }
-
-  // ─── Rendu de chaque catégorie N1 ────────────────────────────
-  categories.forEach(function(cat, catIdx) {
-    var catName = cleanLabel(cat.libelle || cat.item_id || "Catégorie").toUpperCase();
-    var qs      = cat.children || [];
-    var cs4     = catStats[catIdx] || { oui: 0, non: 0, na: 0 };
-    var arb4    = cs4.oui + cs4.non;
-    var taux4   = arb4 > 0 ? Math.round((cs4.oui / arb4) * 100) : null;
-    var tc4     = taux4 !== null ? (taux4 >= 80 ? "#1e8e3e" : taux4 >= 60 ? "#e37400" : "#c5221f") : "#757575";
-
-    // En-tête catégorie
-    var catPara = body.appendParagraph("\u25B6  " + catName);
-    catPara.setHeading(DocumentApp.ParagraphHeading.HEADING3);
-    catPara.setFontSize(11);
-    catPara.setSpacingBefore(20);
-    catPara.setSpacingAfter(2);
-
-    // Stats sous le titre catégorie
-    var catSubText = "    (" + cs4.oui + " / " + arb4 + " conformes" + (taux4 !== null ? "  \u2014  " + taux4 + "%" : "") + ")";
-    addLine(body, catSubText, { size: 9, italic: true, color: tc4, spA: 5 });
-
-    if (qs.length === 0) {
-      addLine(body, "    (Aucune question arbitrée dans cette catégorie)", {
-        size: 9, italic: true, color: "#757575"
-      });
-      return;
-    }
-
-    qs.forEach(function(q, qIdx) {
-      renderN2Question(body, q, qIdx);
-    });
-  });
-
-  // ═══════════════════════════════════════════════════════════════
-  // SECTION 4 — PIED DE RAPPORT
-  // ═══════════════════════════════════════════════════════════════
-  body.appendHorizontalRule();
-  body.appendParagraph("").setSpacingAfter(6);
-
-  addLine(body, "Rapport généré le " + dateStr + " via CaliSync v2.0", {
-    size: 8, italic: true, color: "#9aa0a6",
-    align: DocumentApp.HorizontalAlignment.CENTER, spB: 8
-  });
-  addLine(body, "Session : " + (sessionInfo.session_id || sessionId) + "  \u2014  Taux de conformité global : " + tauxGlobal + "%", {
-    size: 8, color: "#9aa0a6",
-    align: DocumentApp.HorizontalAlignment.CENTER
-  });
-
-  // ── Export PDF dans Google Drive ──────────────────────────────
-  doc.saveAndClose();
-  var docId   = doc.getId();
-  var docFile = DriveApp.getFileById(docId);
-
-  var folder = null;
-  var folderIter = DriveApp.getFoldersByName("CaliSync_Rapports");
-  if (folderIter.hasNext()) {
-    folder = folderIter.next();
-  } else {
-    folder = DriveApp.createFolder("CaliSync_Rapports");
-  }
-
-  var pdfBlob = docFile.getAs("application/pdf").setName(docTitle + ".pdf");
-  var pdfFile = folder.createFile(pdfBlob);
-  pdfFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  var pdfUrl = pdfFile.getUrl();
-
-  try { docFile.setTrashed(true); } catch(e) {}
-
-  // Enregistrer l'URL dans Sessions (colonne 15)
-  var sessSheet = ss.getSheetByName("Sessions");
-  if (sessSheet) {
-    var sessData = sessSheet.getDataRange().getValues();
-    for (var si = 1; si < sessData.length; si++) {
-      if (String(sessData[si][0]).trim() === String(sessionId).trim()) {
-        sessSheet.getRange(si + 1, 15).setValue(pdfUrl);
-        break;
-      }
-    }
-  }
-
-  return pdfUrl;
-}
-
-
-
-
-function updateSessionStatuses(ss) {
-  const sheet = ss.getSheetByName("Sessions");
-  if (!sheet) return;
-  const data = sheet.getDataRange().getValues();
-  const now = new Date();
-
-  for (let i = 1; i < data.length; i++) {
-    const statut = data[i][2];
-    const ouvertureStr = data[i][5];
-    const finStr = data[i][7];
-
-    if (statut === "GAUGE_DONE" && ouvertureStr) {
-      const ouverture = new Date(ouvertureStr);
-      if (now >= ouverture) sheet.getRange(i + 1, 3).setValue("OPEN");
-    }
-
-    if (statut === "OPEN" && finStr) {
-      const fin = new Date(finStr);
-      if (now >= fin) sheet.getRange(i + 1, 3).setValue("LOCKED");
-    }
-  }
-}
-
-function getSubmittedEvaluators(subData, sessionId) {
-  const setEvals = new Set();
-  for (let i = 1; i < subData.length; i++) {
-    if (subData[i][1] === sessionId && (subData[i][3] === false || String(subData[i][3]).toUpperCase() === "FALSE")) {
-      setEvals.add(subData[i][2]);
-    }
-  }
-  return Array.from(setEvals);
-}
-
-function hasGaugeSubmitted(subData, sessionId) {
-  for (let i = 1; i < subData.length; i++) {
-    if (subData[i][1] === sessionId && (subData[i][3] === true || String(subData[i][3]).toUpperCase() === "TRUE")) return true;
-  }
-  return false;
-}
-
-function handleGetMesSessions(ss, req) {
-  var evaluateurId = req.evaluateur_id;
-  if (!evaluateurId) return { success: false, message: "evaluateur_id requis." };
-
-  var cleanId = String(evaluateurId).trim().toLowerCase();
-
-  // 1. Trouver toutes les sessions où l'utilisateur a soumis
-  var submittedSessionIds = {};
-  var subSheet = ss.getSheetByName("Log_Soumissions");
-  if (subSheet) {
-    var subData = subSheet.getDataRange().getValues();
-    for (var i = 1; i < subData.length; i++) {
-      if (String(subData[i][2]).trim().toLowerCase() === cleanId) {
-        submittedSessionIds[String(subData[i][1]).trim()] = true;
-      }
-    }
-  }
-
-  // 2. Récupérer les sessions correspondantes
-  var sessionsSheet = ss.getSheetByName("Sessions");
-  if (!sessionsSheet) return { success: true, sessions: [] };
-
-  var data = sessionsSheet.getDataRange().getValues();
-  var sessions = [];
-
-  for (var i = 1; i < data.length; i++) {
-    var sessionId = String(data[i][0]).trim();
-    var animId = String(data[i][10] || "").trim().toLowerCase();
-    var gaugeId = String(data[i][11] || "").trim().toLowerCase();
-    var hasSubmitted = submittedSessionIds[sessionId] === true;
-
-    // L'utilisateur doit être animateur, gauge, ou avoir soumis une évaluation
-    if (animId === cleanId || gaugeId === cleanId || hasSubmitted) {
-      var roles = [];
-      if (animId === cleanId) roles.push("Animateur");
-      if (gaugeId === cleanId) roles.push("Gauge");
-      if (hasSubmitted && gaugeId !== cleanId) roles.push("Évaluateur");
-
-      sessions.push({
-        session_id: sessionId,
-        nom_session: data[i][1],
-        statut: data[i][2],
-        template_id: data[i][4],
-        heure_ouverture: data[i][5],
-        duree_minutes: data[i][6],
-        heure_fin: data[i][7],
-        url_audio: data[i][8],
-        animateur_id: data[i][10] || "",
-        gauge_id: data[i][11] || "",
-        nom_conseiller: data[i][12] || "",
-        consignes: data[i][13] || "",
-        roles: roles,
-        has_submitted: hasSubmitted
-      });
-    }
-  }
-
-  return { success: true, sessions: sessions };
-}
-
-function handleGetMaSoumission(ss, req) {
-  var sessionId = req.session_id;
-  var evaluateurId = req.evaluateur_id;
-  if (!sessionId || !evaluateurId) {
-    return { success: false, message: "session_id et evaluateur_id requis." };
-  }
-  var sheet = ss.getSheetByName("Log_Soumissions");
-  if (!sheet) return { success: true, answers: {}, comments: {} };
-  var data = sheet.getDataRange().getValues();
-  var answers = {};
-  var comments = {};
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][1]).trim() === String(sessionId).trim() &&
-        String(data[i][2]).trim().toLowerCase() === String(evaluateurId).trim().toLowerCase()) {
-      var itemId = data[i][4];
-      var statut = data[i][7];
-      var comm = data[i][8];
-      answers[itemId] = statut;
-      if (comm) {
-        comments[itemId] = comm;
-      }
-    }
-  }
-  return { success: true, answers: answers, comments: comments };
-}
-
-function handleUploadAudioDrive(ss, body) {
-  const base64Data = body.base64_data || body.base64Data;
-  const fileName = body.file_name || body.fileName || ("calisync_audio_" + new Date().getTime() + ".mp3");
-  const mimeType = body.mime_type || body.mimeType || "audio/mp3";
-
-  if (!base64Data) return { success: false, message: "Données audio manquantes." };
-
-  try {
-    const bytes = Utilities.base64Decode(base64Data);
-    const blob = Utilities.newBlob(bytes, mimeType, fileName);
-    const file = DriveApp.createFile(blob);
-    try {
-      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    } catch(e) {
-      // Fallback
-    }
-    const fileId = file.getId();
-    const downloadUrl = "https://drive.google.com/uc?export=download&id=" + fileId;
     return {
       success: true,
-      file_id: fileId,
-      url_audio: downloadUrl,
-      view_url: file.getUrl(),
-      message: "Audio téléversé avec succès sur Google Drive !"
+      template_id: tplId,
+      nom: nomTemplate,
+      message: "Grille Genii Complète restaurée avec succès ! (10 Questions Process Adherence, 17 questions N2 et 119 critères)."
     };
-  } catch(err) {
-    return { success: false, message: "Erreur lors de l'upload vers Google Drive : " + err.toString() };
+  } catch (err) {
+    return {
+      success: false,
+      message: "Erreur lors de la restauration de la grille : " + err.toString()
+    };
   }
 }
-
-function jsonResponse(data) {
-  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
-}
-
-// ==============================================================================
-// CORRECTION RÉTROACTIVE — Marquer est_gauge=TRUE dans Log_Soumissions
-// Appelez cette fonction UNE SEULE FOIS depuis l'éditeur GAS pour corriger
-// toutes les soumissions existantes dont le flag est_gauge est manquant.
-// ==============================================================================
-function corrigerEstGaugeRetroactif() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sessSheet = ss.getSheetByName("Sessions");
-  var subSheet  = ss.getSheetByName("Log_Soumissions");
-  if (!sessSheet || !subSheet) {
-    Logger.log("Feuilles manquantes.");
-    return;
-  }
-
-  var sessData = sessSheet.getDataRange().getValues();
-  var subData  = subSheet.getDataRange().getValues();
-
-  // Construire index: session_id → { gaugeId, animId }
-  var sessIndex = {};
-  for (var i = 1; i < sessData.length; i++) {
-    var sid     = String(sessData[i][0]).trim();
-    var gaugeId = String(sessData[i][11] || "").trim().toLowerCase();
-    var animId  = String(sessData[i][10] || "").trim().toLowerCase();
-    if (!gaugeId && animId) gaugeId = animId;
-    sessIndex[sid] = { gaugeId: gaugeId, animId: animId };
-  }
-
-  var corrected = 0;
-  for (var k = 1; k < subData.length; k++) {
-    // Si déjà TRUE, passer
-    if (subData[k][3] === true || String(subData[k][3]).toUpperCase() === "TRUE") continue;
-
-    var rSessId = String(subData[k][1]).trim();
-    var rEvalId = String(subData[k][2]).trim().toLowerCase();
-
-    var sess = sessIndex[rSessId];
-    if (!sess) continue;
-
-    var ec  = cleanStringKey(rEvalId);
-    var gc  = cleanStringKey(sess.gaugeId);
-    var ac  = cleanStringKey(sess.animId);
-
-    var isGauge =
-      (sess.gaugeId !== "" && (
-        rEvalId === sess.gaugeId ||
-        (gc.length >= 3 && (ec.includes(gc) || gc.includes(ec)))
-      )) ||
-      (sess.animId !== "" && (
-        rEvalId === sess.animId ||
-        (ac.length >= 3 && (ec.includes(ac) || ac.includes(ec)))
-      ));
-
-    if (isGauge) {
-      subSheet.getRange(k + 1, 4).setValue(true);
-      corrected++;
-      Logger.log("Corrigé ligne " + (k + 1) + " : session=" + rSessId + " eval=" + rEvalId);
-    }
-  }
-
-  Logger.log("✅ Correction terminée — " + corrected + " ligne(s) mise(s) à jour.");
-}
-
-// ==============================================================================
-// RÉPARATION DONNÉES CORROMPUES — À exécuter UNE SEULE FOIS depuis l'éditeur GAS
-// Corrige les dommages causés par le fallback cross-session du 12/08 :
-//  1. Réinitialise est_gauge=FALSE pour les lignes dont l'évaluateur n'est PAS
-//     le gauge_id de la session indiquée.
-//  2. Tente de restaurer le session_id correct pour les lignes migrées à tort.
-// ==============================================================================
-function repairerDonneesCorrupted() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sessSheet = ss.getSheetByName("Sessions");
-  var subSheet  = ss.getSheetByName("Log_Soumissions");
-  if (!sessSheet || !subSheet) { Logger.log("Feuilles manquantes."); return; }
-
-  var sessData = sessSheet.getDataRange().getValues();
-  var subData  = subSheet.getDataRange().getValues();
-
-  // Index 1: session_id → gauge_id (col 12)
-  var sessGaugeIndex = {};
-  // Index 2: gauge_id → [session_id, ...] pour retrouver la bonne session
-  var gaugeToSessions = {};
-  for (var i = 1; i < sessData.length; i++) {
-    var sid    = String(sessData[i][0]).trim();
-    var gid    = String(sessData[i][11] || "").trim().toLowerCase();
-    var aid    = String(sessData[i][10] || "").trim().toLowerCase();
-    // Pour les vieilles sessions sans gauge_id explicite, ne pas inclure animId
-    sessGaugeIndex[sid] = gid;
-    if (gid) {
-      if (!gaugeToSessions[gid]) gaugeToSessions[gid] = [];
-      gaugeToSessions[gid].push(sid);
-    }
-  }
-
-  var resetCount   = 0;
-  var restoredCount = 0;
-
-  for (var k = 1; k < subData.length; k++) {
-    var rowSessId = String(subData[k][1]).trim();
-    var rowEvalId = String(subData[k][2]).trim().toLowerCase();
-    var isGauge   = subData[k][3] === true || String(subData[k][3]).toUpperCase() === "TRUE";
-    if (!isGauge) continue; // On ne traite que les lignes est_gauge=TRUE
-
-    // Vérifier que l'évaluateur est bien la gauge de la session indiquée
-    var expectedGauge = sessGaugeIndex[rowSessId] || "";
-    var ec = cleanStringKey(rowEvalId);
-    var gc = cleanStringKey(expectedGauge);
-
-    var isLegit = expectedGauge !== "" && (
-      rowEvalId === expectedGauge ||
-      (gc.length >= 3 && (ec.includes(gc) || gc.includes(ec)))
-    );
-
-    if (isLegit) continue; // Ligne correcte, ne rien toucher
-
-    // ── Ligne corrompue : tenter de restaurer le bon session_id ──────────────
-    var correctSessId = null;
-    var possibleSessions = gaugeToSessions[rowEvalId] || [];
-    // Chercher aussi via fuzzy match
-    if (possibleSessions.length === 0) {
-      Object.keys(gaugeToSessions).forEach(function(gKey) {
-        var gcKey = cleanStringKey(gKey);
-        if (gcKey.length >= 3 && (ec.includes(gcKey) || gcKey.includes(ec))) {
-          possibleSessions = possibleSessions.concat(gaugeToSessions[gKey]);
-        }
-      });
-    }
-
-    if (possibleSessions.length === 1) {
-      correctSessId = possibleSessions[0];
-    } else if (possibleSessions.length > 1) {
-      // Plusieurs sessions possibles — choisir la plus récente
-      correctSessId = possibleSessions[possibleSessions.length - 1];
-    }
-
-    if (correctSessId && correctSessId !== rowSessId) {
-      subSheet.getRange(k + 1, 2).setValue(correctSessId);
-      Logger.log("[REPAIR] L" + (k+1) + " session_id restauré: " + rowSessId + " → " + correctSessId + " (eval=" + rowEvalId + ")");
-      restoredCount++;
-    } else {
-      // Impossible de retrouver la bonne session → réinitialiser est_gauge
-      subSheet.getRange(k + 1, 4).setValue(false);
-      Logger.log("[REPAIR] L" + (k+1) + " est_gauge remis à FALSE (eval=" + rowEvalId + ", sess=" + rowSessId + " n'a pas cette gauge)");
-      resetCount++;
-    }
-  }
-
-  Logger.log("✅ Réparation terminée — " + restoredCount + " session(s) restaurée(s), " + resetCount + " flag(s) réinitialisé(s).");
-}
-// ==============================================================================
-// DIAGNOSTIC — À exécuter manuellement depuis Apps Script Editor
-// Remplacez TARGET_SESSION_ID par l'ID réel de la session à inspecter.
-// ==============================================================================
-function diagnostiqueSessionGauge() {
-  var TARGET_SESSION_ID = "REMPLACER_PAR_SESSION_ID"; // ex: "SESS_2026_1234"
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  var sessSheet = ss.getSheetByName("Sessions");
-  var sessData  = sessSheet ? sessSheet.getDataRange().getValues() : [];
-  var sessRow   = null;
-  for (var i = 1; i < sessData.length; i++) {
-    if (String(sessData[i][0]).trim() === String(TARGET_SESSION_ID).trim()) {
-      sessRow = sessData[i]; break;
-    }
-  }
-
-  if (!sessRow) {
-    Logger.log("❌ Session introuvable: " + TARGET_SESSION_ID);
-    Logger.log("Sessions existantes:");
-    for (var j = 1; j < Math.min(sessData.length, 11); j++) {
-      Logger.log("  " + sessData[j][0] + " | " + sessData[j][1] + " | " + sessData[j][2]);
-    }
-    return;
-  }
-
-  Logger.log("=== SESSION ===");
-  Logger.log("session_id   : " + sessRow[0]);
-  Logger.log("nom_session  : " + sessRow[1]);
-  Logger.log("statut       : " + sessRow[2]);
-  Logger.log("animateur_id : " + sessRow[10]);
-  Logger.log("gauge_id     : " + sessRow[11]);
-
-  var gaugeId = String(sessRow[11] || "").trim().toLowerCase();
-  var subSheet = ss.getSheetByName("Log_Soumissions");
-  var subData  = subSheet ? subSheet.getDataRange().getValues() : [];
-  var countBySessId = 0, countGaugeSessId = 0, countGaugeByEvalId = 0;
-
-  for (var k = 1; k < subData.length; k++) {
-    var rSessId  = String(subData[k][1]).trim();
-    var rEvalId  = String(subData[k][2]).trim().toLowerCase();
-    var rIsGauge = subData[k][3] === true || String(subData[k][3]).toUpperCase() === "TRUE" || String(subData[k][3]).toUpperCase() === "VRAI";
-    if (rSessId === TARGET_SESSION_ID) { countBySessId++; if (rIsGauge) countGaugeSessId++; }
-    if (gaugeId && rEvalId === gaugeId && rIsGauge) {
-      countGaugeByEvalId++;
-      Logger.log("[GAUGE ROW] sess=" + rSessId + " | est_gauge=" + subData[k][3] + " | item=" + subData[k][4]);
-    }
-  }
-
-  Logger.log("\n=== LOG_SOUMISSIONS ===");
-  Logger.log("Lignes pour sessionId     : " + countBySessId);
-  Logger.log("  dont est_gauge=TRUE     : " + countGaugeSessId);
-  Logger.log("Lignes gauge (par evalId) : " + countGaugeByEvalId);
-
-  var demSheet = ss.getSheetByName("Demandes_Calibrage");
-  var demData  = demSheet ? demSheet.getDataRange().getValues() : [];
-  Logger.log("\n=== DEMANDES_CALIBRAGE ===");
-  for (var d = 1; d < demData.length; d++) {
-    if (String(demData[d][1]).trim().toLowerCase() === gaugeId) {
-      Logger.log("  demande_id=" + demData[d][0] + " | statut=" + demData[d][8]);
-    }
-  }
-
-  if (!gaugeId) Logger.log("\n⚠️ gauge_id VIDE — pas de gauge configurée.");
-  else if (countGaugeByEvalId === 0) Logger.log("\n⚠️ Aucun item gauge trouvé pour gauge_id='" + gaugeId + "' — la Gauge n'a pas soumis.");
-  else if (countGaugeSessId === 0) Logger.log("\n⚠️ Items gauge par evalId=" + countGaugeByEvalId + " MAIS pas par sessionId → migration ratée.");
-  else Logger.log("\n✅ " + countGaugeSessId + " items gauge liés à la session. Le Cockpit doit les afficher.");
-}
-
-// ==============================================================================
-// DIAGNOSTIC — Audit de l'origine de la catégorie "Général"
-// Exécutez cette fonction depuis l'éditeur Apps Script pour localiser la source.
-// ==============================================================================
-function auditGeneralCategory() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  Logger.log("=== AUDIT CATÉGORIE GÉNÉRAL ===");
-
-  // 1. Inspecter Admin_Config_Grille
-  var cfgSheet = ss.getSheetByName("Admin_Config_Grille");
-  if (cfgSheet) {
-    var cfgData = cfgSheet.getDataRange().getValues();
-    var foundCfg = 0;
-    for (var i = 1; i < cfgData.length; i++) {
-      var tplId = String(cfgData[i][0]).trim();
-      var itemId = String(cfgData[i][1]).trim();
-      var niveau = String(cfgData[i][2]).trim();
-      var parentId = String(cfgData[i][3]).trim();
-      var libelle = String(cfgData[i][6] || "").trim();
-      var catRacine = String(cfgData[i][10] || "").trim();
-
-      if (niveau === "1" && (!libelle || libelle.toLowerCase() === "général" || libelle.toLowerCase() === "general")) {
-        Logger.log("⚠️ [Admin_Config_Grille Ligne " + (i+1) + "] N1 avec libellé vide/général : tpl=" + tplId + " | item_id=" + itemId + " | libelle='" + libelle + "'");
-        foundCfg++;
-      }
-      if (niveau === "2" && (!catRacine || catRacine.toLowerCase() === "général" || catRacine.toLowerCase() === "general")) {
-        Logger.log("⚠️ [Admin_Config_Grille Ligne " + (i+1) + "] N2 sans categorie_racine : tpl=" + tplId + " | item_id=" + itemId + " | parent_id=" + parentId + " | libelle='" + libelle + "'");
-        foundCfg++;
-      }
-    }
-    if (foundCfg === 0) Logger.log("✅ Admin_Config_Grille : Aucune anomalie 'Général' détectée.");
-  } else {
-    Logger.log("❌ Feuille Admin_Config_Grille introuvable.");
-  }
-
-  // 2. Inspecter Log_Soumissions
-  var subSheet = ss.getSheetByName("Log_Soumissions");
-  if (subSheet) {
-    var subData = subSheet.getDataRange().getValues();
-    var foundSub = 0;
-    for (var k = 1; k < subData.length; k++) {
-      var sessId = String(subData[k][1]).trim();
-      var itemId = String(subData[k][4]).trim();
-      var cat = String(subData[k][5] || "").trim();
-
-      if (!cat || cat.toLowerCase() === "général" || cat.toLowerCase() === "general") {
-        if (foundSub < 15) {
-          Logger.log("⚠️ [Log_Soumissions Ligne " + (k+1) + "] Catégorie vide/général : session=" + sessId + " | item_id=" + itemId);
-        }
-        foundSub++;
-      }
-    }
-    Logger.log("Total lignes Log_Soumissions avec catégorie vide/général : " + foundSub);
-  } else {
-    Logger.log("❌ Feuille Log_Soumissions introuvable.");
-  }
-}
-

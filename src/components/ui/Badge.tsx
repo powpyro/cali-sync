@@ -8,6 +8,11 @@ export interface BadgeProps {
   className?: string;
 }
 
+// ── 3-Color Wave Design System ────────────────────────────────────────────────
+// Primary: Wave Cyan #1DC4FF  |  Navy: #0F172A  |  Neutral: #F1F5F9 / #FFFFFF
+// Status (functional only): Success #10B981  |  Danger #EF4444  |  Warning #F59E0B
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const Badge: React.FC<BadgeProps> = ({
   children,
   variant = "neutral",
@@ -16,13 +21,16 @@ export const Badge: React.FC<BadgeProps> = ({
   className = "",
 }) => {
   const variantStyles = {
-    success: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
-    warning: "bg-amber-500/10 text-amber-400 border-amber-500/30",
-    danger: "bg-rose-500/10 text-rose-400 border-rose-500/30",
-    info: "bg-blue-500/10 text-blue-400 border-blue-500/30",
-    indigo: "bg-indigo-500/10 text-indigo-300 border-indigo-500/30",
-    purple: "bg-purple-500/10 text-purple-300 border-purple-500/30",
-    neutral: "bg-slate-800 text-slate-300 border-slate-700",
+    // Functional status (use sparingly)
+    success: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    warning: "bg-amber-50 text-amber-700 border-amber-200",
+    danger:  "bg-rose-50 text-rose-700 border-rose-200",
+    // Wave Cyan primary accent
+    info:    "bg-[#1dc4ff]/10 text-[#0077aa] border-[#1dc4ff]/30",
+    indigo:  "bg-[#1dc4ff]/10 text-[#0077aa] border-[#1dc4ff]/30",
+    purple:  "bg-[#1dc4ff]/10 text-[#0077aa] border-[#1dc4ff]/30",
+    // Neutral
+    neutral: "bg-slate-100 text-slate-600 border-slate-200",
   };
 
   const sizeStyles = {

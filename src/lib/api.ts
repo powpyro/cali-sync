@@ -244,6 +244,9 @@ export interface SessionDataResponse {
   animateur_id?: string;
   grille_hierarchique?: CockpitNode[];
   is_read_only?: boolean;
+  user_role?: string;
+  gauge_interaction_summary?: string;
+  gauge_evaluator_comments?: string;
 }
 
 // ── Templates ─────────────────────────────────────────────────────────────────
@@ -471,6 +474,10 @@ export async function listerTemplates(): Promise<TemplatesListResponse> {
   return { ...res, templates: res.templates || [] };
 }
 
+export async function restaurerGrilleGeniiComplete(templateId?: string, nom?: string): Promise<ApiResponse & { template_id?: string; nom?: string }> {
+  return callGAS("restaurer_grille_genii_complete", { template_id: templateId || "", nom: nom || "" }) as unknown as Promise<ApiResponse & { template_id?: string; nom?: string }>;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Import grille complète depuis CSV/TSV
 // ─────────────────────────────────────────────────────────────────────────────
@@ -677,6 +684,18 @@ export async function modifierRoleEvaluateur(
   });
 }
 
+export async function supprimerSession(sessionId: string): Promise<ApiResponse> {
+  return callGAS("supprimer_session", { session_id: sessionId });
+}
+
+export async function annulerDemandeCalibrage(demandeId: string): Promise<ApiResponse> {
+  return callGAS("annuler_demande_calibrage", { demande_id: demandeId });
+}
+
+export async function supprimerEvaluateur(targetIdentifiant: string): Promise<ApiResponse> {
+  return callGAS("supprimer_evaluateur", { target_identifiant: targetIdentifiant });
+}
+
 export async function uploadAudioDrive(
   base64Data: string,
   fileName: string,
@@ -688,4 +707,134 @@ export async function uploadAudioDrive(
     mime_type: mimeType,
   });
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ASSESSMENTS LIBRES / ÉVALUATIONS SIMPLES & ENTRAÎNEMENT
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface AssessmentLibreInfo {
+  assessment_id: string;
+  evaluateur_id: string;
+  template_id: string;
+  template_nom?: string;
+  titre: string;
+  nom_conseiller?: string;
+  audio_url?: string;
+  consignes?: string;
+  score: number;
+  statut: "COMPLETED" | "DRAFT";
+  date_creation: string;
+  date_modification?: string;
+  is_corrected?: boolean;
+  correcteur_nom?: string;
+  interaction_summary?: string;
+  evaluator_comments?: string;
+  reponses: Record<string, string>;
+  commentaires: Record<string, string>;
+}
+
+export interface ListerAssessmentsResponse {
+  success: boolean;
+  assessments: AssessmentLibreInfo[];
+  message?: string;
+}
+
+const LOCAL_ASSESSMENTS_KEY = "CALISYNC_LOCAL_ASSESSMENTS";
+
+function getLocalAssessments(evaluateurId?: string): AssessmentLibreInfo[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_ASSESSMENTS_KEY);
+    if (!raw) return [];
+    const list: AssessmentLibreInfo[] = JSON.parse(raw);
+    if (evaluateurId) {
+      return list.filter((a) => a.evaluateur_id === evaluateurId);
+    }
+    return list;
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalAssessment(assessment: AssessmentLibreInfo) {
+  try {
+    const list = getLocalAssessments();
+    const idx = list.findIndex((a) => a.assessment_id === assessment.assessment_id);
+    if (idx >= 0) {
+      list[idx] = assessment;
+    } else {
+      list.unshift(assessment);
+    }
+    localStorage.setItem(LOCAL_ASSESSMENTS_KEY, JSON.stringify(list));
+  } catch (e) {
+    console.error("Erreur sauvegarde locale assessment", e);
+  }
+}
+
+export async function soumettreAssessmentLibre(payload: AssessmentLibreInfo): Promise<ApiResponse> {
+  // Always save to local cache for instant resilience
+  saveLocalAssessment(payload);
+
+  try {
+    const res = await callGAS("soumettre_assessment_libre", payload as unknown as Record<string, unknown>);
+    if (res && res.success) {
+      return res;
+    }
+  } catch (e) {
+    console.warn("GAS soumettre_assessment_libre non disponible, sauvegarde locale active", e);
+  }
+  return { success: true, message: "Assessment enregistré avec succès (sauvegarde locale confirmée)." };
+}
+
+export async function listerMesAssessments(evaluateurId: string): Promise<ListerAssessmentsResponse> {
+  const localList = getLocalAssessments(evaluateurId);
+
+  try {
+    const res = await callGAS("lister_mes_assessments", { evaluateur_id: evaluateurId }) as unknown as ListerAssessmentsResponse;
+    if (res && res.success && Array.isArray(res.assessments)) {
+      // Merge remote and local without duplicates
+      const map = new Map<string, AssessmentLibreInfo>();
+      localList.forEach((a) => map.set(a.assessment_id, a));
+      res.assessments.forEach((a) => map.set(a.assessment_id, a));
+      const merged = Array.from(map.values()).sort(
+        (a, b) => new Date(b.date_creation).getTime() - new Date(a.date_creation).getTime()
+      );
+      return { success: true, assessments: merged };
+    }
+  } catch (e) {
+    console.warn("GAS lister_mes_assessments fallback local", e);
+  }
+
+  return { success: true, assessments: localList };
+}
+
+export async function getDetailAssessment(assessmentId: string): Promise<{ success: boolean; assessment?: AssessmentLibreInfo; message?: string }> {
+  const localList = getLocalAssessments();
+  const found = localList.find((a) => a.assessment_id === assessmentId);
+
+  try {
+    const res = await callGAS("get_detail_assessment", { assessment_id: assessmentId }) as unknown as { success: boolean; assessment?: AssessmentLibreInfo; message?: string };
+    if (res && res.success && res.assessment) {
+      return res;
+    }
+  } catch (e) {
+    console.warn("GAS get_detail_assessment fallback local", e);
+  }
+
+  if (found) {
+    return { success: true, assessment: found };
+  }
+  return { success: false, message: "Assessment introuvable." };
+}
+
+export async function supprimerAssessmentLibre(assessmentId: string): Promise<ApiResponse> {
+  try {
+    const list = getLocalAssessments().filter((a) => a.assessment_id !== assessmentId);
+    localStorage.setItem(LOCAL_ASSESSMENTS_KEY, JSON.stringify(list));
+    await callGAS("supprimer_assessment_libre", { assessment_id: assessmentId });
+  } catch (e) {
+    console.warn("Suppression assessment", e);
+  }
+  return { success: true, message: "Assessment supprimé." };
+}
+
 

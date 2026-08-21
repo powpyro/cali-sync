@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { postCalibration } from "../lib/api";
 import { CountdownTimer } from "./CountdownTimer";
 import { AudioPlayer } from "./AudioPlayer";
+import { CaliSyncLogo } from "./ui/CaliSyncLogo";
 import {
   Check,
   CheckCircle2,
@@ -19,6 +20,10 @@ import {
   CornerDownRight,
   ArrowLeft,
   PauseCircle,
+  ChevronLeft,
+  ChevronRight,
+  Layers,
+  FileText,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -35,6 +40,8 @@ export interface HierarchicalItem {
   criticite?: "Critical" | "Standard";
   est_terminal?: boolean;
   commentaire_obligatoire?: boolean;
+  show_subitems_on?: "Non" | "Oui"; // "Oui" = VoC inverted logic
+  hide_na?: boolean;               // true = no N/A button (VoC)
 }
 
 export interface HierarchicalEvaluationFormProps {
@@ -43,12 +50,17 @@ export interface HierarchicalEvaluationFormProps {
   evaluateurId?: string;
   sessionLocked?: boolean;
   isGaugeMode?: boolean;
+  isAssessmentMode?: boolean;
   callName?: string;
   audioUrl?: string;
   heureFin?: string;
   initialAnswers?: Record<string, string>;
   initialComments?: Record<string, string>;
+  initialInteractionSummary?: string;
+  initialEvaluatorComments?: string;
+  initialCorrectorName?: string;
   onSubmitPayload?: (items: Array<{ item_id: string; categorie: string; item: string; statut: string; commentaire?: string }>) => Promise<{ success: boolean; message?: string }>;
+  onAssessmentSubmit?: (payload: { answers: Record<string, string>; comments: Record<string, string>; score: number; interactionSummary: string; evaluatorComments: string; correctorName?: string }) => Promise<{ success: boolean; message?: string } | void>;
   onComplete?: () => void;
   onBack?: () => void;
 }
@@ -60,17 +72,32 @@ export interface HierarchicalEvaluationFormProps {
 interface TreeN4 { item: HierarchicalItem }
 interface TreeN3 { item: HierarchicalItem; children: TreeN4[] }
 interface TreeN2 { item: HierarchicalItem; children: TreeN3[] }
-interface TreeCategory { label: string; questions: TreeN2[] }
+interface TreeCategory {
+  label: string;
+  questions: TreeN2[];
+  showSubitemsOn: "Non" | "Oui"; // inherited from first N2 item
+  hideNA: boolean;               // inherited from first N2 item
+}
 
 function buildTree(items: HierarchicalItem[]): TreeCategory[] {
   const n2 = items.filter((i) => i.niveau === 2);
   const n3 = items.filter((i) => i.niveau === 3);
   const n4 = items.filter((i) => i.niveau === 4);
 
-  const catMap = new Map<string, TreeN2[]>();
+  const catMap = new Map<string, { questions: TreeN2[]; showSubitemsOn: "Non" | "Oui"; hideNA: boolean }>();
   n2.forEach((q) => {
-    if (!catMap.has(q.categorie_racine_fr)) catMap.set(q.categorie_racine_fr, []);
-    catMap.get(q.categorie_racine_fr)!.push({
+    const isVoC = (q.categorie_racine_fr || "").trim().toLowerCase().includes("voice of");
+    const showSubOnOui = isVoC || q.show_subitems_on === "Oui" || String(q.show_subitems_on).toLowerCase() === "oui" || String(q.show_subitems_on).toLowerCase() === "yes";
+    const hideNAFlag = isVoC || q.hide_na === true || String(q.hide_na).toLowerCase() === "true" || String(q.hide_na).toLowerCase() === "vrai";
+
+    if (!catMap.has(q.categorie_racine_fr)) {
+      catMap.set(q.categorie_racine_fr, {
+        questions: [],
+        showSubitemsOn: showSubOnOui ? "Oui" : "Non",
+        hideNA: hideNAFlag,
+      });
+    }
+    catMap.get(q.categorie_racine_fr)!.questions.push({
       item: q,
       children: n3
         .filter((s) => s.parent_id === q.item_id)
@@ -81,7 +108,12 @@ function buildTree(items: HierarchicalItem[]): TreeCategory[] {
     });
   });
 
-  return Array.from(catMap.entries()).map(([label, questions]) => ({ label, questions }));
+  return Array.from(catMap.entries()).map(([label, { questions, showSubitemsOn, hideNA }]) => ({
+    label,
+    questions,
+    showSubitemsOn,
+    hideNA,
+  }));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -209,18 +241,33 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
   evaluateurId = "EVAL_01",
   sessionLocked = false,
   isGaugeMode = false,
+  isAssessmentMode = false,
   callName = "Appel Client #8492 - Réclamation Facturation",
   audioUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
   heureFin,
   initialAnswers,
   initialComments,
+  initialInteractionSummary,
+  initialEvaluatorComments,
+  initialCorrectorName,
   onSubmitPayload,
+  onAssessmentSubmit,
   onComplete,
   onBack,
 }) => {
   const [timeIsUp, setTimeIsUp] = useState(false);
   const [lastPauseTimestamp, setLastPauseTimestamp] = useState<string | null>(null);
-  const isFormDisabled = sessionLocked || timeIsUp;
+  const isFormDisabled = sessionLocked || (timeIsUp && !isAssessmentMode);
+
+  // Free-text header fields
+  const [interactionSummary, setInteractionSummary] = useState(initialInteractionSummary || "");
+  const [evaluatorComments, setEvaluatorComments] = useState(initialEvaluatorComments || "");
+  const [correctorName, setCorrectorName] = useState(initialCorrectorName || "");
+  const [isOverviewExpanded, setIsOverviewExpanded] = useState(() => !initialInteractionSummary || initialInteractionSummary.length < 5);
+
+  // Stepped Tabbed Category Navigation
+  const [activeCategoryIndex, setActiveCategoryIndex] = useState(0);
+  const [viewMode, setViewMode] = useState<"stepped" | "all">("stepped");
 
   const tree = useMemo(() => buildTree(items), [items]);
 
@@ -340,10 +387,19 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
     setTimeout(() => setSpringing(null), 200);
     setLastInteracted(itemId);
     setTimeout(() => setLastInteracted(null), 650);
+
+    const prevChoice = answers[itemId];
     setAnswers((prev) => ({ ...prev, [itemId]: choice }));
 
-    if (choice !== "Non") {
-      // clean sub-selections when switching away from Non
+    // Determine if this item uses inverted VoC logic
+    const thisItem = items.find((i) => i.item_id === itemId);
+    const isVoC = (thisItem?.categorie_racine_fr || "").trim().toLowerCase().includes("voice of");
+    const showOn = isVoC || thisItem?.show_subitems_on === "Oui" || String(thisItem?.show_subitems_on).toLowerCase() === "oui" ? "Oui" : "Non";
+
+    // Clean sub-selections when navigating away from the trigger answer
+    const wasTrigger = showOn === "Oui" ? prevChoice === "Oui" : prevChoice === "Non";
+    const isTrigger  = showOn === "Oui" ? choice === "Oui"  : choice === "Non";
+    if (wasTrigger && !isTrigger) {
       items
         .filter((i) => i.parent_id === itemId)
         .forEach((sub) => {
@@ -406,11 +462,13 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
   const missingComments: string[] = [];
   items.forEach((it) => {
     if (it.niveau >= 3 && selectedSubs.has(it.item_id) && isTerminalLeaf(it)) {
-      if (!comments[it.item_id]?.trim()) missingComments.push(it.item_id);
+      const comm = (comments[it.item_id] || "").trim();
+      if (comm.length < 5) missingComments.push(it.item_id);
     }
   });
 
-  const isFormValid = unratedN2.length === 0 && missingComments.length === 0;
+  const isInteractionSummaryValid = interactionSummary.trim().length >= 5;
+  const isFormValid = unratedN2.length === 0 && missingComments.length === 0 && isInteractionSummaryValid;
 
   const buildPayload = () => {
     const payload: Array<{
@@ -419,6 +477,9 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
     }> = [];
 
     tree.forEach((cat) => {
+      const isVoC = cat.label.trim().toLowerCase().includes("voice of");
+      const showSubsOnOui = isVoC || cat.showSubitemsOn === "Oui";
+      const subStatut = showSubsOnOui ? "Oui" : "Non";
       cat.questions.forEach((q) => {
         const ans = answers[q.item.item_id];
         if (!ans) return;
@@ -431,14 +492,15 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
           niveau: 2,
         });
 
-        if (ans === "Non") {
+        const isTrigger = showSubsOnOui ? ans === "Oui" : ans === "Non";
+        if (isTrigger) {
           q.children.forEach((sub) => {
             if (!selectedSubs.has(sub.item.item_id)) return;
             payload.push({
               item_id: sub.item.item_id,
               categorie: cat.label,
               item: sub.item.libelle_fr,
-              statut: "Non",
+              statut: subStatut,
               commentaire: comments[sub.item.item_id] || "",
               niveau: 3,
             });
@@ -448,7 +510,7 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
                 item_id: ss.item.item_id,
                 categorie: cat.label,
                 item: ss.item.libelle_fr,
-                statut: "Non",
+                statut: subStatut,
                 commentaire: comments[ss.item.item_id] || "",
                 niveau: 4,
               });
@@ -461,6 +523,18 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
     return payload;
   };
 
+  const buildHeaderFields = () => ({
+    interaction_summary: interactionSummary.trim(),
+    evaluator_comments: evaluatorComments.trim(),
+  });
+
+  const liveScore = useMemo(() => {
+    const ratedItems = items.filter((it) => answers[it.item_id] === "Oui" || answers[it.item_id] === "Non");
+    if (ratedItems.length === 0) return 100;
+    const ouiItems = ratedItems.filter((it) => answers[it.item_id] === "Oui");
+    return (ouiItems.length / ratedItems.length) * 100;
+  }, [items, answers]);
+
   const handleSubmit = async () => {
     if (isFormDisabled) {
       triggerToast(timeIsUp ? "Date limite dépassée — soumission impossible." : "Session verrouillée — soumission impossible.");
@@ -468,21 +542,54 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
       setTimeout(() => setIsShakingSubmit(false), 400);
       return;
     }
-    if (!isFormValid) {
+    if (!isInteractionSummaryValid) {
       setIsShakingSubmit(true);
       setTimeout(() => setIsShakingSubmit(false), 400);
-      if (unratedN2.length > 0) {
-        triggerToast(`${unratedN2.length} question(s) sans réponse.`);
-        document.getElementById(`q-card-${unratedN2[0]}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-      } else {
-        triggerToast("Commentaire obligatoire manquant.");
-        document.getElementById(`comment-${missingComments[0]}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
+      triggerToast("Le champ 'Interaction Summary' est obligatoire et doit contenir au moins 5 caractères.");
+      document.getElementById("interaction-summary")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document.getElementById("interaction-summary")?.focus();
+      return;
+    }
+    if (unratedN2.length > 0) {
+      setIsShakingSubmit(true);
+      setTimeout(() => setIsShakingSubmit(false), 400);
+      triggerToast(`${unratedN2.length} question(s) sans réponse.`);
+      document.getElementById(`q-card-${unratedN2[0]}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (missingComments.length > 0) {
+      setIsShakingSubmit(true);
+      setTimeout(() => setIsShakingSubmit(false), 400);
+      triggerToast("Commentaire obligatoire (au moins 5 caractères) manquant.");
+      document.getElementById(`comment-${missingComments[0]}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
 
     setIsSubmitting(true);
     try {
+      const headerFields = buildHeaderFields();
+
+      if (isAssessmentMode && onAssessmentSubmit) {
+        const answersMap: Record<string, string> = {};
+        const commentsMap: Record<string, string> = {};
+        Object.entries(answers).forEach(([k, v]) => { if (v) answersMap[k] = v; });
+        Object.entries(comments).forEach(([k, v]) => { if (v) commentsMap[k] = v; });
+
+        await onAssessmentSubmit({
+          answers: answersMap,
+          comments: commentsMap,
+          score: liveScore,
+          interactionSummary: interactionSummary.trim(),
+          evaluatorComments: evaluatorComments.trim(),
+          correctorName: correctorName.trim(),
+        });
+        setIsSubmitting(false);
+        localStorage.removeItem(draftStorageKey);
+        setShowVictory(true);
+        setTimeout(() => { setShowVictory(false); onComplete?.(); }, 2200);
+        return;
+      }
+
       if (onSubmitPayload) {
         const res = await onSubmitPayload(buildPayload());
         setIsSubmitting(false);
@@ -499,6 +606,7 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
           evaluateur_id: evaluateurId,
           est_gauge: isGaugeMode,
           items: buildPayload(),
+          ...headerFields,
         });
         setIsSubmitting(false);
         if (res.success) {
@@ -523,8 +631,8 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans pb-32">
 
       {isGaugeMode && (
-        <div className="bg-indigo-900 text-indigo-100 px-4 py-2.5 text-xs font-extrabold flex items-center justify-center gap-2 border-b border-indigo-700 shadow-md">
-          <ShieldCheck className="w-4 h-4 text-indigo-300 animate-pulse" />
+        <div className="bg-[#0f172a] text-white px-4 py-2.5 text-xs font-extrabold flex items-center justify-center gap-2 border-b border-slate-700 shadow-md">
+          <ShieldCheck className="w-4 h-4 text-[#1dc4ff] animate-pulse" />
           Mode référence — ces réponses serviront de Gauge pour cette session
         </div>
       )}
@@ -568,12 +676,17 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
                 <ArrowLeft className="w-5 h-5" />
               </button>
             )}
+            <CaliSyncLogo size="sm" showText={false} />
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="font-extrabold text-base sm:text-lg text-slate-900 truncate max-w-xs sm:max-w-md">
                   {callName}
                 </h1>
-                {!sessionLocked ? (
+                {isAssessmentMode ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#1dc4ff]/10 border border-[#1dc4ff]/20 text-[#0077aa] text-xs font-black">
+                    {initialAnswers ? "✏️ Correction d'Assessment Libre" : "📝 Assessment Libre"}
+                  </span>
+                ) : !sessionLocked ? (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold flex-shrink-0">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                     Session en cours
@@ -586,36 +699,23 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
                 )}
               </div>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Session: <strong className="text-slate-700">{sessionId}</strong> • Évaluateur:{" "}
-                <strong className="text-slate-700">{evaluateurId}</strong>
+                {isAssessmentMode ? (
+                  <>
+                    Évaluation : <strong className="text-slate-700">{sessionId}</strong> • Évaluateur :{" "}
+                    <strong className="text-slate-700">{evaluateurId}</strong>
+                  </>
+                ) : (
+                  <>
+                    Session : <strong className="text-slate-700">{sessionId}</strong> • Évaluateur :{" "}
+                    <strong className="text-slate-700">{evaluateurId}</strong>
+                  </>
+                )}
               </p>
             </div>
           </div>
 
-          {audioUrl && (
-            <div className="w-full sm:w-auto space-y-2">
-              <AudioPlayer
-                audioUrl={audioUrl}
-                title={callName}
-                floating={true}
-                defaultPosition={{ x: Math.max(20, window.innerWidth - 380), y: 80 }}
-                onPauseTimestamp={(ts) => setLastPauseTimestamp(ts)}
-              />
-              {lastPauseTimestamp && (
-                <div className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 flex items-center justify-between shadow-xs animate-fade-in">
-                  <span className="flex items-center gap-1.5">
-                    <PauseCircle className="w-4 h-4 text-emerald-600 animate-pulse flex-shrink-0" />
-                    Pause capturée à <strong className="font-mono text-emerald-950">{lastPauseTimestamp}</strong>
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-medium hidden sm:inline">
-                    Cliquez sur "Insérer pause" dans vos commentaires
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-          {heureFin && (
-            <div className="w-full flex justify-end mt-2">
+          {!isAssessmentMode && heureFin && (
+            <div className="flex-shrink-0">
               <CountdownTimer
                 closingDateStr={heureFin}
                 onTimeout={() => setTimeIsUp(true)}
@@ -627,38 +727,274 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
       </header>
 
       {/* BODY */}
-      <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 pt-6 space-y-6 flex-1">
-        {tree.map((cat) => {
-          const isOpen = openCategories.has(cat.label);
+      <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 pt-6 pb-36 space-y-5 flex-1">
+
+        {/* ── EMBEDDED HORIZONTAL AUDIO PLAYER ── */}
+        {audioUrl && (
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-xs space-y-2">
+            <AudioPlayer
+              audioUrl={audioUrl}
+              title={callName}
+              floating={false}
+              compact={false}
+              onPauseTimestamp={(ts) => setLastPauseTimestamp(ts)}
+            />
+            {lastPauseTimestamp && (
+              <div className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 flex items-center justify-between shadow-xs animate-fade-in">
+                <span className="flex items-center gap-1.5">
+                  <PauseCircle className="w-4 h-4 text-emerald-600 animate-pulse flex-shrink-0" />
+                  Pause capturée à <strong className="font-mono text-emerald-950">{lastPauseTimestamp}</strong>
+                </span>
+                <span className="text-[10px] text-slate-500 font-medium hidden sm:inline">
+                  Cliquez sur "Insérer pause" dans vos commentaires
+                </span>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── INTERACTION SUMMARY + EVALUATOR COMMENTS (COLLAPSIBLE) ── */}
+        <section className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setIsOverviewExpanded((prev) => !prev)}
+            className="w-full px-5 py-3.5 bg-slate-50 hover:bg-slate-100/80 border-b border-slate-200 flex items-center justify-between transition-colors cursor-pointer text-left"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-[#1dc4ff]/10 border border-[#1dc4ff]/20 text-[#0077aa] flex items-center justify-center font-bold flex-shrink-0">
+                <FileText className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                    Session Overview & Contexte
+                  </h2>
+                  {isInteractionSummaryValid ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                      <Check className="w-3 h-3 text-emerald-700" /> Complété
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                      * Résumé Requis (min. 5 car.)
+                    </span>
+                  )}
+                  {correctorName && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200/80 text-slate-700">
+                      Correcteur : {correctorName}
+                    </span>
+                  )}
+                </div>
+                {!isOverviewExpanded && interactionSummary && (
+                  <p className="text-[11px] text-slate-500 italic truncate max-w-md mt-0.5">
+                    "{interactionSummary}"
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span className="text-xs font-bold text-slate-500 hidden sm:inline">
+                {isOverviewExpanded ? "Réduire" : "Modifier"}
+              </span>
+              <ChevronDown
+                className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
+                  isOverviewExpanded ? "rotate-180" : ""
+                }`}
+              />
+            </div>
+          </button>
+
+          {isOverviewExpanded && (
+            <div className="p-5 space-y-4 animate-fade-in">
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-slate-800 flex items-center justify-between" htmlFor="interaction-summary">
+                  <span>Interaction Summary <span className="text-rose-500">*</span></span>
+                  <span className="text-xs font-semibold text-rose-500">Obligatoire (min. 5 caractères)</span>
+                </label>
+                <textarea
+                  id="interaction-summary"
+                  rows={3}
+                  value={interactionSummary}
+                  onChange={(e) => setInteractionSummary(e.target.value)}
+                  disabled={isFormDisabled}
+                  placeholder="Renseignez le résumé d'interaction (au moins 5 caractères)..."
+                  className={`w-full p-3 rounded-xl text-sm text-slate-900 border transition-all focus:outline-none resize-none ${
+                    isFormDisabled
+                      ? "bg-slate-50 border-slate-200 cursor-not-allowed text-slate-500"
+                      : interactionSummary.trim().length > 0 && interactionSummary.trim().length < 5
+                      ? "bg-rose-50/50 border-rose-400 focus:ring-2 focus:ring-rose-500/20"
+                      : "bg-white border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                  }`}
+                />
+                {interactionSummary.trim().length > 0 && interactionSummary.trim().length < 5 && (
+                  <p className="text-xs text-rose-500 font-semibold">
+                    Le résumé doit contenir au moins 5 caractères ({interactionSummary.trim().length}/5).
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-slate-800 flex items-center justify-between" htmlFor="evaluator-comments">
+                  <span>Evaluator Comments</span>
+                  <span className="text-xs font-normal text-slate-400">Facultatif</span>
+                </label>
+                <textarea
+                  id="evaluator-comments"
+                  rows={3}
+                  value={evaluatorComments}
+                  onChange={(e) => setEvaluatorComments(e.target.value)}
+                  disabled={isFormDisabled}
+                  placeholder="Commentaires d'évaluation facultatifs..."
+                  className={`w-full p-3 rounded-xl text-sm text-slate-900 border transition-all focus:outline-none resize-none ${
+                    isFormDisabled
+                      ? "bg-slate-50 border-slate-200 cursor-not-allowed text-slate-500"
+                      : "bg-white border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                  }`}
+                />
+              </div>
+
+              {isAssessmentMode && (
+                <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                  <label className="text-sm font-bold text-slate-800 flex items-center justify-between" htmlFor="corrector-name">
+                    <span>Nom du Correcteur / Auditeur Qualité</span>
+                    <span className="text-xs font-normal text-slate-400">Facultatif</span>
+                  </label>
+                  <input
+                    id="corrector-name"
+                    type="text"
+                    value={correctorName}
+                    onChange={(e) => setCorrectorName(e.target.value)}
+                    disabled={isFormDisabled}
+                    placeholder="Ex: Jean Dupont (Formateur / Superviseur QA)..."
+                    className={`w-full p-3 rounded-xl text-sm text-slate-900 border transition-all focus:outline-none ${
+                      isFormDisabled
+                        ? "bg-slate-50 border-slate-200 cursor-not-allowed text-slate-500"
+                        : "bg-white border-slate-300 focus:border-[#1dc4ff] focus:ring-2 focus:ring-[#1dc4ff]/20"
+                    }`}
+                  />
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    Ce nom sera affiché sur la fiche d'évaluation et le rapport de correction imprimable.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* ── STEPPED CATEGORY TABS / CONTROLS ── */}
+        <section className="bg-white rounded-2xl border border-slate-200 p-3 shadow-xs space-y-2.5">
+          <div className="flex items-center justify-between gap-2 px-1">
+            <span className="text-xs font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+              <Layers className="w-4 h-4 text-[#009ae5]" />
+              <span>Sections de la Grille ({tree.length})</span>
+            </span>
+
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setViewMode("stepped")}
+                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                  viewMode === "stepped"
+                    ? "bg-white text-slate-950 shadow-xs font-black"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                Par section
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("all")}
+                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                  viewMode === "all"
+                    ? "bg-white text-slate-950 shadow-xs font-black"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                Tout afficher
+              </button>
+            </div>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-1 pt-0.5 no-scrollbar scroll-smooth">
+            {tree.map((cat, idx) => {
+              const catAnswered = cat.questions.filter((q) => !!answers[q.item.item_id]).length;
+              const catTotal = cat.questions.length;
+              const isDone = catAnswered === catTotal && catTotal > 0;
+              const isActive = viewMode === "stepped" && activeCategoryIndex === idx;
+
+              return (
+                <button
+                  key={cat.label}
+                  type="button"
+                  onClick={() => {
+                    setActiveCategoryIndex(idx);
+                    if (viewMode === "all") {
+                      document.getElementById(`cat-section-${idx}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }
+                  }}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer flex-shrink-0 border ${
+                    isActive
+                      ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                      : isDone
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  <span>{idx + 1}. {cat.label}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                    isActive
+                      ? "bg-white/20 text-white"
+                      : isDone
+                      ? "bg-emerald-200/60 text-emerald-900"
+                      : "bg-slate-200 text-slate-600"
+                  }`}>
+                    {catAnswered}/{catTotal}
+                  </span>
+                  {isDone && <Check className="w-3 h-3 text-emerald-600" />}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        {(viewMode === "stepped"
+          ? (tree[activeCategoryIndex] ? [{ cat: tree[activeCategoryIndex], catIdx: activeCategoryIndex }] : [])
+          : tree.map((cat, catIdx) => ({ cat, catIdx }))
+        ).map(({ cat, catIdx }) => {
+          const isOpen = viewMode === "stepped" ? true : openCategories.has(cat.label);
           const catAnswered = cat.questions.filter((q) => !!answers[q.item.item_id]).length;
           const catTotal = cat.questions.length;
 
           return (
-            <section key={cat.label}>
+            <section key={cat.label} id={`cat-section-${catIdx}`}>
               {/* NIVEAU 1 — Category */}
               <button
                 type="button"
-                onClick={() => toggleCategory(cat.label)}
-                className="w-full flex items-center justify-between px-4 py-3 rounded-2xl bg-white border border-slate-200 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all group cursor-pointer mb-3"
+                onClick={() => viewMode !== "stepped" && toggleCategory(cat.label)}
+                className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl bg-white border border-slate-200 shadow-xs hover:shadow-sm hover:border-slate-300 transition-all group mb-3 ${
+                  viewMode !== "stepped" ? "cursor-pointer" : "cursor-default"
+                }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center flex-shrink-0">
-                    <Sparkles className="w-4 h-4 text-emerald-600" />
+                  <div className="w-8 h-8 rounded-xl bg-[#1dc4ff]/10 border border-[#1dc4ff]/30 flex items-center justify-center flex-shrink-0">
+                    <Sparkles className="w-4 h-4 text-[#009ae5]" />
                   </div>
-                  <span className="font-extrabold text-sm uppercase tracking-wider text-slate-800 group-hover:text-emerald-700 transition-colors">
-                    {cat.label}
+                  <span className="font-extrabold text-sm uppercase tracking-wider text-slate-800 group-hover:text-[#009ae5] transition-colors">
+                    {viewMode === "stepped" ? `Section ${catIdx + 1}/${tree.length} : ` : ""}{cat.label}
                   </span>
-                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
-                    catAnswered === catTotal
+                  <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                    catAnswered === catTotal && catTotal > 0
                       ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                       : "bg-slate-100 text-slate-500 border-slate-200"
                   }`}>
-                    {catAnswered}/{catTotal}
+                    {catAnswered}/{catTotal} notés
                   </span>
                 </div>
-                <ChevronDown
-                  className={`w-5 h-5 text-slate-400 transition-transform duration-250 ${isOpen ? "rotate-180" : ""}`}
-                />
+                {viewMode !== "stepped" && (
+                  <ChevronDown
+                    className={`w-5 h-5 text-slate-400 transition-transform duration-250 ${isOpen ? "rotate-180" : ""}`}
+                  />
+                )}
               </button>
 
               {/* NIVEAU 2 — Questions */}
@@ -671,6 +1007,11 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
                     const isNA = ans === "N.A.";
                     const hasSubItems = q.children.length > 0;
 
+                    // VoC: show sub-items on Yes; others: on No
+                    const showSubsOnOui = cat.showSubitemsOn === "Oui";
+                    const subItemsVisible = showSubsOnOui ? isOui : isNon;
+                    const triggerLabel = showSubsOnOui ? "Yes" : "No";
+
                     const cardBg = isOui
                       ? "bg-emerald-50/60 border-emerald-200 shadow-sm shadow-emerald-500/5"
                       : isNon
@@ -679,7 +1020,7 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
                       ? "bg-slate-100/80 border-slate-300"
                       : "bg-white border-slate-200";
 
-                    const pillConfig = [
+                    const allPills = [
                       {
                         choice: "Oui" as PillChoice,
                         label: "Yes",
@@ -702,6 +1043,8 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
                         hover: "bg-white text-slate-600 border-slate-300 hover:border-slate-500 hover:text-slate-800",
                       },
                     ];
+                    // Hide N/A for VoC category
+                    const pillConfig = cat.hideNA ? allPills.filter(p => p.choice !== "N.A.") : allPills;
 
                     return (
                       <div
@@ -711,34 +1054,21 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
                       >
                         <div className="p-4 sm:p-5 space-y-3">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                            <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                              <div className="pt-0.5 flex-shrink-0">
-                                {q.item.criticite === "Critical" ? (
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-700 border border-rose-200">
-                                    CRITICAL
-                                  </span>
-                                ) : (
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
-                                    STD
-                                  </span>
+                            <div className="space-y-0.5 min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-sm sm:text-base text-slate-800 leading-snug">
+                                  {q.item.libelle_fr}
+                                </span>
+                                {lastInteracted === q.item.item_id && (
+                                  <Check className="w-5 h-5 text-emerald-600 animate-pop-in flex-shrink-0" />
                                 )}
                               </div>
-                              <div className="space-y-0.5 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-bold text-sm sm:text-base text-slate-800 leading-snug">
-                                    {q.item.libelle_fr}
-                                  </span>
-                                  {lastInteracted === q.item.item_id && (
-                                    <Check className="w-5 h-5 text-emerald-600 animate-pop-in flex-shrink-0" />
-                                  )}
-                                </div>
-                                {hasSubItems && isNon && (
-                                  <p className="text-[11px] text-rose-500 font-semibold flex items-center gap-1">
-                                    <CornerDownRight className="w-3 h-3" />
-                                    Sélectionnez le(s) motif(s) ci-dessous
-                                  </p>
-                                )}
-                              </div>
+                              {hasSubItems && subItemsVisible && (
+                                <p className="text-[11px] text-rose-500 font-semibold flex items-center gap-1">
+                                  <CornerDownRight className="w-3 h-3" />
+                                  {showSubsOnOui ? "Select the relevant dissatisfaction reason(s) below" : "Sélectionnez le(s) motif(s) ci-dessous"}
+                                </p>
+                              )}
                             </div>
 
                             <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
@@ -764,13 +1094,13 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
                           </div>
                         </div>
 
-                        {/* NIVEAU 3 — Sous-items (revealed when Non) */}
+                        {/* NIVEAU 3 — Sous-items (revealed dynamically: Non ou Oui selon catégorie) */}
                         {hasSubItems && (
-                          <Reveal open={isNon} indent>
+                          <Reveal open={subItemsVisible} indent>
                             <div className="pb-4 pr-4 space-y-2">
                               <p className="text-[11px] font-bold uppercase tracking-wider text-rose-500 mb-2 flex items-center gap-1.5">
                                 <CornerDownRight className="w-3.5 h-3.5" />
-                                Motif(s) de l'écart — plusieurs choix possibles
+                                {showSubsOnOui ? `Dissatisfaction reason(s) — ${triggerLabel} selected` : "Motif(s) de l'écart — plusieurs choix possibles"}
                               </p>
 
                               {q.children.map((sub) => {
@@ -808,7 +1138,7 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
                                     {isSelected && isTerminalLeaf(sub.item) && (
                                       <div className="mt-2 ml-4 space-y-1">
                                         <p className="text-[11px] font-bold text-rose-500 flex items-center gap-1">
-                                          * Commentaire d'imputation obligatoire (Dernier niveau)
+                                          * Commentaire d'imputation obligatoire (au moins 5 caractères)
                                         </p>
                                         <CommentField
                                           itemId={sub.item.item_id}
@@ -855,7 +1185,7 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
                                                 {isSSSelected && isTerminalLeaf(ss.item) && (
                                                   <div className="mt-2 ml-4 space-y-1">
                                                     <p className="text-[11px] font-bold text-rose-500 flex items-center gap-1">
-                                                      * Commentaire d'imputation obligatoire (Dernier niveau)
+                                                      * Commentaire d'imputation obligatoire (au moins 5 caractères)
                                                     </p>
                                                     <CommentField
                                                       itemId={ss.item.item_id}
@@ -886,6 +1216,51 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
             </section>
           );
         })}
+
+        {/* ── STEPPER NAVIGATION FOOTER (IN STEPPED MODE) ── */}
+        {viewMode === "stepped" && tree.length > 1 && (
+          <div className="flex items-center justify-between pt-4 pb-2 border-t border-slate-200 gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                const nextIdx = Math.max(0, activeCategoryIndex - 1);
+                setActiveCategoryIndex(nextIdx);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              disabled={activeCategoryIndex === 0}
+              className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" /> Section précédente
+            </button>
+
+            <span className="text-xs font-extrabold text-slate-500">
+              Section {activeCategoryIndex + 1} sur {tree.length}
+            </span>
+
+            {activeCategoryIndex < tree.length - 1 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const nextIdx = Math.min(tree.length - 1, activeCategoryIndex + 1);
+                  setActiveCategoryIndex(nextIdx);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className="px-4 py-2.5 rounded-xl bg-[#1dc4ff] hover:bg-[#009ae5] text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md shadow-[#1dc4ff]/20 transition-all cursor-pointer"
+              >
+                Section suivante <ChevronRight className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={!isFormValid || isSubmitting || isFormDisabled}
+                className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs flex items-center gap-1.5 shadow-md shadow-emerald-500/20 disabled:opacity-50 transition-all cursor-pointer"
+              >
+                <Send className="w-4 h-4" /> Soumettre l'évaluation
+              </button>
+            )}
+          </div>
+        )}
       </main>
 
       {/* STICKY FOOTER */}
@@ -893,7 +1268,7 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
         <div className="max-w-4xl mx-auto space-y-3">
           <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
             <div
-              className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-300 ease-out"
+              className="h-full bg-[#1dc4ff] transition-all duration-300 ease-out"
               style={{ width: `${progressPct}%` }}
             />
           </div>
@@ -921,12 +1296,12 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
                   isShakingSubmit ? "animate-shake" : ""
                 } ${
                   isFormValid && !isFormDisabled
-                    ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/25 active:scale-95"
+                    ? "bg-[#1dc4ff] hover:bg-[#009ae5] text-slate-950 shadow-lg shadow-[#1dc4ff]/25 active:scale-95"
                     : "bg-slate-200 text-slate-400 border border-slate-300 opacity-60 cursor-not-allowed"
                 }`}
               >
                 {isSubmitting ? (
-                  <div className="w-4 h-4 border-2 border-slate-400 border-t-white rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-slate-400 border-t-slate-950 rounded-full animate-spin" />
                 ) : (
                   <>
                     <Send className="w-4 h-4" />

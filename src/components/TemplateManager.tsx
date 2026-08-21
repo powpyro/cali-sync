@@ -9,6 +9,7 @@ import {
   type TemplateItem,
   type ImportItem,
 } from "../lib/api";
+import { CaliSyncLogo } from "./ui/CaliSyncLogo";
 import {
   ArrowLeft,
   Layers,
@@ -367,9 +368,10 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({ onBack }) => {
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
+            <CaliSyncLogo size="sm" showText={false} variant="dark" />
             <div>
               <div className="font-extrabold text-white text-base flex items-center gap-2">
-                <Layers className="w-4.5 h-4.5 text-teal-400" />
+                <Layers className="w-4.5 h-4.5 text-[#1dc4ff]" />
                 {editing ? "Éditeur de Template" : "Gestion des Templates"}
               </div>
               <div className="text-xs text-slate-400 font-medium">

@@ -1,0 +1,579 @@
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  X,
+  FileText,
+  Printer,
+  ChevronDown,
+  Tag,
+  Headphones,
+  Calendar,
+  User,
+  Sparkles,
+  MessageSquare,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  MinusCircle,
+  Edit3,
+  Check,
+} from "lucide-react";
+import { AudioPlayer } from "./AudioPlayer";
+import { CaliSyncLogo } from "./ui/CaliSyncLogo";
+import { getConfigTemplate, type AssessmentLibreInfo } from "../lib/api";
+
+interface AssessmentViewerModalProps {
+  assessment: AssessmentLibreInfo;
+  onClose: () => void;
+  onEdit?: (assessment: AssessmentLibreInfo) => void;
+  onOpenReport?: (assessment: AssessmentLibreInfo) => void;
+}
+
+interface TreeN4 {
+  item: any;
+}
+
+interface TreeN3 {
+  item: any;
+  children: TreeN4[];
+}
+
+interface TreeN2 {
+  item: any;
+  children: TreeN3[];
+}
+
+interface TreeCategory {
+  label: string;
+  questions: TreeN2[];
+}
+
+function buildTreeFromItems(items: any[]): TreeCategory[] {
+  const n2 = items.filter((it) => it.niveau === 2 || it.niveau === "2");
+  const n3 = items.filter((it) => it.niveau === 3 || it.niveau === "3");
+  const n4 = items.filter((it) => it.niveau === 4 || it.niveau === "4");
+
+  const catMap = new Map<string, TreeN2[]>();
+
+  n2.forEach((q) => {
+    const catRacine = (q.categorie_racine_fr || q.categorie || "Critères Généraux").trim();
+    if (!catMap.has(catRacine)) {
+      catMap.set(catRacine, []);
+    }
+    catMap.get(catRacine)!.push({
+      item: q,
+      children: n3
+        .filter((s) => s.parent_id === q.item_id)
+        .map((s) => ({
+          item: s,
+          children: n4.filter((ss) => ss.parent_id === s.item_id).map((ss) => ({ item: ss })),
+        })),
+    });
+  });
+
+  return Array.from(catMap.entries()).map(([label, questions]) => ({
+    label,
+    questions,
+  }));
+}
+
+export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
+  assessment,
+  onClose,
+  onEdit,
+  onOpenReport,
+}) => {
+  const [templateItems, setTemplateItems] = useState<any[]>([]);
+  const [loadingTemplate, setLoadingTemplate] = useState(true);
+  const [openCategories, setOpenCategories] = useState<Set<string>>(new Set());
+  const [activeCategoryIndex, setActiveCategoryIndex] = useState(0);
+  const [viewMode, setViewMode] = useState<"stepped" | "all">("stepped");
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchTemplate = async () => {
+      setLoadingTemplate(true);
+      try {
+        const res = await getConfigTemplate(assessment.template_id);
+        if (isMounted && res.success && Array.isArray(res.items)) {
+          setTemplateItems(res.items);
+          // Expand all categories by default
+          const cats = new Set<string>();
+          res.items.forEach((it: any) => {
+            const cat = (it.categorie_racine_fr || it.categorie || "Critères Généraux").trim();
+            cats.add(cat);
+          });
+          setOpenCategories(cats);
+        }
+      } catch (e) {
+        console.error("Erreur chargement template assessment", e);
+      } finally {
+        if (isMounted) setLoadingTemplate(false);
+      }
+    };
+    fetchTemplate();
+    return () => {
+      isMounted = false;
+    };
+  }, [assessment.template_id]);
+
+  const tree = useMemo(() => buildTreeFromItems(templateItems), [templateItems]);
+
+  const toggleCategory = (catLabel: string) => {
+    setOpenCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(catLabel)) next.delete(catLabel);
+      else next.add(catLabel);
+      return next;
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 sm:p-6 overflow-y-auto animate-fade-in font-sans">
+      <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] overflow-hidden my-auto">
+        {/* ── HEADER ── */}
+        <header className="p-5 sm:p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-4 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <CaliSyncLogo size="sm" showText={false} />
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg font-black text-slate-900 tracking-tight">
+                  {assessment.titre}
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#1dc4ff]/10 text-[#0077aa] border border-[#1dc4ff]/20">
+                  Assessment Libre
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200">
+                  {assessment.template_nom || assessment.template_id}
+                </span>
+                {assessment.is_corrected && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Grille Corrigée
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 font-medium mt-0.5 flex items-center gap-3 flex-wrap">
+                <span className="flex items-center gap-1">
+                  <User className="w-3.5 h-3.5 text-slate-400" />
+                  Évaluateur : <strong className="text-slate-800">{assessment.evaluateur_id}</strong>
+                </span>
+                {assessment.nom_conseiller && (
+                  <span className="flex items-center gap-1">
+                    ID Appel / Conseiller : <strong className="font-mono text-slate-800">{assessment.nom_conseiller}</strong>
+                  </span>
+                )}
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                  {new Date(assessment.date_creation).toLocaleDateString("fr-FR", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+                {assessment.correcteur_nom && (
+                  <span className="flex items-center gap-1 text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                    <User className="w-3.5 h-3.5 text-emerald-600" />
+                    Correcteur : <strong className="text-emerald-950">{assessment.correcteur_nom}</strong>
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {onOpenReport && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenReport(assessment);
+                }}
+                className="px-3.5 py-2 bg-[#1dc4ff] hover:bg-[#009ae5] text-slate-950 font-black rounded-xl text-xs shadow-md shadow-[#1dc4ff]/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                title="Consulter la grille d'évaluation corrigée et l'imprimer"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>{assessment.is_corrected ? "Voir la correction" : "Fiche & Imprimer"}</span>
+              </button>
+            )}
+
+            {onEdit && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onEdit(assessment);
+                }}
+                className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                title="Modifier ou corriger cette évaluation"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-[#1dc4ff]" />
+                <span className="hidden sm:inline">Corriger</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => window.print()}
+              className="p-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
+              title="Imprimer / Exporter en PDF"
+            >
+              <Printer className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={onClose}
+              className="p-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+              title="Fermer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </header>
+
+        {/* ── SCROLLABLE BODY ── */}
+        <div className="p-6 space-y-6 overflow-y-auto flex-1 bg-slate-50/50">
+          {/* Audio Player if provided */}
+          {assessment.audio_url && (
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+              <div className="flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider text-slate-600">
+                <Headphones className="w-4 h-4 text-[#1dc4ff]" /> Support Audio Enregistré
+              </div>
+              <AudioPlayer audioUrl={assessment.audio_url} floating={false} compact={false} />
+            </div>
+          )}
+
+          {/* Interaction Summary / Comments */}
+          {(assessment.interaction_summary || assessment.evaluator_comments || assessment.consignes) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {assessment.interaction_summary && (
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-1 shadow-xs">
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-[#1dc4ff]" /> Résumé de l'Interaction
+                  </span>
+                  <p className="text-xs text-slate-800 leading-relaxed italic whitespace-pre-wrap">
+                    "{assessment.interaction_summary}"
+                  </p>
+                </div>
+              )}
+
+              {assessment.evaluator_comments && (
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-1 shadow-xs">
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-emerald-500" /> Synthèse & Axes de Progrès
+                  </span>
+                  <p className="text-xs text-slate-800 leading-relaxed italic whitespace-pre-wrap">
+                    "{assessment.evaluator_comments}"
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Detailed Items Breakdown */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                <Tag className="w-4 h-4 text-[#1dc4ff]" /> Grille d'Évaluation & Justifications ({assessment.template_nom || assessment.template_id})
+              </h3>
+
+              {tree.length > 1 && (
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("stepped")}
+                    className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                      viewMode === "stepped"
+                        ? "bg-white text-slate-950 shadow-xs font-black"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    Par section
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("all")}
+                    className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                      viewMode === "all"
+                        ? "bg-white text-slate-950 shadow-xs font-black"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    Tout afficher
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Category Navigation Pills */}
+            {!loadingTemplate && tree.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-1 pt-0.5 no-scrollbar scroll-smooth">
+                {tree.map((cat, idx) => {
+                  const evaluatedCount = cat.questions.filter((q) => !!assessment.reponses[q.item.item_id]).length;
+                  const totalQuestions = cat.questions.length;
+                  const isDone = evaluatedCount === totalQuestions && totalQuestions > 0;
+                  const isActive = viewMode === "stepped" && activeCategoryIndex === idx;
+
+                  return (
+                    <button
+                      key={cat.label}
+                      type="button"
+                      onClick={() => {
+                        setActiveCategoryIndex(idx);
+                        if (viewMode === "all") {
+                          document.getElementById(`view-cat-section-${idx}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }
+                      }}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer flex-shrink-0 border ${
+                        isActive
+                          ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                          : isDone
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
+                          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                      }`}
+                    >
+                      <span>{idx + 1}. {cat.label}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                        isActive
+                          ? "bg-white/20 text-white"
+                          : isDone
+                          ? "bg-emerald-200/60 text-emerald-900"
+                          : "bg-slate-100 text-slate-600"
+                      }`}>
+                        {evaluatedCount}/{totalQuestions}
+                      </span>
+                      {isDone && <Check className="w-3 h-3 text-emerald-600" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {loadingTemplate ? (
+              <div className="p-8 text-center text-xs text-slate-400 font-medium bg-white rounded-2xl border border-slate-200">
+                Chargement de la grille...
+              </div>
+            ) : tree.length > 0 ? (
+              (viewMode === "stepped"
+                ? (tree[activeCategoryIndex] ? [{ cat: tree[activeCategoryIndex], catIdx: activeCategoryIndex }] : [])
+                : tree.map((cat, catIdx) => ({ cat, catIdx }))
+              ).map(({ cat, catIdx }) => {
+                const isOpen = viewMode === "stepped" ? true : openCategories.has(cat.label);
+                const evaluatedCount = cat.questions.filter((q) => !!assessment.reponses[q.item.item_id]).length;
+                const totalQuestions = cat.questions.length;
+
+                return (
+                  <div
+                    key={cat.label}
+                    id={`view-cat-section-${catIdx}`}
+                    className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs"
+                  >
+                    {/* Category Header */}
+                    <button
+                      type="button"
+                      onClick={() => viewMode !== "stepped" && toggleCategory(cat.label)}
+                      className={`w-full px-5 py-3.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between hover:bg-slate-100 transition-colors text-left ${
+                        viewMode !== "stepped" ? "cursor-pointer" : "cursor-default"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-7 h-7 rounded-xl bg-[#1dc4ff]/10 border border-[#1dc4ff]/30 flex items-center justify-center flex-shrink-0">
+                          <Sparkles className="w-3.5 h-3.5 text-[#009ae5]" />
+                        </div>
+                        <span className="font-extrabold text-xs sm:text-sm uppercase tracking-wider text-slate-900">
+                          {viewMode === "stepped" ? `Section ${catIdx + 1}/${tree.length} : ` : ""}{cat.label}
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                          evaluatedCount === totalQuestions
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-slate-100 text-slate-600 border-slate-200"
+                        }`}>
+                          {evaluatedCount}/{totalQuestions} évalué(s)
+                        </span>
+                      </div>
+                      {viewMode !== "stepped" && (
+                        <ChevronDown
+                          className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                        />
+                      )}
+                    </button>
+
+                    {/* Questions List */}
+                    {isOpen && (
+                      <div className="p-4 sm:p-5 space-y-4 divide-y divide-slate-100">
+                        {cat.questions.map((q, idx) => {
+                          const ans = assessment.reponses[q.item.item_id];
+                          const comment = assessment.commentaires[q.item.item_id];
+                          const isCritical = q.item.criticite === "Critical";
+
+                          const isOui = ans === "Oui";
+                          const isNon = ans === "Non";
+                          const isNA = ans === "N.A.";
+
+                          return (
+                            <div key={q.item.item_id} className={`space-y-3 ${idx > 0 ? "pt-4" : ""}`}>
+                              {/* Main Question Card */}
+                              <div
+                                className={`p-4 rounded-2xl border transition-all ${
+                                  isOui
+                                    ? "bg-emerald-50/40 border-emerald-200"
+                                    : isNon
+                                    ? "bg-rose-50/40 border-rose-200"
+                                    : isNA
+                                    ? "bg-slate-50 border-slate-200"
+                                    : "bg-white border-slate-200"
+                                }`}
+                              >
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                  <div className="flex-1 space-y-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-xs sm:text-sm font-bold text-slate-900">
+                                        {q.item.libelle_fr || q.item.libelle || q.item.item_id}
+                                      </span>
+                                      {isCritical && (
+                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
+                                          <AlertTriangle className="w-3 h-3 text-rose-600" /> Critique
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-[10px] font-mono text-slate-400">
+                                      Réf : {q.item.item_id}
+                                    </div>
+                                  </div>
+
+                                  {/* Answer Pill */}
+                                  <div className="flex-shrink-0">
+                                    {isOui && (
+                                      <span className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-500 text-white shadow-xs flex items-center gap-1.5">
+                                        <CheckCircle2 className="w-4 h-4" /> OUI / CONFORME
+                                      </span>
+                                    )}
+                                    {isNon && (
+                                      <span className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-rose-500 text-white shadow-xs flex items-center gap-1.5">
+                                        <XCircle className="w-4 h-4" /> NON / NON CONFORME
+                                      </span>
+                                    )}
+                                    {isNA && (
+                                      <span className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-slate-200 text-slate-700 border border-slate-300 flex items-center gap-1.5">
+                                        <MinusCircle className="w-4 h-4" /> NON APPLICABLE
+                                      </span>
+                                    )}
+                                    {!ans && (
+                                      <span className="px-3 py-1 rounded-xl text-xs font-bold bg-slate-100 text-slate-400 border border-slate-200">
+                                        Non évalué
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Justification Comment */}
+                                {comment && (
+                                  <div className="mt-3 pt-3 border-t border-slate-200/80">
+                                    <div className="text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1.5">
+                                      <MessageSquare className="w-3.5 h-3.5 text-[#009ae5]" />
+                                      Commentaire / Justification de l'évaluateur :
+                                    </div>
+                                    <p className="text-xs text-slate-800 bg-white p-3 rounded-xl border border-slate-200 font-medium whitespace-pre-wrap leading-relaxed">
+                                      {comment}
+                                    </p>
+                                  </div>
+                                )}
+
+                                {/* Sub-items / Motifs (N3 / N4) */}
+                                {q.children.length > 0 && (
+                                  <div className="mt-3 pt-3 border-t border-slate-200/80 space-y-2">
+                                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                                      Points de contrôle & Motifs associés :
+                                    </div>
+                                    <div className="space-y-1.5 pl-2 border-l-2 border-slate-200">
+                                      {q.children.map((n3) => {
+                                        const n3Ans = assessment.reponses[n3.item.item_id];
+                                        const n3Comm = assessment.commentaires[n3.item.item_id];
+
+                                        return (
+                                          <div
+                                            key={n3.item.item_id}
+                                            className="text-xs p-2 bg-white rounded-lg border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                                          >
+                                            <span className="text-slate-700 font-medium">
+                                              • {n3.item.libelle_fr || n3.item.libelle}
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                              {n3Ans && (
+                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
+                                                  {n3Ans}
+                                                </span>
+                                              )}
+                                              {n3Comm && (
+                                                <span className="text-[11px] text-slate-600 italic">
+                                                  "{n3Comm}"
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              // Fallback raw answers list
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 divide-y divide-slate-100">
+                {Object.entries(assessment.reponses).map(([itemId, rep]) => (
+                  <div key={itemId} className="py-2.5 flex items-center justify-between gap-3 text-xs">
+                    <span className="font-semibold text-slate-800">{itemId}</span>
+                    <span className="font-bold">{rep}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── FOOTER ── */}
+        <footer className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 flex-shrink-0 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            {onEdit && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onEdit(assessment);
+                }}
+                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-2 cursor-pointer transition-all"
+              >
+                <Edit3 className="w-4 h-4 text-[#1dc4ff]" />
+                {assessment.is_corrected ? "Modifier à nouveau" : "Corriger cette évaluation"}
+              </button>
+            )}
+
+            {onOpenReport && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenReport(assessment);
+                }}
+                className="px-4 py-2.5 bg-[#1dc4ff] hover:bg-[#009ae5] text-slate-950 font-black text-xs rounded-xl shadow-md shadow-[#1dc4ff]/20 flex items-center gap-2 cursor-pointer transition-all"
+              >
+                <FileText className="w-4 h-4" />
+                <span>{assessment.is_corrected ? "Voir la correction & Imprimer" : "Voir la fiche & Imprimer"}</span>
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={onClose}
+            className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs rounded-xl transition-all cursor-pointer"
+          >
+            Fermer la consultation
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+};

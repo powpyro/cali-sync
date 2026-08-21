@@ -16,9 +16,11 @@ import {
   ChevronRight,
   Globe,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Sparkles
 } from "lucide-react";
-import { getConfigTemplate, dupliquerTemplate, creerVersionAnglaiseGenii, sauvegarderGrilleComplete, supprimerTemplate, type Template } from "../lib/api";
+import { getConfigTemplate, dupliquerTemplate, creerVersionAnglaiseGenii, sauvegarderGrilleComplete, supprimerTemplate, restaurerGrilleGeniiComplete, type Template } from "../lib/api";
+import { CaliSyncLogo } from "./ui/CaliSyncLogo";
 
 export interface FlatGridItem {
   item_id: string;
@@ -289,6 +291,33 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
     }
   };
 
+  const handleRestaurerGeniiComplete = async () => {
+    if (
+      !window.confirm(
+        `Restaurer la Grille Officielle Genii Complète (100% - 10/10 Questions Process Adherence) dans ce template ?\n\nCette action va réinjecter les 4 catégories complètes, les 10 questions de Process, et l'ensemble des 73 sous-critères.`
+      )
+    )
+      return;
+    setDuplicating(true);
+    try {
+      const res = await restaurerGrilleGeniiComplete(template.template_id, templateName);
+      if (res.success) {
+        setFeedback({
+          success: true,
+          message: "Grille Genii Complète restaurée avec succès (10/10 Process Adherence) !",
+        });
+        loadConfig();
+        onSaved();
+      } else {
+        setFeedback({ success: false, message: res.message || "Erreur lors de la restauration." });
+      }
+    } catch (e) {
+      setFeedback({ success: false, message: "Erreur lors de la restauration." });
+    } finally {
+      setDuplicating(false);
+    }
+  };
+
   const handleCreateEnglishVersion = async () => {
     if (!window.confirm(`Créer la version anglaise originale du template "${templateName}" ?`)) return;
     setDuplicating(true);
@@ -476,9 +505,7 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
         {/* Header */}
         <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-teal-500/10 border border-teal-500/20 rounded-2xl text-teal-400">
-              <Settings2 className="w-6 h-6" />
-            </div>
+            <CaliSyncLogo size="sm" showText={false} variant="dark" />
             <div>
               <h2 className="text-lg font-black text-white flex items-center gap-2">
                 Studio de Template — {template.template_id}
@@ -562,6 +589,16 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleRestaurerGeniiComplete}
+                  disabled={duplicating || loading}
+                  className="px-3.5 py-2.5 bg-amber-950/80 hover:bg-amber-900/80 border border-amber-500/50 text-amber-200 font-black text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 shadow-md shadow-amber-500/10"
+                  title="Restaurer l'intégralité des 10 questions de Process Adherence et 4 catégories Genii"
+                >
+                  {duplicating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-amber-400" />}
+                  ⚡ Restaurer Grille Genii (100% - 10/10 Process)
+                </button>
                 <button
                   type="button"
                   onClick={handleCreateEnglishVersion}

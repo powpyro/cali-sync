@@ -11,33 +11,21 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const stored = localStorage.getItem("CALISYNC_THEME") as Theme;
-      if (stored === "dark" || stored === "light") return stored;
-    }
-    return "dark";
-  });
+  const [theme] = useState<Theme>("light");
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    if (theme === "dark") {
-      document.documentElement.classList.add("dark");
-      document.documentElement.classList.remove("light");
-    } else {
-      document.documentElement.classList.add("light");
-      document.documentElement.classList.remove("dark");
+    document.documentElement.setAttribute("data-theme", "light");
+    document.documentElement.classList.add("light");
+    document.documentElement.classList.remove("dark");
+    try {
+      localStorage.removeItem("CALISYNC_THEME");
+    } catch {
+      // Ignore
     }
-    localStorage.setItem("CALISYNC_THEME", theme);
-  }, [theme]);
+  }, []);
 
-  const toggleTheme = () => {
-    setThemeState((prev) => (prev === "dark" ? "light" : "dark"));
-  };
-
-  const setTheme = (newTheme: Theme) => {
-    setThemeState(newTheme);
-  };
+  const toggleTheme = () => {};
+  const setTheme = () => {};
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>

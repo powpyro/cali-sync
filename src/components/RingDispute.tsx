@@ -1,5 +1,6 @@
 import React from "react";
 import { Gavel, Construction, ArrowLeft } from "lucide-react";
+import { CaliSyncLogo } from "./ui/CaliSyncLogo";
 
 interface RingDisputeProps {
   onBack: () => void;
@@ -16,8 +17,9 @@ export const RingDispute: React.FC<RingDisputeProps> = ({ onBack }) => {
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
+          <CaliSyncLogo size="sm" showText={false} variant="dark" />
           <div className="font-extrabold text-white text-base flex items-center gap-2">
-            <Gavel className="w-4.5 h-4.5 text-indigo-400" />
+            <Gavel className="w-4.5 h-4.5 text-[#1dc4ff]" />
             Mode Dispute — Arbitrage
           </div>
         </div>
