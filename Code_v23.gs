@@ -2433,7 +2433,7 @@ function genererRapportCalibrage(ss, sessionId) {
         nbNon++; cN++;
         if (q.criticite === "Critical" || q.criticite === "Terminal" || q.criticite === "Eliminatoire") nbCritNon++;
       }
-      else if (dec === "N.A.") { nbNA++; cNA++; }
+      else if (dec === "N.A." || dec === "N/A") { nbNA++; cNA++; }
     });
     catStats.push({ name: cleanLabel(cat.libelle || ""), oui: cO, non: cN, na: cNA });
   });
@@ -2504,39 +2504,70 @@ function genererRapportCalibrage(ss, sessionId) {
     heading: DocumentApp.ParagraphHeading.HEADING2, spB: 14, spA: 8
   });
 
-  // Barre de progression + taux
-  var barStr  = mkBar(nbOui, totalArb, 22);
-  var barLine = barStr + "   " + tauxGlobal + "% de conformité";
-  var barColor = tauxGlobal >= 80 ? "#1e8e3e" : tauxGlobal >= 60 ? "#e37400" : "#c5221f";
-  var barPara = body.appendParagraph(barLine);
-  barPara.setFontSize(13);
-  barPara.setBold(true);
-  barPara.setSpacingAfter(4);
-  if (barStr.length > 0) {
-    barPara.editAsText().setForegroundColor(0, barStr.length - 1, barColor);
+  // Calcul du verdict global
+  var verdictLabel = "EN ATTENTE";
+  var verdictColor = "#5f6368";
+  var verdictBg = "#f1f3f4";
+  if (totalArb > 0) {
+    if (nbCritNon > 0 || tauxGlobal < 50) {
+      verdictLabel = "🔴  ATTENTION REQUISE";
+      verdictColor = "#c5221f";
+      verdictBg = "#fce8e6";
+    } else if (tauxGlobal < 80) {
+      verdictLabel = "⚠️  PARTIEL";
+      verdictColor = "#e37400";
+      verdictBg = "#fef7e0";
+    } else {
+      verdictLabel = "✅  CONFORME";
+      verdictColor = "#1e8e3e";
+      verdictBg = "#e6f4ea";
+    }
   }
+
+  // Tableau Banner Verdict Global
+  var vTableData = [
+    [verdictLabel + "   —   " + tauxGlobal + "% de conformité", totalArb + " / " + totalQuestions + " arbitré(s)"]
+  ];
+  var vTable = body.appendTable(vTableData);
+  var vc0 = vTable.getCell(0, 0);
+  var vc1 = vTable.getCell(0, 1);
+  vc0.setBackgroundColor(verdictBg);
+  vc1.setBackgroundColor(verdictBg);
+  vc0.setPaddingTop(6); vc0.setPaddingBottom(6); vc0.setPaddingLeft(10); vc0.setPaddingRight(10);
+  vc1.setPaddingTop(6); vc1.setPaddingBottom(6); vc1.setPaddingLeft(10); vc1.setPaddingRight(10);
+  vc0.editAsText().setFontSize(11).setBold(true).setForegroundColor(verdictColor);
+  vc1.editAsText().setFontSize(9).setBold(true).setForegroundColor("#3c4043");
+  body.appendParagraph("").setSpacingAfter(4);
 
   // KPIs
-  var kpiText = "  ✅  " + nbOui + " Conformes      ❌  " + nbNon + " Imputés      ⚪  " + nbNA + " N.A.";
+  var kpiText = "✅  " + nbOui + " Conforme(s)       ❌  " + nbNon + " Imputé(s)       ⚪  " + nbNA + " N.A." + (nbNonArb > 0 ? "       ⏳  " + nbNonArb + " en attente" : "");
   var kpiPara = body.appendParagraph(kpiText);
   kpiPara.setFontSize(10);
+  kpiPara.setBold(true);
   kpiPara.setSpacingAfter(6);
 
-  // Alerte items critiques imputés
+  // Alerte items critiques imputés avec liste des libellés
   if (nbCritNon > 0) {
-    var critText = "⚠   " + nbCritNon + " item(s) CRITIQUE(S) non conforme(s) — Attention particulière requise";
-    addLine(body, critText, { size: 10, bold: true, color: "#c5221f", spA: 6 });
-  }
-
-  // Items non arbitrés
-  if (nbNonArb > 0) {
-    addLine(body, "ℹ   " + nbNonArb + " item(s) sans décision finale (en attente d'arbitrage)", {
-      size: 9, italic: true, color: "#757575", spA: 6
+    var critText = "⚠️   " + nbCritNon + " item(s) CRITIQUE(S) non conforme(s) — Attention particulière requise :";
+    addLine(body, critText, { size: 9, bold: true, color: "#c5221f", spA: 2 });
+    
+    // Lister les questions critiques non conformes
+    categories.forEach(function(cat) {
+      (cat.children || []).forEach(function(q) {
+        var isCrit = q.criticite === "Critical" || q.criticite === "Terminal" || q.criticite === "Eliminatoire";
+        var dec = q.decision_finale ? q.decision_finale.decision : (q.gauge ? q.gauge.critere : "");
+        if (isCrit && dec === "Non") {
+          addLine(body, "      •  " + cleanLabel(q.libelle || q.item_id || ""), {
+            size: 8, bold: true, color: "#c5221f", spA: 1
+          });
+        }
+      });
     });
+    body.appendParagraph("").setSpacingAfter(4);
   }
 
   // Tableau récapitulatif par catégorie ─────────────────────────
-  addLine(body, "Récapitulatif par catégorie :", { size: 9, bold: true, spB: 8, spA: 4 });
+  addLine(body, "Récapitulatif par catégorie :", { size: 9, bold: true, spB: 6, spA: 4 });
 
   var catTableData = [["Catégorie", "✅ Conformes", "❌ Imputés", "Taux"]];
   catStats.forEach(function(cs) {
@@ -2546,14 +2577,12 @@ function genererRapportCalibrage(ss, sessionId) {
   });
 
   var cTable = body.appendTable(catTableData);
-  // En-tête tableau
   for (var ch = 0; ch < 4; ch++) {
     var hc = cTable.getCell(0, ch);
     hc.setBackgroundColor("#e8eaed");
     hc.setPaddingTop(4); hc.setPaddingBottom(4); hc.setPaddingLeft(6); hc.setPaddingRight(6);
     hc.editAsText().setFontSize(9).setBold(true).setForegroundColor("#3c4043");
   }
-  // Lignes de données
   for (var cr = 1; cr < catTableData.length; cr++) {
     var cs3 = catStats[cr - 1];
     var arb3 = cs3.oui + cs3.non;
@@ -2562,11 +2591,9 @@ function genererRapportCalibrage(ss, sessionId) {
       dc.setPaddingTop(3); dc.setPaddingBottom(3); dc.setPaddingLeft(6); dc.setPaddingRight(6);
       dc.editAsText().setFontSize(9);
     }
-    // Colorer taux
     var tauxVal = arb3 > 0 ? cs3.oui / arb3 : 1;
     var tauxColor = tauxVal >= 0.8 ? "#1e8e3e" : tauxVal >= 0.6 ? "#e37400" : "#c5221f";
     cTable.getCell(cr, 3).editAsText().setForegroundColor(tauxColor).setBold(true);
-    // Colorer Non si > 0
     if (cs3.non > 0) {
       cTable.getCell(cr, 2).editAsText().setForegroundColor("#c5221f").setBold(true);
     }
@@ -2582,20 +2609,20 @@ function genererRapportCalibrage(ss, sessionId) {
   });
 
   // ─── Rendu d'une question N2 ─────────────────────────────────
-  function renderN2Question(body, q, qIdx) {
+  function renderN2Question(body, q, originalIdx) {
     var qLabel = cleanLabel(q.libelle || q.item_id || "");
     var isCrit = q.criticite === "Critical" || q.criticite === "Terminal" || q.criticite === "Eliminatoire";
     var decObj = q.decision_finale;
-    var decStr = decObj ? String(decObj.decision || "").trim() : "";
-    var justif = decObj ? String(decObj.justification || "").trim() : "";
+    var decStr = decObj ? String(decObj.decision || "").trim() : (q.gauge ? String(q.gauge.critere || "").trim() : "");
+    var justif = decObj ? String(decObj.justification || "").trim() : (q.gauge ? String(q.gauge.commentaire || "").trim() : "");
 
     // Libellé question (N2)
     var critBadge = isCrit ? "  ★ CRITIQUE" : "";
-    var qText = "  " + (qIdx + 1) + ".  " + qLabel + critBadge;
+    var qText = "  Q" + (originalIdx + 1) + ".  " + qLabel + critBadge;
     var qPara  = body.appendParagraph(qText);
     qPara.setFontSize(10);
     qPara.setBold(true);
-    qPara.setSpacingBefore(11);
+    qPara.setSpacingBefore(10);
     qPara.setSpacingAfter(2);
     if (isCrit && critBadge) {
       var criStart = qText.indexOf(critBadge);
@@ -2606,24 +2633,23 @@ function genererRapportCalibrage(ss, sessionId) {
     var vIcon, vText, vColor;
     if (decStr === "Oui")  { vIcon = "\u2705"; vText = "OUI \u2014 Conforme";      vColor = "#1e8e3e"; }
     else if (decStr === "Non")  { vIcon = "\u274C"; vText = "NON \u2014 Imput\u00e9";   vColor = "#c5221f"; }
-    else if (decStr === "N.A.") { vIcon = "\u26AA"; vText = "N.A. \u2014 Non applicable"; vColor = "#757575"; }
+    else if (decStr === "N.A." || decStr === "N/A") { vIcon = "\u26AA"; vText = "N.A. \u2014 Non applicable"; vColor = "#757575"; }
     else                        { vIcon = "\u26A0";  vText = "Non arbitr\u00e9";          vColor = "#e37400"; }
 
     var vFull  = "       " + vIcon + "  " + vText;
     var vStart = vFull.indexOf(vIcon);
-    addLineColored(body, vFull, vStart, vColor, { bold: true, size: 10, spA: 2 });
+    addLineColored(body, vFull, vStart, vColor, { bold: true, size: 9, spA: 2 });
 
-    // Justification arbitrage (uniquement si NON + texte)
-    if (decStr === "Non" && justif) {
-      var jText = "       \uD83D\uDCAC  " + justif;
-      addLine(body, jText, { size: 9, italic: true, color: "#1a73e8", spA: 4 });
+    // Directive d'arbitrage / Consigne (mise en valeur pour tout item ayant un commentaire)
+    if (justif) {
+      var jText = "       📌  Directive post-arbitrage : \"" + justif + "\"";
+      var jColor = decStr === "Non" ? "#c5221f" : "#0077aa";
+      addLine(body, jText, { size: 9, bold: true, color: jColor, spA: 3 });
     }
 
     // Sous-items (UNIQUEMENT si décision = NON) ──────────────────
     if (decStr === "Non") {
       var subItems = q.children || [];
-
-      // Filtrer les N3 imputés
       var imputedN3 = subItems.filter(function(sub) {
         if (sub.decision_finale && sub.decision_finale.decision === "Non") return true;
         if (sub.gauge && sub.gauge.critere === "Non") return true;
@@ -2632,11 +2658,122 @@ function genererRapportCalibrage(ss, sessionId) {
       });
 
       if (imputedN3.length > 0) {
-        var pPin = body.appendParagraph("       \uD83D\uDCCC  Motifs d'imputation retenus :");
-        pPin.setFontSize(9);
+        var pPin = body.appendParagraph("       ⚠️  Motifs d'imputation retenus :");
+        pPin.setFontSize(8);
         pPin.setBold(true);
         pPin.setSpacingAfter(2);
         pPin.editAsText().setForegroundColor("#c5221f");
+
+        imputedN3.forEach(function(sub) {
+          var subLabel = cleanLabel(sub.libelle || sub.item_id || "");
+          var subComm = "";
+          if (sub.gauge && sub.gauge.commentaire && sub.gauge.commentaire.trim()) {
+            subComm = sub.gauge.commentaire.trim();
+          } else if (sub.decision_finale && sub.decision_finale.justification) {
+            subComm = sub.decision_finale.justification.trim();
+          } else if (sub.votes_par_critere && sub.votes_par_critere["Non"]) {
+            var vwc = sub.votes_par_critere["Non"].filter(function(v) { return v.commentaire && v.commentaire.trim(); });
+            if (vwc.length > 0) subComm = vwc[0].commentaire.trim();
+          }
+
+          var n3Para = body.appendParagraph("          •  " + subLabel + (subComm ? " — \"" + subComm + "\"" : ""));
+          n3Para.setFontSize(8);
+          n3Para.setSpacingAfter(1);
+          n3Para.editAsText().setForegroundColor("#5f6368");
+        });
+      }
+    }
+
+    // Avis calibreur/Gauge ────────────────────────────────────────
+    if (q.gauge && q.gauge.critere && gaugeId) {
+      var gNom   = q.gauge.nom || gaugeId;
+      var gCrit  = q.gauge.critere;
+      var gComm  = q.gauge.commentaire ? q.gauge.commentaire.trim() : "";
+      var gIcon  = gCrit === "Oui" ? "\u2705" : gCrit === "Non" ? "\u274C" : "\u26AA";
+      var gText  = "       🎯  Avis calibreur (" + gNom + ") : " + gIcon + " " + gCrit;
+      if (gComm) gText += "  —  \"" + gComm + "\"";
+
+      addLine(body, gText, { size: 8, color: "#7b1fa2", spA: 2 });
+
+      if (decStr && decStr !== gCrit && decStr !== "") {
+        addLine(body, "              ⚡  Divergence : calibreur ≠ décision finale", {
+          size: 8, bold: true, color: "#e37400", spA: 2
+        });
+      }
+    }
+
+    body.appendParagraph("").setSpacingAfter(2);
+  }
+
+  // ─── Rendu de chaque catégorie N1 (avec tri et compactage) ──
+  categories.forEach(function(cat, catIdx) {
+    var catName = cleanLabel(cat.libelle || cat.item_id || "Catégorie").toUpperCase();
+    var allQs   = cat.children || [];
+    var cs4     = catStats[catIdx] || { oui: 0, non: 0, na: 0 };
+    var arb4    = cs4.oui + cs4.non;
+    var taux4   = arb4 > 0 ? Math.round((cs4.oui / arb4) * 100) : null;
+    var tc4     = taux4 !== null ? (taux4 >= 80 ? "#1e8e3e" : taux4 >= 60 ? "#e37400" : "#c5221f") : "#757575";
+
+    // En-tête catégorie
+    var catPara = body.appendParagraph("▶  " + catName);
+    catPara.setHeading(DocumentApp.ParagraphHeading.HEADING3);
+    catPara.setFontSize(11);
+    catPara.setSpacingBefore(18);
+    catPara.setSpacingAfter(2);
+
+    // Stats sous le titre catégorie
+    var catSubText = "    (" + cs4.oui + " / " + arb4 + " conformes" + (taux4 !== null ? "  —  " + taux4 + "%" : "") + ")";
+    addLine(body, catSubText, { size: 9, bold: true, color: tc4, spA: 4 });
+
+    if (allQs.length === 0) {
+      addLine(body, "    (Aucune question dans cette catégorie)", {
+        size: 9, italic: true, color: "#757575"
+      });
+      return;
+    }
+
+    // Séparer les questions décidées vs en attente
+    var decidedQs = [];
+    var pendingQs = [];
+
+    allQs.forEach(function(q, origIdx) {
+      var dec = q.decision_finale ? q.decision_finale.decision : (q.gauge ? q.gauge.critere : "");
+      if (dec === "Oui" || dec === "Non" || dec === "N.A." || dec === "N/A") {
+        decidedQs.push({ q: q, idx: origIdx, dec: dec });
+      } else {
+        pendingQs.push({ q: q, idx: origIdx });
+      }
+    });
+
+    // Trier les questions décidées : Non (0) > Oui (1) > N.A. (2)
+    var statusWeights = { "Non": 0, "Oui": 1, "N.A.": 2, "N/A": 2 };
+    decidedQs.sort(function(a, b) {
+      var wA = statusWeights[a.dec] !== undefined ? statusWeights[a.dec] : 99;
+      var wB = statusWeights[b.dec] !== undefined ? statusWeights[b.dec] : 99;
+      return wA - wB;
+    });
+
+    // 1. Rendu des questions décidées
+    decidedQs.forEach(function(item) {
+      renderN2Question(body, item.q, item.idx);
+    });
+
+    // 2. Rendu compressé des questions en attente d'arbitrage
+    if (pendingQs.length > 0) {
+      var pendingListStr = pendingQs.map(function(item) {
+        var lbl = cleanLabel(item.q.libelle || item.q.item_id || "");
+        if (lbl.length > 55) lbl = lbl.substring(0, 53) + "...";
+        return "Q" + (item.idx + 1) + ". " + lbl;
+      }).join("   •   ");
+
+      addLine(body, "       ⏳  En attente d'arbitrage (" + pendingQs.length + ") :", {
+        size: 8, bold: true, color: "#757575", spB: 4, spA: 2
+      });
+      addLine(body, "             " + pendingListStr, {
+        size: 8, color: "#9aa0a6", italic: true, spA: 6
+      });
+    }
+  });      pPin.editAsText().setForegroundColor("#c5221f");
 
         imputedN3.forEach(function(sub) {
           var subLabel = cleanLabel(sub.libelle || sub.item_id || "");
