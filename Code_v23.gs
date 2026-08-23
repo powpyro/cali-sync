@@ -2438,6 +2438,7 @@ function genererRapportCalibrage(ss, sessionId) {
     catStats.push({ name: cleanLabel(cat.libelle || ""), oui: cO, non: cN, na: cNA });
   });
 
+  var totalQuestions = nbOui + nbNon + nbNA + nbNonArb;
   var totalArb   = nbOui + nbNon + nbNA;
   var tauxGlobal = totalArb > 0 ? Math.round((nbOui / totalArb) * 100) : 0;
 
