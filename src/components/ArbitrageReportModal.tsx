@@ -340,138 +340,238 @@ export const ArbitrageReportModal: React.FC<ArbitrageReportModalProps> = ({
               </h2>
 
               {tree.map((cat, catIdx) => {
-                const sorted = [...cat.questions].sort((a, b) => STATUS_ORDER[getDecisionStatus(a)] - STATUS_ORDER[getDecisionStatus(b)]);
-                const decided = sorted.filter((q) => getDecisionStatus(q) !== "pending");
-                const pending = sorted.filter((q) => getDecisionStatus(q) === "pending");
-                const cc = cat.questions.filter((q) => getDecisionStatus(q) === "Oui").length;
-                const cn = cat.questions.filter((q) => getDecisionStatus(q) === "Non").length;
+                const imputed = cat.questions.filter((q) => getDecisionStatus(q) === "Non");
+                const conformes = cat.questions.filter((q) => getDecisionStatus(q) === "Oui");
+                const naList = cat.questions.filter((q) => getDecisionStatus(q) === "NA");
+                const pending = cat.questions.filter((q) => getDecisionStatus(q) === "pending");
+
+                const cc = conformes.length;
+                const cn = imputed.length;
                 const ca = cc + cn;
                 const ct = ca > 0 ? Math.round((cc / ca) * 100) : null;
 
                 return (
-                  <div key={catIdx} className="space-y-2.5 print:break-inside-avoid">
+                  <div key={catIdx} className="space-y-4 print:break-inside-avoid">
                     {/* Category header */}
-                    <div className="flex items-center justify-between px-4 py-2.5 bg-slate-800 text-white rounded-xl">
+                    <div className="flex items-center justify-between px-4 py-2.5 bg-slate-900 text-white rounded-xl shadow-sm">
                       <span className="text-xs font-black uppercase tracking-wider">▶ {cat.label}</span>
-                      <span className="text-[10px] font-bold text-slate-300">
-                        {ct !== null ? `${cc} / ${ca} — ${ct}%` : `${cat.questions.length} question(s)`}
+                      <span className="text-[11px] font-bold text-slate-300">
+                        {ct !== null ? `${cc} / ${ca} conformes — ${ct}%` : `${cat.questions.length} question(s)`}
                       </span>
                     </div>
 
-                    {/* Decided items */}
-                    <div className="space-y-2 pl-1 sm:pl-2">
-                      {decided.map((q) => {
-                        const status = getDecisionStatus(q);
-                        let justification = q.node.decision_finale?.justification || q.node.gauge?.commentaire;
-                        if (!justification) {
-                          const subJustifs = q.children
-                            .map((c) => c.node.decision_finale?.justification || c.node.gauge?.commentaire)
-                            .filter(Boolean) as string[];
-                          if (subJustifs.length > 0) {
-                            justification = Array.from(new Set(subJustifs)).join(" — ");
+                    {/* 1. NON-CONFORMITÉS & ARBITRAGES (Carte détaillée) */}
+                    {imputed.length > 0 && (
+                      <div className="space-y-3 pl-1 sm:pl-2">
+                        <div className="text-[11px] font-black uppercase tracking-wider text-rose-700 flex items-center gap-1.5 pt-1">
+                          <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                          Non-Conformités & Directives d'arbitrage ({imputed.length})
+                        </div>
+                        {imputed.map((q) => {
+                          let justification = q.node.decision_finale?.justification || q.node.gauge?.commentaire;
+                          if (!justification) {
+                            const subJustifs = q.children
+                              .map((c) => c.node.decision_finale?.justification || c.node.gauge?.commentaire)
+                              .filter(Boolean) as string[];
+                            if (subJustifs.length > 0) {
+                              justification = Array.from(new Set(subJustifs)).join(" — ");
+                            }
                           }
-                        }
-                        const animateur = q.node.decision_finale?.animateur_id;
-                        const isOui = status === "Oui";
-                        const isNon = status === "Non";
-                        const isCritical = q.node.criticite === "Critical";
-                        const originalIdx = cat.questions.indexOf(q);
+                          const animateur = q.node.decision_finale?.animateur_id;
+                          const isCritical = q.node.criticite === "Critical";
+                          const originalIdx = cat.questions.indexOf(q);
+                          const gaugeCrit = q.node.gauge?.critere;
+                          const gaugeNom = q.node.gauge?.nom;
+                          const hasDivergence = gaugeCrit && gaugeCrit !== "Non";
 
-                        return (
-                          <div key={q.node.item_id || originalIdx}
-                            className={`rounded-xl border overflow-hidden print:break-inside-avoid ${
-                              isNon ? "border-rose-300 bg-rose-50/30" : isOui ? "border-emerald-200 bg-white" : "border-slate-200 bg-slate-50/40"
-                            }`}>
-                            <div className="flex">
-                              {/* Accent bar */}
-                              <div className={`w-1 flex-shrink-0 ${isNon ? "bg-rose-500" : isOui ? "bg-emerald-500" : "bg-slate-300"}`} />
-                              <div className="flex-1 p-3 space-y-2">
-                                {/* Question row */}
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="flex items-start gap-2 min-w-0 flex-1">
-                                    <span className="font-mono text-[10px] font-extrabold text-slate-400 pt-0.5 flex-shrink-0">Q{originalIdx + 1}.</span>
-                                    <div className="min-w-0 space-y-0.5">
-                                      <p className="text-xs sm:text-sm font-bold text-slate-900 leading-snug">{q.node.libelle}</p>
-                                      {isCritical && (
-                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[10px] font-black uppercase tracking-wider">★ Critique</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className="flex-shrink-0">
-                                    {isOui && (
-                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-black whitespace-nowrap">
-                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />OUI — Conforme
+                          return (
+                            <div
+                              key={q.node.item_id || originalIdx}
+                              className="rounded-xl border border-rose-300 bg-rose-50/20 shadow-sm overflow-hidden print:break-inside-avoid"
+                            >
+                              <div className="flex">
+                                <div className="w-1.5 bg-rose-500 flex-shrink-0" />
+                                <div className="flex-1 p-3.5 space-y-2.5">
+                                  {/* Top header row */}
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-start gap-2 min-w-0 flex-1">
+                                      <span className="font-mono text-xs font-black text-rose-600 pt-0.5 flex-shrink-0">
+                                        Q{originalIdx + 1}.
                                       </span>
-                                    )}
-                                    {isNon && (
-                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-100 border border-rose-300 text-rose-800 text-xs font-black whitespace-nowrap">
-                                        <XCircle className="w-3.5 h-3.5 text-rose-600" />NON — Imputé
-                                      </span>
-                                    )}
-                                    {status === "NA" && (
-                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold whitespace-nowrap">
-                                        <MinusCircle className="w-3.5 h-3.5 text-slate-400" />N/A
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Directive / Consigne — HIGHLIGHTED */}
-                                {justification && (
-                                  <div className={`flex items-start gap-2 p-3 rounded-lg border ${isNon ? "bg-rose-50 border-rose-200" : "bg-[#e8f7ff] border-[#b3e8ff]"}`}>
-                                    <Pin className={`w-3.5 h-3.5 flex-shrink-0 mt-0.5 ${isNon ? "text-rose-500" : "text-[#1dc4ff]"}`} />
-                                    <div>
-                                      <div className={`text-[10px] font-black uppercase tracking-wider mb-0.5 ${isNon ? "text-rose-600" : "text-[#0088bb]"}`}>
-                                        Directive post-arbitrage{animateur ? ` — ${animateur}` : ""}
+                                      <div className="space-y-1">
+                                        <p className="text-xs sm:text-sm font-bold text-slate-900 leading-snug">
+                                          {q.node.libelle}
+                                        </p>
+                                        {isCritical && (
+                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 text-[10px] font-black uppercase tracking-wider">
+                                            ★ CRITIQUE
+                                          </span>
+                                        )}
                                       </div>
-                                      <p className={`text-xs font-semibold leading-relaxed ${isNon ? "text-rose-900" : "text-slate-800"}`}>
-                                        {justification}
+                                    </div>
+                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-rose-100 border border-rose-300 text-rose-800 text-xs font-black whitespace-nowrap shadow-xs">
+                                      <XCircle className="w-4 h-4 text-rose-600" />
+                                      NON — Imputé
+                                    </span>
+                                  </div>
+
+                                  {/* Directive post-arbitrage — PROMINENT HIGHLIGHT */}
+                                  {justification && (
+                                    <div className="p-3 bg-white border border-rose-200 rounded-lg shadow-xs space-y-1">
+                                      <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-rose-700">
+                                        <Pin className="w-3.5 h-3.5 text-rose-600" />
+                                        Directive post-arbitrage{animateur ? ` (${animateur})` : ""} :
+                                      </div>
+                                      <p className="text-xs font-bold text-rose-950 leading-relaxed pl-5">
+                                        « {justification} »
                                       </p>
                                     </div>
-                                  </div>
-                                )}
+                                  )}
 
-                                {/* Motifs d'imputation (NON only) */}
-                                {isNon && q.children.some((n3) => (n3.node.decision_finale?.decision || n3.node.gauge?.critere) === "Non") && (
-                                  <div className="space-y-1 pl-3 border-l-2 border-rose-200">
-                                    <div className="text-[10px] font-black uppercase tracking-wider text-rose-600 flex items-center gap-1">
-                                      <AlertTriangle className="w-3 h-3" />Motifs retenus :
+                                  {/* Motifs d'imputation retenus */}
+                                  {q.children.some(
+                                    (n3) => (n3.node.decision_finale?.decision || n3.node.gauge?.critere) === "Non"
+                                  ) && (
+                                    <div className="p-2.5 bg-rose-50/70 border border-rose-200/80 rounded-lg space-y-1.5">
+                                      <div className="text-[10px] font-black uppercase tracking-wider text-rose-700 flex items-center gap-1">
+                                        <AlertTriangle className="w-3 h-3 text-rose-500" />
+                                        Motifs d'imputation constatés :
+                                      </div>
+                                      <div className="space-y-1 pl-2">
+                                        {q.children.map((n3, n3i) => {
+                                          const n3Dec = n3.node.decision_finale?.decision || n3.node.gauge?.critere;
+                                          if (n3Dec !== "Non") return null;
+                                          const n3Justif =
+                                            n3.node.decision_finale?.justification || n3.node.gauge?.commentaire;
+                                          return (
+                                            <div
+                                              key={n3.node.item_id || n3i}
+                                              className="text-xs text-slate-800 flex items-start gap-1.5"
+                                            >
+                                              <span className="text-rose-500 font-black flex-shrink-0">•</span>
+                                              <span>
+                                                <strong className="font-semibold text-rose-950">{n3.node.libelle}</strong>
+                                                {n3Justif && (
+                                                  <span className="text-slate-600 italic"> — « {n3Justif} »</span>
+                                                )}
+                                              </span>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
                                     </div>
-                                    {q.children.map((n3, n3i) => {
-                                      const n3Dec = n3.node.decision_finale?.decision || n3.node.gauge?.critere;
-                                      if (n3Dec !== "Non") return null;
-                                      const n3Justif = n3.node.decision_finale?.justification || n3.node.gauge?.commentaire;
-                                      return (
-                                        <div key={n3.node.item_id || n3i} className="space-y-0.5">
-                                          <div className="flex items-center gap-1.5 text-xs">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 flex-shrink-0" />
-                                            <span className="font-semibold text-rose-900">{n3.node.libelle}</span>
-                                          </div>
-                                          {n3Justif && <p className="text-[11px] text-rose-700 pl-3">{n3Justif}</p>}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                )}
+                                  )}
+
+                                  {/* Bottom metadata footer */}
+                                  {gaugeCrit && (
+                                    <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-slate-600 border-t border-rose-100">
+                                      <span>
+                                        🎯 Avis Calibreur ({gaugeNom || "Gauge"}) :{" "}
+                                        <strong className={gaugeCrit === "Non" ? "text-rose-600" : "text-emerald-600"}>
+                                          {gaugeCrit === "Oui" ? "✅ Oui" : gaugeCrit === "Non" ? "❌ Non" : "⚪ N.A."}
+                                        </strong>
+                                      </span>
+                                      {hasDivergence && (
+                                        <span className="inline-flex items-center gap-1 font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                          ⚡ Divergence (Calibreur ≠ Décision finale)
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    )}
 
-                    {/* Pending items — compressed */}
-                    {pending.length > 0 && (
-                      <div className="mx-1 px-3 py-2.5 bg-slate-50 border border-dashed border-slate-300 rounded-xl">
-                        <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">
-                          <Clock className="w-3 h-3" />En attente d'arbitrage ({pending.length})
+                    {/* 2. ITEMS CONFORMES (Liste compacte & épurée) */}
+                    {conformes.length > 0 && (
+                      <div className="space-y-1.5 pl-1 sm:pl-2">
+                        <div className="text-[11px] font-black uppercase tracking-wider text-emerald-800 flex items-center gap-1.5 pt-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          Pratiques Conformes Validées ({conformes.length})
                         </div>
-                        <div className="space-y-0.5">
+                        <div className="divide-y divide-emerald-100 bg-white border border-emerald-200 rounded-xl overflow-hidden shadow-xs">
+                          {conformes.map((q) => {
+                            const originalIdx = cat.questions.indexOf(q);
+                            const isCritical = q.node.criticite === "Critical";
+                            const justif = q.node.decision_finale?.justification;
+                            const gaugeCrit = q.node.gauge?.critere;
+
+                            return (
+                              <div
+                                key={q.node.item_id || originalIdx}
+                                className="px-3.5 py-2 flex items-center justify-between gap-3 hover:bg-emerald-50/40 transition-colors"
+                              >
+                                <div className="min-w-0 flex-1 space-y-0.5">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-mono text-xs font-bold text-slate-400">
+                                      Q{originalIdx + 1}.
+                                    </span>
+                                    <span className="text-xs font-semibold text-slate-800">
+                                      {q.node.libelle}
+                                    </span>
+                                    {isCritical && (
+                                      <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 text-[9px] font-black uppercase tracking-wider">
+                                        ★ Critique
+                                      </span>
+                                    )}
+                                  </div>
+                                  {justif && justif !== "Consensus" && (
+                                    <p className="text-[11px] text-emerald-800 pl-6 italic">
+                                      ↳ Consigne : « {justif} »
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  {gaugeCrit && gaugeCrit !== "Oui" && (
+                                    <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-medium">
+                                      Calibreur: {gaugeCrit}
+                                    </span>
+                                  )}
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-xs font-black">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                    Conforme
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 3. NON APPLICABLE (Liste compacte) */}
+                    {naList.length > 0 && (
+                      <div className="pl-1 sm:pl-2">
+                        <div className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between text-xs text-slate-600">
+                          <span className="font-medium">
+                            ⚪ Non applicables ({naList.length}) :{" "}
+                            {naList.map((q) => `Q${cat.questions.indexOf(q) + 1}`).join(", ")}
+                          </span>
+                          <span className="text-[10px] font-bold uppercase text-slate-400">N.A.</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 4. EN ATTENTE D'ARBITRAGE */}
+                    {pending.length > 0 && (
+                      <div className="mx-1 px-3.5 py-2 bg-amber-50/60 border border-dashed border-amber-300 rounded-xl">
+                        <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-amber-800 mb-1">
+                          <Clock className="w-3 h-3 text-amber-600" />
+                          En attente d'arbitrage ({pending.length})
+                        </div>
+                        <div className="flex flex-wrap gap-2">
                           {pending.map((q) => {
                             const idx = cat.questions.indexOf(q);
                             return (
-                              <span key={q.node.item_id || idx} className="block text-[11px] text-slate-500 font-medium">
-                                · Q{idx + 1}. {q.node.libelle.length > 70 ? q.node.libelle.slice(0, 68) + "…" : q.node.libelle}
+                              <span
+                                key={q.node.item_id || idx}
+                                className="inline-flex items-center text-[11px] text-amber-900 bg-amber-100/60 px-2 py-0.5 rounded font-medium"
+                              >
+                                Q{idx + 1}. {q.node.libelle.length > 50 ? q.node.libelle.slice(0, 48) + "…" : q.node.libelle}
                               </span>
                             );
                           })}

@@ -2609,12 +2609,11 @@ function genererRapportCalibrage(ss, sessionId) {
     heading: DocumentApp.ParagraphHeading.HEADING2, spB: 14, spA: 6
   });
 
-  // ─── Rendu d'une question N2 ─────────────────────────────────
-  function renderN2Question(body, q, originalIdx) {
+  // ─── Rendu d'une question NON (Carte d'arbitrage détaillée) ──
+  function renderNonConformiteCard(body, q, originalIdx) {
     var qLabel = cleanLabel(q.libelle || q.item_id || "");
     var isCrit = q.criticite === "Critical" || q.criticite === "Terminal" || q.criticite === "Eliminatoire";
     var decObj = q.decision_finale;
-    var decStr = decObj ? String(decObj.decision || "").trim() : (q.gauge ? String(q.gauge.critere || "").trim() : "");
     var justif = decObj ? String(decObj.justification || "").trim() : (q.gauge ? String(q.gauge.commentaire || "").trim() : "");
 
     // Si pas de commentaire global au N2, récupérer les justifications des sous-items imputés
@@ -2634,96 +2633,63 @@ function genererRapportCalibrage(ss, sessionId) {
       }
     }
 
-    // Libellé question (N2)
+    // 1. En-tête de la non-conformité
     var critBadge = isCrit ? "  ★ CRITIQUE" : "";
-    var qText = "  Q" + (originalIdx + 1) + ".  " + qLabel + critBadge;
-    var qPara  = body.appendParagraph(qText);
-    qPara.setFontSize(10);
-    qPara.setBold(true);
-    qPara.setSpacingBefore(10);
-    qPara.setSpacingAfter(2);
-    if (isCrit && critBadge) {
-      var criStart = qText.indexOf(critBadge);
-      if (criStart > 0) qPara.editAsText().setForegroundColor(criStart, qText.length - 1, "#c5221f");
-    }
+    var headerText = "Q" + (originalIdx + 1) + ". " + qLabel + critBadge + "   [ ❌ NON — Imputé ]";
+    var pHead = body.appendParagraph(headerText);
+    pHead.setFontSize(10);
+    pHead.setBold(true);
+    pHead.setSpacingBefore(10);
+    pHead.setSpacingAfter(2);
+    pHead.editAsText().setForegroundColor("#c5221f");
 
-    // Verdict (coloré)
-    var vIcon, vText, vColor;
-    if (decStr === "Oui")  { vIcon = "\u2705"; vText = "OUI \u2014 Conforme";      vColor = "#1e8e3e"; }
-    else if (decStr === "Non")  { vIcon = "\u274C"; vText = "NON \u2014 Imput\u00e9";   vColor = "#c5221f"; }
-    else if (decStr === "N.A." || decStr === "N/A") { vIcon = "\u26AA"; vText = "N.A. \u2014 Non applicable"; vColor = "#757575"; }
-    else                        { vIcon = "\u26A0";  vText = "Non arbitr\u00e9";          vColor = "#e37400"; }
-
-    var vFull  = "       " + vIcon + "  " + vText;
-    var vStart = vFull.indexOf(vIcon);
-    addLineColored(body, vFull, vStart, vColor, { bold: true, size: 9, spA: 2 });
-
-    // Directive d'arbitrage / Consigne (mise en valeur pour tout item ayant un commentaire)
+    // 2. Directive post-arbitrage (Mise en avant prioritaire)
     if (justif) {
-      var jText = "       📌  Directive post-arbitrage : \"" + justif + "\"";
-      var jColor = decStr === "Non" ? "#c5221f" : "#0077aa";
-      addLine(body, jText, { size: 9, bold: true, color: jColor, spA: 3 });
+      var animName = decObj && decObj.animateur_id ? " (" + decObj.animateur_id + ")" : "";
+      var jText = "    📌  DIRECTIVE POST-ARBITRAGE" + animName + " : \"" + justif + "\"";
+      addLine(body, jText, { size: 9, bold: true, color: "#900000", spA: 3 });
     }
 
-    // Sous-items (UNIQUEMENT si décision = NON) ──────────────────
-    if (decStr === "Non") {
-      var subItems = q.children || [];
-      var imputedN3 = subItems.filter(function(sub) {
-        if (sub.decision_finale && sub.decision_finale.decision === "Non") return true;
-        if (sub.gauge && sub.gauge.critere === "Non") return true;
-        if (sub.votes_par_critere && sub.votes_par_critere["Non"] && sub.votes_par_critere["Non"].length > 0) return true;
-        return false;
+    // 3. Motifs d'imputation retenus
+    var subItems = q.children || [];
+    var imputedN3 = subItems.filter(function(sub) {
+      if (sub.decision_finale && sub.decision_finale.decision === "Non") return true;
+      if (sub.gauge && sub.gauge.critere === "Non") return true;
+      if (sub.votes_par_critere && sub.votes_par_critere["Non"] && sub.votes_par_critere["Non"].length > 0) return true;
+      return false;
+    });
+
+    if (imputedN3.length > 0) {
+      var motifsList = imputedN3.map(function(sub) {
+        var sLabel = cleanLabel(sub.libelle || sub.item_id || "");
+        var sComm = "";
+        if (sub.decision_finale && sub.decision_finale.justification) {
+          sComm = sub.decision_finale.justification.trim();
+        } else if (sub.gauge && sub.gauge.commentaire) {
+          sComm = sub.gauge.commentaire.trim();
+        }
+        return sLabel + (sComm ? " — \"" + sComm + "\"" : "");
       });
 
-      if (imputedN3.length > 0) {
-        var pPin = body.appendParagraph("       ⚠️  Motifs d'imputation retenus :");
-        pPin.setFontSize(8);
-        pPin.setBold(true);
-        pPin.setSpacingAfter(2);
-        pPin.editAsText().setForegroundColor("#c5221f");
-
-        imputedN3.forEach(function(sub) {
-          var subLabel = cleanLabel(sub.libelle || sub.item_id || "");
-          var subComm = "";
-          if (sub.gauge && sub.gauge.commentaire && sub.gauge.commentaire.trim()) {
-            subComm = sub.gauge.commentaire.trim();
-          } else if (sub.decision_finale && sub.decision_finale.justification) {
-            subComm = sub.decision_finale.justification.trim();
-          } else if (sub.votes_par_critere && sub.votes_par_critere["Non"]) {
-            var vwc = sub.votes_par_critere["Non"].filter(function(v) { return v.commentaire && v.commentaire.trim(); });
-            if (vwc.length > 0) subComm = vwc[0].commentaire.trim();
-          }
-
-          var n3Para = body.appendParagraph("          •  " + subLabel + (subComm ? " — \"" + subComm + "\"" : ""));
-          n3Para.setFontSize(8);
-          n3Para.setSpacingAfter(1);
-          n3Para.editAsText().setForegroundColor("#5f6368");
-        });
-      }
+      addLine(body, "    ⚠️  Motif(s) constaté(s) : " + motifsList.join("  •  "), {
+        size: 8, italic: true, color: "#5f6368", spA: 2
+      });
     }
 
-    // Avis calibreur/Gauge ────────────────────────────────────────
+    // 4. Métadonnées d'accord / Avis calibreur
     if (q.gauge && q.gauge.critere && gaugeId) {
-      var gNom   = q.gauge.nom || gaugeId;
-      var gCrit  = q.gauge.critere;
-      var gComm  = q.gauge.commentaire ? q.gauge.commentaire.trim() : "";
-      var gIcon  = gCrit === "Oui" ? "\u2705" : gCrit === "Non" ? "\u274C" : "\u26AA";
-      var gText  = "       🎯  Avis calibreur (" + gNom + ") : " + gIcon + " " + gCrit;
-      if (gComm) gText += "  —  \"" + gComm + "\"";
-
-      addLine(body, gText, { size: 8, color: "#7b1fa2", spA: 2 });
-
-      if (decStr && decStr !== gCrit && decStr !== "") {
-        addLine(body, "              ⚡  Divergence : calibreur ≠ décision finale", {
-          size: 8, bold: true, color: "#e37400", spA: 2
-        });
-      }
+      var gNom  = q.gauge.nom || gaugeId;
+      var gCrit = q.gauge.critere;
+      var gIcon = gCrit === "Oui" ? "✅" : gCrit === "Non" ? "❌" : "⚪";
+      var metaText = "    🎯  Avis calibreur (" + gNom + ") : " + gIcon + " " + gCrit;
+      if (gCrit !== "Non") metaText += "   •   ⚡ Divergence (Calibreur ≠ Décision)";
+      addLine(body, metaText, { size: 8, color: "#7b1fa2", spA: 4 });
     }
 
     body.appendParagraph("").setSpacingAfter(2);
   }
 
-  // ─── Rendu de chaque catégorie N1 (avec tri et compactage) ──
+  // ─── Rendu de chaque catégorie N1 (avec séparation nette NON vs OUI) ──
   categories.forEach(function(cat, catIdx) {
     var catName = cleanLabel(cat.libelle || cat.item_id || "Catégorie").toUpperCase();
     var allQs   = cat.children || [];
@@ -2750,33 +2716,61 @@ function genererRapportCalibrage(ss, sessionId) {
       return;
     }
 
-    // Séparer les questions décidées vs en attente
-    var decidedQs = [];
+    // Séparer les questions par statut
+    var nonQs     = [];
+    var ouiQs     = [];
+    var naQs      = [];
     var pendingQs = [];
 
     allQs.forEach(function(q, origIdx) {
       var dec = q.decision_finale ? q.decision_finale.decision : (q.gauge ? q.gauge.critere : "");
-      if (dec === "Oui" || dec === "Non" || dec === "N.A." || dec === "N/A") {
-        decidedQs.push({ q: q, idx: origIdx, dec: dec });
+      if (dec === "Non") {
+        nonQs.push({ q: q, idx: origIdx });
+      } else if (dec === "Oui") {
+        ouiQs.push({ q: q, idx: origIdx });
+      } else if (dec === "N.A." || dec === "N/A") {
+        naQs.push({ q: q, idx: origIdx });
       } else {
         pendingQs.push({ q: q, idx: origIdx });
       }
     });
 
-    // Trier les questions décidées : Non (0) > Oui (1) > N.A. (2)
-    var statusWeights = { "Non": 0, "Oui": 1, "N.A.": 2, "N/A": 2 };
-    decidedQs.sort(function(a, b) {
-      var wA = statusWeights[a.dec] !== undefined ? statusWeights[a.dec] : 99;
-      var wB = statusWeights[b.dec] !== undefined ? statusWeights[b.dec] : 99;
-      return wA - wB;
-    });
+    // 1. SECTION NON-CONFORMITÉS & DIRECTIVES (Mise en avant détaillée)
+    if (nonQs.length > 0) {
+      addLine(body, "    ❌  Non-Conformités & Directives d'arbitrage (" + nonQs.length + ") :", {
+        size: 9, bold: true, color: "#c5221f", spB: 4, spA: 2
+      });
+      nonQs.forEach(function(item) {
+        renderNonConformiteCard(body, item.q, item.idx);
+      });
+    }
 
-    // 1. Rendu des questions décidées
-    decidedQs.forEach(function(item) {
-      renderN2Question(body, item.q, item.idx);
-    });
+    // 2. SECTION PRATIQUES CONFORMES (Liste compacte 1 ligne par question)
+    if (ouiQs.length > 0) {
+      addLine(body, "    ✅  Pratiques Conformes Validées (" + ouiQs.length + ") :", {
+        size: 9, bold: true, color: "#1e8e3e", spB: 4, spA: 2
+      });
+      ouiQs.forEach(function(item) {
+        var qLbl = cleanLabel(item.q.libelle || item.q.item_id || "");
+        var isCrit = item.q.criticite === "Critical" || item.q.criticite === "Terminal" || item.q.criticite === "Eliminatoire";
+        var cBadge = isCrit ? " ★" : "";
+        var jStr = item.q.decision_finale ? String(item.q.decision_finale.justification || "").trim() : "";
+        var lineTxt = "       ✅  Q" + (item.idx + 1) + ". " + qLbl + cBadge;
+        if (jStr && jStr !== "Consensus") lineTxt += "  —  Consigne : \"" + jStr + "\"";
+        addLine(body, lineTxt, { size: 8, color: "#202124", spA: 2 });
+      });
+      body.appendParagraph("").setSpacingAfter(2);
+    }
 
-    // 2. Rendu compressé des questions en attente d'arbitrage
+    // 3. SECTION NON APPLICABLES
+    if (naQs.length > 0) {
+      var naListStr = naQs.map(function(item) { return "Q" + (item.idx + 1); }).join(", ");
+      addLine(body, "       ⚪  Non applicables (" + naQs.length + ") : " + naListStr, {
+        size: 8, italic: true, color: "#757575", spA: 2
+      });
+    }
+
+    // 4. SECTION EN ATTENTE D'ARBITRAGE
     if (pendingQs.length > 0) {
       var pendingListStr = pendingQs.map(function(item) {
         var lbl = cleanLabel(item.q.libelle || item.q.item_id || "");
@@ -2784,11 +2778,8 @@ function genererRapportCalibrage(ss, sessionId) {
         return "Q" + (item.idx + 1) + ". " + lbl;
       }).join("   •   ");
 
-      addLine(body, "       ⏳  En attente d'arbitrage (" + pendingQs.length + ") :", {
-        size: 8, bold: true, color: "#757575", spB: 4, spA: 2
-      });
-      addLine(body, "             " + pendingListStr, {
-        size: 8, color: "#9aa0a6", italic: true, spA: 6
+      addLine(body, "       ⏳  En attente d'arbitrage (" + pendingQs.length + ") : " + pendingListStr, {
+        size: 8, italic: true, color: "#9aa0a6", spB: 2, spA: 4
       });
     }
   });
