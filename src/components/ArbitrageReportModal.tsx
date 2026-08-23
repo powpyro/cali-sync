@@ -362,7 +362,15 @@ export const ArbitrageReportModal: React.FC<ArbitrageReportModalProps> = ({
                     <div className="space-y-2 pl-1 sm:pl-2">
                       {decided.map((q) => {
                         const status = getDecisionStatus(q);
-                        const justification = q.node.decision_finale?.justification || q.node.gauge?.commentaire;
+                        let justification = q.node.decision_finale?.justification || q.node.gauge?.commentaire;
+                        if (!justification) {
+                          const subJustifs = q.children
+                            .map((c) => c.node.decision_finale?.justification || c.node.gauge?.commentaire)
+                            .filter(Boolean) as string[];
+                          if (subJustifs.length > 0) {
+                            justification = Array.from(new Set(subJustifs)).join(" — ");
+                          }
+                        }
                         const animateur = q.node.decision_finale?.animateur_id;
                         const isOui = status === "Oui";
                         const isNon = status === "Non";

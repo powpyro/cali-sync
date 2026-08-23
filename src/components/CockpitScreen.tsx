@@ -2482,9 +2482,18 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
           setSelectedArbitrageNode(null);
 
           try {
+            const allSpecificComments = Array.from(
+              new Set(
+                Object.values(payload.itemComments)
+                  .map((c) => (c || "").trim())
+                  .filter(Boolean)
+              )
+            ).join(" — ");
+            const fallbackJustification = payload.justification || allSpecificComments;
+
             const batchItems = requests.map((r) => {
               const specificComment = payload.itemComments[r.itemId]?.trim();
-              const finalJustification = specificComment || payload.justification;
+              const finalJustification = specificComment || fallbackJustification;
               return {
                 itemId: r.itemId,
                 decision: r.decision,

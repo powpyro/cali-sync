@@ -2617,6 +2617,23 @@ function genererRapportCalibrage(ss, sessionId) {
     var decStr = decObj ? String(decObj.decision || "").trim() : (q.gauge ? String(q.gauge.critere || "").trim() : "");
     var justif = decObj ? String(decObj.justification || "").trim() : (q.gauge ? String(q.gauge.commentaire || "").trim() : "");
 
+    // Si pas de commentaire global au N2, récupérer les justifications des sous-items imputés
+    if (!justif) {
+      var subJustifs = [];
+      (q.children || []).forEach(function(sub) {
+        var sComm = "";
+        if (sub.decision_finale && sub.decision_finale.justification && sub.decision_finale.justification.trim()) {
+          sComm = sub.decision_finale.justification.trim();
+        } else if (sub.gauge && sub.gauge.commentaire && sub.gauge.commentaire.trim()) {
+          sComm = sub.gauge.commentaire.trim();
+        }
+        if (sComm && subJustifs.indexOf(sComm) === -1) subJustifs.push(sComm);
+      });
+      if (subJustifs.length > 0) {
+        justif = subJustifs.join(" — ");
+      }
+    }
+
     // Libellé question (N2)
     var critBadge = isCrit ? "  ★ CRITIQUE" : "";
     var qText = "  Q" + (originalIdx + 1) + ".  " + qLabel + critBadge;
