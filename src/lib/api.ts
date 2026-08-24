@@ -322,6 +322,7 @@ async function callGAS(
     "upload_audio_drive",
     "proposer_calibrage",          // ← items_gauge est un tableau → doit passer en POST
     "approuver_demande_calibrage", // ← sécurité : payload complexe
+    "soumettre_assessment_libre",  // ← reponses & commentaires sont des objets complexes
   ].includes(action);
 
   const apiUrl = getApiUrl();
@@ -786,19 +787,59 @@ export async function soumettreAssessmentLibre(payload: AssessmentLibreInfo): Pr
   return { success: true, message: "Assessment enregistré avec succès (sauvegarde locale confirmée)." };
 }
 
+function sanitizeAssessment(ass: AssessmentLibreInfo): AssessmentLibreInfo {
+  let rep = ass.reponses || {};
+  if (typeof rep === "string") {
+    try { rep = JSON.parse(rep); } catch { rep = {}; }
+  }
+  let com = ass.commentaires || {};
+  if (typeof com === "string") {
+    try { com = JSON.parse(com); } catch { com = {}; }
+  }
+  return {
+    ...ass,
+    reponses: rep,
+    commentaires: com,
+  };
+}
+
 export async function listerMesAssessments(evaluateurId: string): Promise<ListerAssessmentsResponse> {
-  const localList = getLocalAssessments(evaluateurId);
+  const localList = getLocalAssessments(evaluateurId).map(sanitizeAssessment);
 
   try {
     const res = await callGAS("lister_mes_assessments", { evaluateur_id: evaluateurId }) as unknown as ListerAssessmentsResponse;
     if (res && res.success && Array.isArray(res.assessments)) {
-      // Merge remote and local without duplicates
+      const sanitizedRemote = res.assessments.map(sanitizeAssessment);
       const map = new Map<string, AssessmentLibreInfo>();
-      localList.forEach((a) => map.set(a.assessment_id, a));
-      res.assessments.forEach((a) => map.set(a.assessment_id, a));
+
+      // Remote first
+      sanitizedRemote.forEach((a) => map.set(a.assessment_id, a));
+
+      // Local merge: if remote has empty responses but local has saved answers, preserve local answers!
+      localList.forEach((local) => {
+        const remote = map.get(local.assessment_id);
+        if (!remote) {
+          map.set(local.assessment_id, local);
+        } else {
+          const remoteAnswersCount = Object.keys(remote.reponses || {}).length;
+          const localAnswersCount = Object.keys(local.reponses || {}).length;
+          if (remoteAnswersCount === 0 && localAnswersCount > 0) {
+            map.set(local.assessment_id, {
+              ...remote,
+              reponses: local.reponses,
+              commentaires: Object.keys(remote.commentaires || {}).length > 0 ? remote.commentaires : local.commentaires,
+            });
+          }
+        }
+      });
+
       const merged = Array.from(map.values()).sort(
         (a, b) => new Date(b.date_creation).getTime() - new Date(a.date_creation).getTime()
       );
+
+      // Save sanitized list to local storage
+      merged.forEach((a) => saveLocalAssessment(a));
+
       return { success: true, assessments: merged };
     }
   } catch (e) {
@@ -809,13 +850,18 @@ export async function listerMesAssessments(evaluateurId: string): Promise<Lister
 }
 
 export async function getDetailAssessment(assessmentId: string): Promise<{ success: boolean; assessment?: AssessmentLibreInfo; message?: string }> {
-  const localList = getLocalAssessments();
+  const localList = getLocalAssessments().map(sanitizeAssessment);
   const found = localList.find((a) => a.assessment_id === assessmentId);
 
   try {
     const res = await callGAS("get_detail_assessment", { assessment_id: assessmentId }) as unknown as { success: boolean; assessment?: AssessmentLibreInfo; message?: string };
     if (res && res.success && res.assessment) {
-      return res;
+      const sanitized = sanitizeAssessment(res.assessment);
+      if (found && Object.keys(sanitized.reponses || {}).length === 0 && Object.keys(found.reponses || {}).length > 0) {
+        sanitized.reponses = found.reponses;
+        sanitized.commentaires = found.commentaires;
+      }
+      return { success: true, assessment: sanitized };
     }
   } catch (e) {
     console.warn("GAS get_detail_assessment fallback local", e);

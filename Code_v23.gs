@@ -3277,6 +3277,16 @@ function auditGeneralCategory() {
 // ==============================================================================
 // GESTION DES ASSESSMENTS LIBRES & ENTRAÎNEMENTS AUTONOMES
 // ==============================================================================
+function safeJsonParse(raw) {
+  if (!raw) return {};
+  if (typeof raw === "object") return raw;
+  try {
+    return JSON.parse(String(raw));
+  } catch (e) {
+    return {};
+  }
+}
+
 function getOrCreateAssessmentsLibresSheet(ss) {
   var sheet = ss.getSheetByName("Assessments_Libres");
   if (!sheet) {
@@ -3296,7 +3306,9 @@ function getOrCreateAssessmentsLibresSheet(ss) {
       "interaction_summary",
       "evaluator_comments",
       "reponses_json",
-      "commentaires_json"
+      "commentaires_json",
+      "is_corrected",
+      "correcteur_nom"
     ];
     sheet.appendRow(headers);
     sheet.getRange(1, 1, 1, headers.length).setBackground("#1dc4ff").setFontColor("#0f172a").setFontWeight("bold");
@@ -3321,13 +3333,19 @@ function handleSoumettreAssessmentLibre(ss, req) {
     var statut = req.statut || "COMPLETED";
     var interactionSummary = req.interaction_summary || "";
     var evaluatorComments = req.evaluator_comments || "";
-    var reponsesJson = JSON.stringify(req.reponses || {});
-    var commentairesJson = JSON.stringify(req.commentaires || {});
+    var isCorrected = req.is_corrected ? "TRUE" : "FALSE";
+    var correcteurNom = req.correcteur_nom || "";
+
+    var reponsesObj = safeJsonParse(req.reponses);
+    var reponsesJson = JSON.stringify(reponsesObj);
+
+    var commentairesObj = safeJsonParse(req.commentaires);
+    var commentairesJson = JSON.stringify(commentairesObj);
 
     var data = sheet.getDataRange().getValues();
     var rowFound = -1;
     for (var i = 1; i < data.length; i++) {
-      if (String(data[i][0]) === String(assessmentId)) {
+      if (String(data[i][0]).trim() === String(assessmentId).trim()) {
         rowFound = i + 1;
         break;
       }
@@ -3348,7 +3366,9 @@ function handleSoumettreAssessmentLibre(ss, req) {
       interactionSummary,
       evaluatorComments,
       reponsesJson,
-      commentairesJson
+      commentairesJson,
+      isCorrected,
+      correcteurNom
     ];
 
     if (rowFound > 0) {
@@ -3390,8 +3410,10 @@ function handleListerMesAssessments(ss, req) {
           statut: String(row[10] || "COMPLETED"),
           interaction_summary: String(row[11] || ""),
           evaluator_comments: String(row[12] || ""),
-          reponses: row[13] ? JSON.parse(row[13]) : {},
-          commentaires: row[14] ? JSON.parse(row[14]) : {}
+          reponses: safeJsonParse(row[13]),
+          commentaires: safeJsonParse(row[14]),
+          is_corrected: String(row[15] || "").toUpperCase() === "TRUE",
+          correcteur_nom: String(row[16] || "")
         });
       }
     }
@@ -3413,7 +3435,7 @@ function handleGetDetailAssessment(ss, req) {
     var data = sheet.getDataRange().getValues();
 
     for (var i = 1; i < data.length; i++) {
-      if (String(data[i][0]) === String(assessmentId)) {
+      if (String(data[i][0]).trim() === String(assessmentId).trim()) {
         var row = data[i];
         return {
           success: true,
@@ -3431,8 +3453,10 @@ function handleGetDetailAssessment(ss, req) {
             statut: String(row[10] || "COMPLETED"),
             interaction_summary: String(row[11] || ""),
             evaluator_comments: String(row[12] || ""),
-            reponses: row[13] ? JSON.parse(row[13]) : {},
-            commentaires: row[14] ? JSON.parse(row[14]) : {}
+            reponses: safeJsonParse(row[13]),
+            commentaires: safeJsonParse(row[14]),
+            is_corrected: String(row[15] || "").toUpperCase() === "TRUE",
+            correcteur_nom: String(row[16] || "")
           }
         };
       }

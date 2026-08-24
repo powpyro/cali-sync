@@ -118,6 +118,30 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
 
   const tree = useMemo(() => buildTreeFromItems(templateItems), [templateItems]);
 
+  const reponsesMap = useMemo<Record<string, string>>(() => {
+    if (!assessment.reponses) return {};
+    if (typeof assessment.reponses === "string") {
+      try {
+        return JSON.parse(assessment.reponses);
+      } catch {
+        return {};
+      }
+    }
+    return assessment.reponses;
+  }, [assessment.reponses]);
+
+  const commentairesMap = useMemo<Record<string, string>>(() => {
+    if (!assessment.commentaires) return {};
+    if (typeof assessment.commentaires === "string") {
+      try {
+        return JSON.parse(assessment.commentaires);
+      } catch {
+        return {};
+      }
+    }
+    return assessment.commentaires;
+  }, [assessment.commentaires]);
+
   const toggleCategory = (catLabel: string) => {
     setOpenCategories((prev) => {
       const next = new Set(prev);
@@ -306,7 +330,7 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
             {!loadingTemplate && tree.length > 0 && (
               <div className="flex gap-2 overflow-x-auto pb-1 pt-0.5 no-scrollbar scroll-smooth">
                 {tree.map((cat, idx) => {
-                  const evaluatedCount = cat.questions.filter((q) => !!assessment.reponses[q.item.item_id]).length;
+                  const evaluatedCount = cat.questions.filter((q) => !!reponsesMap[q.item.item_id]).length;
                   const totalQuestions = cat.questions.length;
                   const isDone = evaluatedCount === totalQuestions && totalQuestions > 0;
                   const isActive = viewMode === "stepped" && activeCategoryIndex === idx;
@@ -356,7 +380,7 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
                 : tree.map((cat, catIdx) => ({ cat, catIdx }))
               ).map(({ cat, catIdx }) => {
                 const isOpen = viewMode === "stepped" ? true : openCategories.has(cat.label);
-                const evaluatedCount = cat.questions.filter((q) => !!assessment.reponses[q.item.item_id]).length;
+                const evaluatedCount = cat.questions.filter((q) => !!reponsesMap[q.item.item_id]).length;
                 const totalQuestions = cat.questions.length;
 
                 return (
@@ -399,8 +423,8 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
                     {isOpen && (
                       <div className="p-4 sm:p-5 space-y-4 divide-y divide-slate-100">
                         {cat.questions.map((q, idx) => {
-                          const ans = assessment.reponses[q.item.item_id];
-                          const comment = assessment.commentaires[q.item.item_id];
+                          const ans = reponsesMap[q.item.item_id];
+                          const comment = commentairesMap[q.item.item_id];
                           const isCritical = q.item.criticite === "Critical";
 
                           const isOui = ans === "Oui";
@@ -484,8 +508,8 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
                                     </div>
                                     <div className="space-y-1.5 pl-2 border-l-2 border-slate-200">
                                       {q.children.map((n3) => {
-                                        const n3Ans = assessment.reponses[n3.item.item_id];
-                                        const n3Comm = assessment.commentaires[n3.item.item_id];
+                                        const n3Ans = reponsesMap[n3.item.item_id];
+                                        const n3Comm = commentairesMap[n3.item.item_id];
 
                                         return (
                                           <div
@@ -517,15 +541,14 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
                             </div>
                           );
                         })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            ) : (
+                        </div>
+                      )}
+                    </div>
+                  );
+                })) : (
               // Fallback raw answers list
               <div className="bg-white rounded-2xl border border-slate-200 p-4 divide-y divide-slate-100">
-                {Object.entries(assessment.reponses).map(([itemId, rep]) => (
+                {Object.entries(reponsesMap).map(([itemId, rep]) => (
                   <div key={itemId} className="py-2.5 flex items-center justify-between gap-3 text-xs">
                     <span className="font-semibold text-slate-800">{itemId}</span>
                     <span className="font-bold">{rep}</span>

@@ -106,6 +106,30 @@ export const AssessmentReportModal: React.FC<AssessmentReportModalProps> = ({
 
   const tree = useMemo(() => buildTreeFromItems(templateItems), [templateItems]);
 
+  const reponsesMap = useMemo<Record<string, string>>(() => {
+    if (!assessment.reponses) return {};
+    if (typeof assessment.reponses === "string") {
+      try {
+        return JSON.parse(assessment.reponses);
+      } catch {
+        return {};
+      }
+    }
+    return assessment.reponses;
+  }, [assessment.reponses]);
+
+  const commentairesMap = useMemo<Record<string, string>>(() => {
+    if (!assessment.commentaires) return {};
+    if (typeof assessment.commentaires === "string") {
+      try {
+        return JSON.parse(assessment.commentaires);
+      } catch {
+        return {};
+      }
+    }
+    return assessment.commentaires;
+  }, [assessment.commentaires]);
+
   // Statistics calculation
   const stats = useMemo(() => {
     let conformes = 0;
@@ -115,7 +139,7 @@ export const AssessmentReportModal: React.FC<AssessmentReportModalProps> = ({
 
     tree.forEach((cat) => {
       cat.questions.forEach((q) => {
-        const rep = assessment.reponses[q.item.item_id];
+        const rep = reponsesMap[q.item.item_id];
         if (rep === "Oui") conformes++;
         else if (rep === "Non") {
           nonConformes++;
@@ -134,7 +158,7 @@ export const AssessmentReportModal: React.FC<AssessmentReportModalProps> = ({
       critiquesNonConformes,
       totalEvalues,
     };
-  }, [tree, assessment.reponses]);
+  }, [tree, reponsesMap]);
 
   const handleCopyText = () => {
     let reportText = `📋 RAPPORT DE DÉBRIEFING QUALITÉ — CALISYNC\n`;
@@ -162,8 +186,8 @@ export const AssessmentReportModal: React.FC<AssessmentReportModalProps> = ({
     tree.forEach((cat) => {
       reportText += `\n[ ${cat.label} ]\n`;
       cat.questions.forEach((q) => {
-        const rep = assessment.reponses[q.item.item_id] || "Non évalué";
-        const comm = assessment.commentaires[q.item.item_id];
+        const rep = reponsesMap[q.item.item_id] || "Non évalué";
+        const comm = commentairesMap[q.item.item_id];
         reportText += `• ${q.item.libelle_fr || q.item.libelle} : ${rep.toUpperCase()}\n`;
         if (comm) reportText += `  └─ Commentaire : "${comm}"\n`;
       });
@@ -439,8 +463,8 @@ export const AssessmentReportModal: React.FC<AssessmentReportModalProps> = ({
 
                     <div className="divide-y divide-slate-100">
                       {cat.questions.map((q) => {
-                        const rep = assessment.reponses[q.item.item_id];
-                        const comm = assessment.commentaires[q.item.item_id];
+                        const rep = reponsesMap[q.item.item_id];
+                        const comm = commentairesMap[q.item.item_id];
                         const isCritical = q.item.criticite === "Critical";
 
                         return (
