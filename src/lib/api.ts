@@ -428,8 +428,8 @@ export async function getMesSessions(evaluateurId: string): Promise<{ success: b
   return callGAS("get_mes_sessions", { evaluateur_id: evaluateurId }) as unknown as Promise<{ success: boolean; sessions: any[] }>;
 }
 
-export async function getMaSoumission(sessionId: string, evaluateurId: string): Promise<{ success: boolean; answers: Record<string, string>; comments: Record<string, string> }> {
-  return callGAS("get_ma_soumission", { session_id: sessionId, evaluateur_id: evaluateurId }) as unknown as Promise<{ success: boolean; answers: Record<string, string>; comments: Record<string, string> }>;
+export async function getMaSoumission(sessionId: string, evaluateurId: string): Promise<{ success: boolean; answers: Record<string, string>; comments: Record<string, string>; interaction_summary?: string; evaluator_comments?: string }> {
+  return callGAS("get_ma_soumission", { session_id: sessionId, evaluateur_id: evaluateurId }) as unknown as Promise<{ success: boolean; answers: Record<string, string>; comments: Record<string, string>; interaction_summary?: string; evaluator_comments?: string }>;
 }
 
 export async function approuverDemandeCalibrage(

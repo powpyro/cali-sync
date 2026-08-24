@@ -41,6 +41,8 @@ export const EvaluateurScreen: React.FC<EvaluateurScreenProps> = ({
   const [items, setItems] = useState<HierarchicalItem[]>([]);
   const [initialAnswers, setInitialAnswers] = useState<Record<string, string> | undefined>(undefined);
   const [initialComments, setInitialComments] = useState<Record<string, string> | undefined>(undefined);
+  const [initialInteractionSummary, setInitialInteractionSummary] = useState<string | undefined>(undefined);
+  const [initialEvaluatorComments, setInitialEvaluatorComments] = useState<string | undefined>(undefined);
 
   const loadSessionAndGrid = async () => {
     setLoading(true);
@@ -130,6 +132,8 @@ export const EvaluateurScreen: React.FC<EvaluateurScreenProps> = ({
         if (subRes && subRes.success) {
           setInitialAnswers(subRes.answers);
           setInitialComments(subRes.comments);
+          setInitialInteractionSummary(subRes.interaction_summary || "");
+          setInitialEvaluatorComments(subRes.evaluator_comments || "");
         }
       }
     } catch (err) {
@@ -183,6 +187,8 @@ export const EvaluateurScreen: React.FC<EvaluateurScreenProps> = ({
       heureFin={sessionInfo?.heure_fin}
       initialAnswers={initialAnswers}
       initialComments={initialComments}
+      initialInteractionSummary={initialInteractionSummary}
+      initialEvaluatorComments={initialEvaluatorComments}
       onComplete={onComplete}
       onBack={onComplete}
     />

@@ -1531,9 +1531,12 @@ function handleSoumettreEvaluation(ss, payload) {
   if (!sheet) { initialiserBaseDeDonnees(ss); sheet = ss.getSheetByName("Log_Soumissions"); }
   var now = new Date().toISOString();
 
+  var interactionSummary = String(payload.interaction_summary || "").trim();
+  var evaluatorComments = String(payload.evaluator_comments || "").trim();
+
   if (items.length > 0) {
     items.forEach(function(item) {
-      sheet.appendRow([now, sessionId, evalId, estGauge, item.item_id, item.categorie, item.item, item.statut, item.commentaire || ""]);
+      sheet.appendRow([now, sessionId, evalId, estGauge, item.item_id, item.categorie, item.item, item.statut, item.commentaire || "", interactionSummary, evaluatorComments]);
     });
   }
 
@@ -2947,6 +2950,8 @@ function handleGetMaSoumission(ss, req) {
   var data = sheet.getDataRange().getValues();
   var answers = {};
   var comments = {};
+  var interactionSummary = "";
+  var evaluatorComments = "";
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][1]).trim() === String(sessionId).trim() &&
         String(data[i][2]).trim().toLowerCase() === String(evaluateurId).trim().toLowerCase()) {
@@ -2957,9 +2962,12 @@ function handleGetMaSoumission(ss, req) {
       if (comm) {
         comments[itemId] = comm;
       }
+      // Extract session-level text fields from any matching row (columns 10 & 11)
+      if (!interactionSummary && data[i][9]) interactionSummary = String(data[i][9]);
+      if (!evaluatorComments && data[i][10]) evaluatorComments = String(data[i][10]);
     }
   }
-  return { success: true, answers: answers, comments: comments };
+  return { success: true, answers: answers, comments: comments, interaction_summary: interactionSummary, evaluator_comments: evaluatorComments };
 }
 
 function handleUploadAudioDrive(ss, body) {

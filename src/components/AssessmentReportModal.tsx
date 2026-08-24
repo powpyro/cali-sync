@@ -424,7 +424,7 @@ export const AssessmentReportModal: React.FC<AssessmentReportModalProps> = ({
                     <FileText className="w-3.5 h-3.5 text-[#009ae5]" /> Résumé de l'Interaction
                   </div>
                   <p className="text-xs text-slate-800 leading-relaxed italic whitespace-pre-wrap">
-                    "{assessment.interaction_summary}"
+                    &ldquo;{assessment.interaction_summary}&rdquo;
                   </p>
                 </div>
               )}
@@ -432,7 +432,7 @@ export const AssessmentReportModal: React.FC<AssessmentReportModalProps> = ({
               {assessment.evaluator_comments && (
                 <div className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-200">
                   <div className="text-[11px] font-black uppercase tracking-wider text-emerald-800 flex items-center gap-1.5 mb-1">
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> Synthèse & Recommandations de Débriefing
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> Synthèse &amp; Recommandations de Débriefing
                   </div>
                   <p className="text-xs text-slate-800 leading-relaxed whitespace-pre-wrap font-medium">
                     {assessment.evaluator_comments}
@@ -443,82 +443,183 @@ export const AssessmentReportModal: React.FC<AssessmentReportModalProps> = ({
           )}
 
           {/* Detailed Criteria Table by Category */}
-          <div className="space-y-4 pt-2">
-            <h2 className="text-xs font-black uppercase tracking-wider text-slate-900 border-b border-slate-200 pb-2 flex items-center gap-2">
-              <Tag className="w-4 h-4 text-[#009ae5]" /> Grille Complète des Critères & Remarques
+          <div className="space-y-5 pt-2">
+            <h2 className="text-[11px] font-black uppercase tracking-widest text-slate-500 border-b-2 border-slate-900 pb-2.5 flex items-center gap-2">
+              <Tag className="w-4 h-4 text-[#009ae5]" />
+              <span className="text-slate-900">Grille Complète des Critères &amp; Remarques</span>
             </h2>
 
             {loadingTemplate ? (
               <div className="p-6 text-center text-xs text-slate-400">Chargement de la grille...</div>
             ) : tree.length > 0 ? (
-              <div className="space-y-5">
-                {tree.map((cat) => (
-                  <div key={cat.label} className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
-                    <div className="bg-slate-100 px-4 py-2.5 font-extrabold text-xs text-slate-900 uppercase tracking-wider flex items-center justify-between">
-                      <span>{cat.label}</span>
-                      <span className="text-[10px] text-slate-500 font-bold">
-                        {cat.questions.length} critère(s)
-                      </span>
-                    </div>
+              <div className="space-y-6">
+                {tree.map((cat) => {
+                  const conformesCat = cat.questions.filter((q) => reponsesMap[q.item.item_id] === "Oui").length;
+                  const nonConformesCat = cat.questions.filter((q) => reponsesMap[q.item.item_id] === "Non").length;
+                  const nasCat = cat.questions.filter((q) => reponsesMap[q.item.item_id] === "N.A.").length;
 
-                    <div className="divide-y divide-slate-100">
-                      {cat.questions.map((q) => {
-                        const rep = reponsesMap[q.item.item_id];
-                        const comm = commentairesMap[q.item.item_id];
-                        const isCritical = q.item.criticite === "Critical";
+                  return (
+                    <div key={cat.label} className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm print:break-inside-avoid">
+                      {/* Category Header */}
+                      <div className="bg-slate-900 px-4 py-3 flex items-center justify-between print:bg-slate-100 print:border-b print:border-slate-300">
+                        <span className="text-xs font-black uppercase tracking-widest text-white print:text-slate-900">
+                          {cat.label}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {conformesCat > 0 && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 print:bg-emerald-100 print:text-emerald-800 border border-emerald-500/30 print:border-emerald-300 flex items-center gap-1">
+                              <Check className="w-3 h-3" /> {conformesCat}
+                            </span>
+                          )}
+                          {nonConformesCat > 0 && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 print:bg-rose-100 print:text-rose-800 border border-rose-500/30 print:border-rose-300 flex items-center gap-1">
+                              <X className="w-3 h-3" /> {nonConformesCat}
+                            </span>
+                          )}
+                          {nasCat > 0 && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-500/30 text-slate-300 print:bg-slate-100 print:text-slate-600 border border-slate-600 print:border-slate-300">
+                              N.A. {nasCat}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-slate-400 print:text-slate-500 font-medium">
+                            {cat.questions.length} critère(s)
+                          </span>
+                        </div>
+                      </div>
 
-                        return (
-                          <div key={q.item.item_id} className="p-3.5 sm:p-4 space-y-2">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                              <div className="flex-1">
-                                <div className="text-xs font-bold text-slate-900 flex items-center gap-2 flex-wrap">
-                                  <span>{q.item.libelle_fr || q.item.libelle}</span>
-                                  {isCritical && (
-                                    <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-rose-50 text-rose-700 border border-rose-200">
-                                      Critique
+                      {/* Questions */}
+                      <div className="divide-y divide-slate-100">
+                        {cat.questions.map((q) => {
+                          const rep = reponsesMap[q.item.item_id];
+                          const comm = commentairesMap[q.item.item_id];
+                          const isCritical = q.item.criticite === "Critical";
+                          const isNon = rep === "Non";
+                          const isOui = rep === "Oui";
+                          const isNA = rep === "N.A.";
+
+                          // Only show sub-items that have an imputed answer
+                          const imputedChildren = q.children.filter(
+                            (n3) => !!reponsesMap[n3.item.item_id]
+                          );
+
+                          return (
+                            <div
+                              key={q.item.item_id}
+                              className={`p-3.5 sm:p-4 space-y-2.5 print:break-inside-avoid ${
+                                isNon ? "bg-rose-50/30" : isOui ? "bg-emerald-50/20" : ""
+                              }`}
+                            >
+                              {/* ── Question Row ── */}
+                              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-start gap-2 flex-wrap">
+                                    <span className="text-xs font-bold text-slate-900 leading-snug">
+                                      {q.item.libelle_fr || q.item.libelle}
+                                    </span>
+                                    {isCritical && (
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-0.5 flex-shrink-0">
+                                        <AlertTriangle className="w-2.5 h-2.5" /> Critique
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[10px] font-mono text-slate-400 mt-0.5">
+                                    Réf : {q.item.item_id}
+                                  </div>
+                                </div>
+
+                                <div className="flex-shrink-0">
+                                  {isOui && (
+                                    <span className="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                                      <Check className="w-3.5 h-3.5" /> Conforme
+                                    </span>
+                                  )}
+                                  {isNon && (
+                                    <span className="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-1">
+                                      <X className="w-3.5 h-3.5" /> Non Conforme
+                                    </span>
+                                  )}
+                                  {isNA && (
+                                    <span className="px-3 py-1.5 rounded-lg text-[11px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-1">
+                                      <MinusCircle className="w-3.5 h-3.5" /> N.A.
+                                    </span>
+                                  )}
+                                  {!rep && (
+                                    <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-50 text-slate-400 border border-slate-200">
+                                      Non évalué
                                     </span>
                                   )}
                                 </div>
                               </div>
 
-                              <div className="flex-shrink-0">
-                                {rep === "Oui" && (
-                                  <span className="px-3 py-1 rounded-lg text-xs font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
-                                    <Check className="w-3.5 h-3.5" /> Conforme
-                                  </span>
-                                )}
-                                {rep === "Non" && (
-                                  <span className="px-3 py-1 rounded-lg text-xs font-black uppercase bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-1">
-                                    <X className="w-3.5 h-3.5" /> Non Conforme
-                                  </span>
-                                )}
-                                {rep === "N.A." && (
-                                  <span className="px-3 py-1 rounded-lg text-xs font-black uppercase bg-slate-100 text-slate-600 border border-slate-200">
-                                    — N.A.
-                                  </span>
-                                )}
-                                {!rep && (
-                                  <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-50 text-slate-400">
-                                    Non évalué
-                                  </span>
-                                )}
-                              </div>
-                            </div>
+                              {/* ── Evaluator Comment on N2 ── */}
+                              {comm && (
+                                <div className="flex items-start gap-2 bg-blue-50/60 border border-blue-200 rounded-xl px-3 py-2 print:bg-slate-50 print:border-slate-200">
+                                  <FileText className="w-3 h-3 text-blue-500 flex-shrink-0 mt-0.5 print:text-slate-500" />
+                                  <div>
+                                    <div className="text-[9px] font-black uppercase tracking-widest text-blue-600 print:text-slate-500 mb-0.5">
+                                      Justification / Commentaire évaluateur
+                                    </div>
+                                    <p className="text-[11px] text-slate-800 font-medium leading-relaxed italic">
+                                      &ldquo;{comm}&rdquo;
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
 
-                            {comm && (
-                              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 font-medium">
-                                <span className="text-[10px] font-bold text-slate-500 block mb-0.5">
-                                  Remarque / Justification :
-                                </span>
-                                "{comm}"
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                              {/* ── Imputed Sub-Items / Motifs ── */}
+                              {imputedChildren.length > 0 && (
+                                <div className="ml-3 sm:ml-5 space-y-1.5 border-l-2 border-rose-300 pl-3">
+                                  <div className="text-[9px] font-black uppercase tracking-widest text-rose-600 print:text-slate-500 mb-1 flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3" />
+                                    Motifs / Points de non-conformité imputés
+                                  </div>
+                                  {imputedChildren.map((n3) => {
+                                    const n3Rep = reponsesMap[n3.item.item_id];
+                                    const n3Comm = commentairesMap[n3.item.item_id];
+                                    const n3IsNon = n3Rep === "Non";
+
+                                    return (
+                                      <div
+                                        key={n3.item.item_id}
+                                        className={`rounded-lg border px-3 py-2 text-xs print:break-inside-avoid ${
+                                          n3IsNon
+                                            ? "bg-rose-50 border-rose-200"
+                                            : "bg-slate-50 border-slate-200"
+                                        }`}
+                                      >
+                                        <div className="flex items-start justify-between gap-2">
+                                          <span className="font-semibold text-slate-800 leading-snug">
+                                            &bull; {n3.item.libelle_fr || n3.item.libelle}
+                                          </span>
+                                          {n3Rep && (
+                                            <span
+                                              className={`text-[9px] font-black uppercase px-2 py-0.5 rounded flex-shrink-0 border ${
+                                                n3IsNon
+                                                  ? "bg-rose-100 text-rose-700 border-rose-300"
+                                                  : "bg-slate-100 text-slate-600 border-slate-300"
+                                              }`}
+                                            >
+                                              {n3Rep}
+                                            </span>
+                                          )}
+                                        </div>
+                                        {n3Comm && (
+                                          <p className="text-[10px] text-slate-600 italic mt-1 leading-relaxed">
+                                            &ldquo;{n3Comm}&rdquo;
+                                          </p>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="p-4 bg-slate-50 rounded-xl text-xs text-slate-600">
@@ -569,3 +670,4 @@ export const AssessmentReportModal: React.FC<AssessmentReportModalProps> = ({
     </div>
   );
 };
+
