@@ -438,6 +438,23 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
                         const isNon = ans === "Non";
                         const isNA = ans === "N.A.";
 
+                        // Collect all imputed sub-items (N3 and N4) under this question
+                        const imputedChildren: { item: any; rep?: string; comm?: string; level: number }[] = [];
+                        q.children.forEach((n3) => {
+                          const n3Ans = reponsesMap[n3.item.item_id];
+                          const n3Comm = commentairesMap[n3.item.item_id];
+                          if (n3Ans || n3Comm) {
+                            imputedChildren.push({ item: n3.item, rep: n3Ans, comm: n3Comm, level: 3 });
+                          }
+                          n3.children?.forEach((n4) => {
+                            const n4Ans = reponsesMap[n4.item.item_id];
+                            const n4Comm = commentairesMap[n4.item.item_id];
+                            if (n4Ans || n4Comm) {
+                              imputedChildren.push({ item: n4.item, rep: n4Ans, comm: n4Comm, level: 4 });
+                            }
+                          });
+                        });
+
                         return (
                           <div key={q.item.item_id} className={`space-y-3 print:break-inside-avoid ${idx > 0 ? "pt-4" : ""}`}>
                             {/* Main Question Card */}
@@ -508,33 +525,45 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
                               )}
 
                               {/* Sub-items / Motifs (N3 / N4) */}
-                              {q.children.length > 0 && (
+                              {imputedChildren.length > 0 && (
                                 <div className="mt-3 pt-3 border-t border-slate-200/80 space-y-2">
-                                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                                    Points de contrôle &amp; Motifs associés :
+                                  <div className="text-[11px] font-bold uppercase tracking-wider text-rose-600 print:text-slate-600 flex items-center gap-1.5">
+                                    <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+                                    Points de contrôle &amp; Motifs imputés :
                                   </div>
-                                  <div className="space-y-1.5 pl-2 border-l-2 border-slate-200 print:border-slate-300">
-                                    {q.children.map((n3) => {
-                                      const n3Ans = reponsesMap[n3.item.item_id];
-                                      const n3Comm = commentairesMap[n3.item.item_id];
+                                  <div className="space-y-1.5 pl-2 border-l-2 border-rose-300 print:border-slate-300">
+                                    {imputedChildren.map((subNode) => {
+                                      const subAns = subNode.rep;
+                                      const subComm = subNode.comm;
+                                      const isSubNon = subAns === "Non";
 
                                       return (
                                         <div
-                                          key={n3.item.item_id}
-                                          className="text-xs p-2 bg-white rounded-lg border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 print:border-slate-200 print:break-inside-avoid"
+                                          key={subNode.item.item_id}
+                                          className={`text-xs p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 print:border-slate-200 print:break-inside-avoid ${
+                                            subNode.level === 4 ? "ml-3 border-l-2 border-l-rose-400" : ""
+                                          } ${
+                                            isSubNon
+                                              ? "bg-rose-50/50 border-rose-200"
+                                              : "bg-white border-slate-200"
+                                          }`}
                                         >
-                                          <span className="text-slate-700 font-medium">
-                                            &bull; {n3.item.libelle_fr || n3.item.libelle}
+                                          <span className="text-slate-800 font-semibold">
+                                            &bull; {subNode.item.libelle_fr || subNode.item.libelle}
                                           </span>
                                           <div className="flex items-center gap-2">
-                                            {n3Ans && (
-                                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 print:bg-rose-100 print:border-rose-300">
-                                                {n3Ans}
+                                            {subAns && (
+                                              <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${
+                                                isSubNon
+                                                  ? "bg-rose-100 text-rose-700 border-rose-200"
+                                                  : "bg-slate-100 text-slate-700 border-slate-200"
+                                              }`}>
+                                                {subAns}
                                               </span>
                                             )}
-                                            {n3Comm && (
+                                            {subComm && (
                                               <span className="text-[11px] text-slate-600 italic">
-                                                &ldquo;{n3Comm}&rdquo;
+                                                &ldquo;{subComm}&rdquo;
                                               </span>
                                             )}
                                           </div>

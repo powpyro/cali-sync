@@ -346,6 +346,45 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
     return {};
   });
 
+  // Sync initialAnswers / initialComments when provided from props (e.g. edit / correction)
+  useEffect(() => {
+    if (initialAnswers) {
+      const n2Answers: Record<string, PillChoice> = {};
+      const subSet = new Set<string>();
+      const expN3 = new Set<string>();
+
+      Object.entries(initialAnswers).forEach(([itemId, status]) => {
+        const item = items.find((i) => i.item_id === itemId);
+        if (!item || item.niveau === 2) {
+          n2Answers[itemId] = status as PillChoice;
+        } else if (item.niveau === 3 || item.niveau === 4) {
+          if (status === "Non" || status === "Oui") {
+            subSet.add(itemId);
+          }
+          if (item.niveau === 4 && (status === "Non" || status === "Oui")) {
+            expN3.add(item.parent_id);
+          }
+        }
+      });
+
+      if (initialComments) {
+        Object.keys(initialComments).forEach((itemId) => {
+          const item = items.find((i) => i.item_id === itemId);
+          if (item && (item.niveau === 3 || item.niveau === 4)) {
+            subSet.add(itemId);
+            if (item.niveau === 4) {
+              expN3.add(item.parent_id);
+            }
+          }
+        });
+      }
+
+      setAnswers(n2Answers);
+      setSelectedSubs(subSet);
+      setExpandedN3(expN3);
+    }
+  }, [initialAnswers, initialComments, items]);
+
   // Auto-save draft changes to localStorage
   useEffect(() => {
     if (sessionLocked || initialAnswers) return;
@@ -595,8 +634,17 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
       const headerFields = buildHeaderFields();
 
       if (isAssessmentMode && onAssessmentSubmit) {
+        const payloadItems = buildPayload();
         const answersMap: Record<string, string> = {};
         const commentsMap: Record<string, string> = {};
+
+        // 1. Populate from buildPayload (contains both N2 and selected N3/N4 sub-items)
+        payloadItems.forEach((it) => {
+          if (it.item_id && it.statut) answersMap[it.item_id] = it.statut;
+          if (it.item_id && it.commentaire) commentsMap[it.item_id] = it.commentaire;
+        });
+
+        // 2. Ensure all direct state answers and comments are preserved
         Object.entries(answers).forEach(([k, v]) => { if (v) answersMap[k] = v; });
         Object.entries(comments).forEach(([k, v]) => { if (v) commentsMap[k] = v; });
 

@@ -497,10 +497,22 @@ export const AssessmentReportModal: React.FC<AssessmentReportModalProps> = ({
                           const isOui = rep === "Oui";
                           const isNA = rep === "N.A.";
 
-                          // Only show sub-items that have an imputed answer
-                          const imputedChildren = q.children.filter(
-                            (n3) => !!reponsesMap[n3.item.item_id]
-                          );
+                          // Collect all imputed sub-items (N3 and N4) under this question
+                          const imputedChildren: { item: any; rep?: string; comm?: string; level: number }[] = [];
+                          q.children.forEach((n3) => {
+                            const n3Rep = reponsesMap[n3.item.item_id];
+                            const n3Comm = commentairesMap[n3.item.item_id];
+                            if (n3Rep || n3Comm) {
+                              imputedChildren.push({ item: n3.item, rep: n3Rep, comm: n3Comm, level: 3 });
+                            }
+                            n3.children?.forEach((n4) => {
+                              const n4Rep = reponsesMap[n4.item.item_id];
+                              const n4Comm = commentairesMap[n4.item.item_id];
+                              if (n4Rep || n4Comm) {
+                                imputedChildren.push({ item: n4.item, rep: n4Rep, comm: n4Comm, level: 4 });
+                              }
+                            });
+                          });
 
                           return (
                             <div
@@ -573,39 +585,41 @@ export const AssessmentReportModal: React.FC<AssessmentReportModalProps> = ({
                                     <AlertTriangle className="w-3 h-3" />
                                     Motifs / Points de non-conformité imputés
                                   </div>
-                                  {imputedChildren.map((n3) => {
-                                    const n3Rep = reponsesMap[n3.item.item_id];
-                                    const n3Comm = commentairesMap[n3.item.item_id];
-                                    const n3IsNon = n3Rep === "Non";
+                                  {imputedChildren.map((subNode) => {
+                                    const subRep = subNode.rep;
+                                    const subComm = subNode.comm;
+                                    const isSubNon = subRep === "Non";
 
                                     return (
                                       <div
-                                        key={n3.item.item_id}
+                                        key={subNode.item.item_id}
                                         className={`rounded-lg border px-3 py-2 text-xs print:break-inside-avoid ${
-                                          n3IsNon
+                                          subNode.level === 4 ? "ml-3 border-l-2 border-l-rose-400" : ""
+                                        } ${
+                                          isSubNon
                                             ? "bg-rose-50 border-rose-200"
                                             : "bg-slate-50 border-slate-200"
                                         }`}
                                       >
                                         <div className="flex items-start justify-between gap-2">
                                           <span className="font-semibold text-slate-800 leading-snug">
-                                            &bull; {n3.item.libelle_fr || n3.item.libelle}
+                                            &bull; {subNode.item.libelle_fr || subNode.item.libelle}
                                           </span>
-                                          {n3Rep && (
+                                          {subRep && (
                                             <span
                                               className={`text-[9px] font-black uppercase px-2 py-0.5 rounded flex-shrink-0 border ${
-                                                n3IsNon
+                                                isSubNon
                                                   ? "bg-rose-100 text-rose-700 border-rose-300"
                                                   : "bg-slate-100 text-slate-600 border-slate-300"
                                               }`}
                                             >
-                                              {n3Rep}
+                                              {subRep}
                                             </span>
                                           )}
                                         </div>
-                                        {n3Comm && (
+                                        {subComm && (
                                           <p className="text-[10px] text-slate-600 italic mt-1 leading-relaxed">
-                                            &ldquo;{n3Comm}&rdquo;
+                                            &ldquo;{subComm}&rdquo;
                                           </p>
                                         )}
                                       </div>
