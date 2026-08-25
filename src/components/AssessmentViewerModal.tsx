@@ -152,10 +152,10 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 sm:p-6 overflow-y-auto animate-fade-in font-sans">
-      <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] overflow-hidden my-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 sm:p-6 overflow-y-auto animate-fade-in font-sans print:static print:p-0 print:bg-white print:overflow-visible print:block print:w-full">
+      <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] overflow-hidden my-auto print:max-h-none print:m-0 print:border-none print:shadow-none print:rounded-none print:w-full print:block print:overflow-visible">
         {/* ── HEADER ── */}
-        <header className="p-5 sm:p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-4 flex-shrink-0">
+        <header className="p-5 sm:p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-4 flex-shrink-0 print:border-b-2 print:border-slate-900 print:bg-white print:p-0 print:pb-4">
           <div className="flex items-center gap-3">
             <CaliSyncLogo size="sm" showText={false} />
             <div>
@@ -163,14 +163,14 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
                 <h2 className="text-lg font-black text-slate-900 tracking-tight">
                   {assessment.titre}
                 </h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#1dc4ff]/10 text-[#0077aa] border border-[#1dc4ff]/20">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#1dc4ff]/10 text-[#0077aa] border border-[#1dc4ff]/20 print:border-slate-300 print:text-slate-800">
                   Assessment Libre
                 </span>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200">
                   {assessment.template_nom || assessment.template_id}
                 </span>
                 {assessment.is_corrected && (
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1 print:bg-emerald-100 print:border-emerald-300">
                     <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Grille Corrigée
                   </span>
                 )}
@@ -196,7 +196,7 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
                   })}
                 </span>
                 {assessment.correcteur_nom && (
-                  <span className="flex items-center gap-1 text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                  <span className="flex items-center gap-1 text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 print:bg-emerald-100">
                     <User className="w-3.5 h-3.5 text-emerald-600" />
                     Correcteur : <strong className="text-emerald-950">{assessment.correcteur_nom}</strong>
                   </span>
@@ -205,7 +205,7 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0 print:hidden">
             {onOpenReport && (
               <button
                 onClick={() => {
@@ -213,10 +213,10 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
                   onOpenReport(assessment);
                 }}
                 className="px-3.5 py-2 bg-[#1dc4ff] hover:bg-[#009ae5] text-slate-950 font-black rounded-xl text-xs shadow-md shadow-[#1dc4ff]/20 transition-all flex items-center gap-1.5 cursor-pointer"
-                title="Consulter la grille d'évaluation corrigée et l'imprimer"
+                title="Consulter le rapport officiel de débriefing et l'imprimer en PDF"
               >
                 <FileText className="w-3.5 h-3.5" />
-                <span>{assessment.is_corrected ? "Voir la correction" : "Fiche & Imprimer"}</span>
+                <span>{assessment.is_corrected ? "Rapport Corrigé & PDF" : "Rapport Qualité & PDF"}</span>
               </button>
             )}
 
@@ -235,16 +235,24 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
             )}
 
             <button
-              onClick={() => window.print()}
-              className="p-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
-              title="Imprimer / Exporter en PDF"
+              onClick={() => {
+                if (onOpenReport) {
+                  onClose();
+                  onOpenReport(assessment);
+                } else {
+                  window.print();
+                }
+              }}
+              className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="Générer et imprimer le rapport PDF officiel"
             >
-              <Printer className="w-4 h-4" />
+              <Printer className="w-3.5 h-3.5 text-[#1dc4ff]" />
+              <span className="hidden sm:inline">Imprimer / PDF</span>
             </button>
 
             <button
               onClick={onClose}
-              className="p-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+              className="p-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
               title="Fermer"
             >
               <X className="w-5 h-5" />
@@ -253,10 +261,10 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
         </header>
 
         {/* ── SCROLLABLE BODY ── */}
-        <div className="p-6 space-y-6 overflow-y-auto flex-1 bg-slate-50/50">
-          {/* Audio Player if provided */}
+        <div className="p-6 space-y-6 overflow-y-auto flex-1 bg-slate-50/50 print:p-0 print:space-y-4 print:bg-white print:overflow-visible print:h-auto">
+          {/* Audio Player if provided (Hidden in Print) */}
           {assessment.audio_url && (
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs print:hidden">
               <div className="flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider text-slate-600">
                 <Headphones className="w-4 h-4 text-[#1dc4ff]" /> Support Audio Enregistré
               </div>
@@ -266,25 +274,25 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
 
           {/* Interaction Summary / Comments */}
           {(assessment.interaction_summary || assessment.evaluator_comments || assessment.consignes) && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 print:grid-cols-2">
               {assessment.interaction_summary && (
-                <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-1 shadow-xs">
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-1 shadow-xs print:border-slate-300">
                   <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-[#1dc4ff]" /> Résumé de l'Interaction
+                    <FileText className="w-3.5 h-3.5 text-[#1dc4ff] print:text-slate-700" /> Résumé de l'Interaction
                   </span>
                   <p className="text-xs text-slate-800 leading-relaxed italic whitespace-pre-wrap">
-                    "{assessment.interaction_summary}"
+                    &ldquo;{assessment.interaction_summary}&rdquo;
                   </p>
                 </div>
               )}
 
               {assessment.evaluator_comments && (
-                <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-1 shadow-xs">
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-1 shadow-xs print:border-slate-300">
                   <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-emerald-500" /> Synthèse & Axes de Progrès
+                    <FileText className="w-3.5 h-3.5 text-emerald-500 print:text-slate-700" /> Synthèse &amp; Axes de Progrès
                   </span>
                   <p className="text-xs text-slate-800 leading-relaxed italic whitespace-pre-wrap">
-                    "{assessment.evaluator_comments}"
+                    &ldquo;{assessment.evaluator_comments}&rdquo;
                   </p>
                 </div>
               )}
@@ -295,11 +303,11 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-2">
-                <Tag className="w-4 h-4 text-[#1dc4ff]" /> Grille d'Évaluation & Justifications ({assessment.template_nom || assessment.template_id})
+                <Tag className="w-4 h-4 text-[#1dc4ff] print:text-slate-800" /> Grille d'Évaluation &amp; Justifications ({assessment.template_nom || assessment.template_id})
               </h3>
 
               {tree.length > 1 && (
-                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold print:hidden">
                   <button
                     type="button"
                     onClick={() => setViewMode("stepped")}
@@ -326,9 +334,9 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
               )}
             </div>
 
-            {/* Category Navigation Pills */}
+            {/* Category Navigation Pills (Hidden in Print) */}
             {!loadingTemplate && tree.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto pb-1 pt-0.5 no-scrollbar scroll-smooth">
+              <div className="flex gap-2 overflow-x-auto pb-1 pt-0.5 no-scrollbar scroll-smooth print:hidden">
                 {tree.map((cat, idx) => {
                   const evaluatedCount = cat.questions.filter((q) => !!reponsesMap[q.item.item_id]).length;
                   const totalQuestions = cat.questions.length;
@@ -375,10 +383,8 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
                 Chargement de la grille...
               </div>
             ) : tree.length > 0 ? (
-              (viewMode === "stepped"
-                ? (tree[activeCategoryIndex] ? [{ cat: tree[activeCategoryIndex], catIdx: activeCategoryIndex }] : [])
-                : tree.map((cat, catIdx) => ({ cat, catIdx }))
-              ).map(({ cat, catIdx }) => {
+              tree.map((cat, catIdx) => {
+                const isSectionActiveOnScreen = viewMode === "all" || activeCategoryIndex === catIdx;
                 const isOpen = viewMode === "stepped" ? true : openCategories.has(cat.label);
                 const evaluatedCount = cat.questions.filter((q) => !!reponsesMap[q.item.item_id]).length;
                 const totalQuestions = cat.questions.length;
@@ -387,26 +393,28 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
                   <div
                     key={cat.label}
                     id={`view-cat-section-${catIdx}`}
-                    className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs"
+                    className={`bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs print:border-slate-300 print:shadow-none print:break-inside-avoid print:mb-4 ${
+                      isSectionActiveOnScreen ? "block" : "hidden print:block"
+                    }`}
                   >
                     {/* Category Header */}
                     <button
                       type="button"
                       onClick={() => viewMode !== "stepped" && toggleCategory(cat.label)}
-                      className={`w-full px-5 py-3.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between hover:bg-slate-100 transition-colors text-left ${
+                      className={`w-full px-5 py-3.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between hover:bg-slate-100 transition-colors text-left print:bg-slate-100 print:border-slate-300 ${
                         viewMode !== "stepped" ? "cursor-pointer" : "cursor-default"
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-7 h-7 rounded-xl bg-[#1dc4ff]/10 border border-[#1dc4ff]/30 flex items-center justify-center flex-shrink-0">
-                          <Sparkles className="w-3.5 h-3.5 text-[#009ae5]" />
+                        <div className="w-7 h-7 rounded-xl bg-[#1dc4ff]/10 border border-[#1dc4ff]/30 flex items-center justify-center flex-shrink-0 print:border-slate-300">
+                          <Sparkles className="w-3.5 h-3.5 text-[#009ae5] print:text-slate-800" />
                         </div>
                         <span className="font-extrabold text-xs sm:text-sm uppercase tracking-wider text-slate-900">
-                          {viewMode === "stepped" ? `Section ${catIdx + 1}/${tree.length} : ` : ""}{cat.label}
+                          Section {catIdx + 1}/{tree.length} : {cat.label}
                         </span>
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                           evaluatedCount === totalQuestions
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 print:bg-emerald-100 print:border-emerald-300"
                             : "bg-slate-100 text-slate-600 border-slate-200"
                         }`}>
                           {evaluatedCount}/{totalQuestions} évalué(s)
@@ -414,138 +422,137 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
                       </div>
                       {viewMode !== "stepped" && (
                         <ChevronDown
-                          className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                          className={`w-4 h-4 text-slate-400 transition-transform duration-200 print:hidden ${isOpen ? "rotate-180" : ""}`}
                         />
                       )}
                     </button>
 
-                    {/* Questions List */}
-                    {isOpen && (
-                      <div className="p-4 sm:p-5 space-y-4 divide-y divide-slate-100">
-                        {cat.questions.map((q, idx) => {
-                          const ans = reponsesMap[q.item.item_id];
-                          const comment = commentairesMap[q.item.item_id];
-                          const isCritical = q.item.criticite === "Critical";
+                    {/* Questions List (Always visible in print) */}
+                    <div className={`p-4 sm:p-5 space-y-4 divide-y divide-slate-100 ${isOpen ? "block" : "hidden print:block"}`}>
+                      {cat.questions.map((q, idx) => {
+                        const ans = reponsesMap[q.item.item_id];
+                        const comment = commentairesMap[q.item.item_id];
+                        const isCritical = q.item.criticite === "Critical";
 
-                          const isOui = ans === "Oui";
-                          const isNon = ans === "Non";
-                          const isNA = ans === "N.A.";
+                        const isOui = ans === "Oui";
+                        const isNon = ans === "Non";
+                        const isNA = ans === "N.A.";
 
-                          return (
-                            <div key={q.item.item_id} className={`space-y-3 ${idx > 0 ? "pt-4" : ""}`}>
-                              {/* Main Question Card */}
-                              <div
-                                className={`p-4 rounded-2xl border transition-all ${
-                                  isOui
-                                    ? "bg-emerald-50/40 border-emerald-200"
-                                    : isNon
-                                    ? "bg-rose-50/40 border-rose-200"
-                                    : isNA
-                                    ? "bg-slate-50 border-slate-200"
-                                    : "bg-white border-slate-200"
-                                }`}
-                              >
-                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                                  <div className="flex-1 space-y-1">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="text-xs sm:text-sm font-bold text-slate-900">
-                                        {q.item.libelle_fr || q.item.libelle || q.item.item_id}
+                        return (
+                          <div key={q.item.item_id} className={`space-y-3 print:break-inside-avoid ${idx > 0 ? "pt-4" : ""}`}>
+                            {/* Main Question Card */}
+                            <div
+                              className={`p-4 rounded-2xl border transition-all print:border-slate-200 ${
+                                isOui
+                                  ? "bg-emerald-50/40 border-emerald-200 print:bg-emerald-50/20"
+                                  : isNon
+                                  ? "bg-rose-50/40 border-rose-200 print:bg-rose-50/20"
+                                  : isNA
+                                  ? "bg-slate-50 border-slate-200"
+                                  : "bg-white border-slate-200"
+                              }`}
+                            >
+                              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                <div className="flex-1 space-y-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-xs sm:text-sm font-bold text-slate-900">
+                                      {q.item.libelle_fr || q.item.libelle || q.item.item_id}
+                                    </span>
+                                    {isCritical && (
+                                      <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1 print:bg-rose-100 print:border-rose-300">
+                                        <AlertTriangle className="w-3 h-3 text-rose-600" /> Critique
                                       </span>
-                                      {isCritical && (
-                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
-                                          <AlertTriangle className="w-3 h-3 text-rose-600" /> Critique
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="text-[10px] font-mono text-slate-400">
-                                      Réf : {q.item.item_id}
-                                    </div>
+                                    )}
                                   </div>
-
-                                  {/* Answer Pill */}
-                                  <div className="flex-shrink-0">
-                                    {isOui && (
-                                      <span className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-500 text-white shadow-xs flex items-center gap-1.5">
-                                        <CheckCircle2 className="w-4 h-4" /> OUI / CONFORME
-                                      </span>
-                                    )}
-                                    {isNon && (
-                                      <span className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-rose-500 text-white shadow-xs flex items-center gap-1.5">
-                                        <XCircle className="w-4 h-4" /> NON / NON CONFORME
-                                      </span>
-                                    )}
-                                    {isNA && (
-                                      <span className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-slate-200 text-slate-700 border border-slate-300 flex items-center gap-1.5">
-                                        <MinusCircle className="w-4 h-4" /> NON APPLICABLE
-                                      </span>
-                                    )}
-                                    {!ans && (
-                                      <span className="px-3 py-1 rounded-xl text-xs font-bold bg-slate-100 text-slate-400 border border-slate-200">
-                                        Non évalué
-                                      </span>
-                                    )}
+                                  <div className="text-[10px] font-mono text-slate-400">
+                                    Réf : {q.item.item_id}
                                   </div>
                                 </div>
 
-                                {/* Justification Comment */}
-                                {comment && (
-                                  <div className="mt-3 pt-3 border-t border-slate-200/80">
-                                    <div className="text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1.5">
-                                      <MessageSquare className="w-3.5 h-3.5 text-[#009ae5]" />
-                                      Commentaire / Justification de l'évaluateur :
-                                    </div>
-                                    <p className="text-xs text-slate-800 bg-white p-3 rounded-xl border border-slate-200 font-medium whitespace-pre-wrap leading-relaxed">
-                                      {comment}
-                                    </p>
-                                  </div>
-                                )}
-
-                                {/* Sub-items / Motifs (N3 / N4) */}
-                                {q.children.length > 0 && (
-                                  <div className="mt-3 pt-3 border-t border-slate-200/80 space-y-2">
-                                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                                      Points de contrôle & Motifs associés :
-                                    </div>
-                                    <div className="space-y-1.5 pl-2 border-l-2 border-slate-200">
-                                      {q.children.map((n3) => {
-                                        const n3Ans = reponsesMap[n3.item.item_id];
-                                        const n3Comm = commentairesMap[n3.item.item_id];
-
-                                        return (
-                                          <div
-                                            key={n3.item.item_id}
-                                            className="text-xs p-2 bg-white rounded-lg border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
-                                          >
-                                            <span className="text-slate-700 font-medium">
-                                              • {n3.item.libelle_fr || n3.item.libelle}
-                                            </span>
-                                            <div className="flex items-center gap-2">
-                                              {n3Ans && (
-                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
-                                                  {n3Ans}
-                                                </span>
-                                              )}
-                                              {n3Comm && (
-                                                <span className="text-[11px] text-slate-600 italic">
-                                                  "{n3Comm}"
-                                                </span>
-                                              )}
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                )}
+                                {/* Answer Pill */}
+                                <div className="flex-shrink-0">
+                                  {isOui && (
+                                    <span className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-500 text-white shadow-xs flex items-center gap-1.5 print:bg-emerald-100 print:text-emerald-800 print:border print:border-emerald-300">
+                                      <CheckCircle2 className="w-4 h-4" /> OUI / CONFORME
+                                    </span>
+                                  )}
+                                  {isNon && (
+                                    <span className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-rose-500 text-white shadow-xs flex items-center gap-1.5 print:bg-rose-100 print:text-rose-800 print:border print:border-rose-300">
+                                      <XCircle className="w-4 h-4" /> NON / NON CONFORME
+                                    </span>
+                                  )}
+                                  {isNA && (
+                                    <span className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-slate-200 text-slate-700 border border-slate-300 flex items-center gap-1.5 print:bg-slate-100 print:text-slate-600">
+                                      <MinusCircle className="w-4 h-4" /> NON APPLICABLE
+                                    </span>
+                                  )}
+                                  {!ans && (
+                                    <span className="px-3 py-1 rounded-xl text-xs font-bold bg-slate-100 text-slate-400 border border-slate-200">
+                                      Non évalué
+                                    </span>
+                                  )}
+                                </div>
                               </div>
+
+                              {/* Justification Comment */}
+                              {comment && (
+                                <div className="mt-3 pt-3 border-t border-slate-200/80">
+                                  <div className="text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1.5 print:text-slate-700">
+                                    <MessageSquare className="w-3.5 h-3.5 text-[#009ae5] print:text-slate-700" />
+                                    Commentaire / Justification de l'évaluateur :
+                                  </div>
+                                  <p className="text-xs text-slate-800 bg-white p-3 rounded-xl border border-slate-200 font-medium whitespace-pre-wrap leading-relaxed print:bg-slate-50 print:border-slate-200">
+                                    &ldquo;{comment}&rdquo;
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Sub-items / Motifs (N3 / N4) */}
+                              {q.children.length > 0 && (
+                                <div className="mt-3 pt-3 border-t border-slate-200/80 space-y-2">
+                                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                                    Points de contrôle &amp; Motifs associés :
+                                  </div>
+                                  <div className="space-y-1.5 pl-2 border-l-2 border-slate-200 print:border-slate-300">
+                                    {q.children.map((n3) => {
+                                      const n3Ans = reponsesMap[n3.item.item_id];
+                                      const n3Comm = commentairesMap[n3.item.item_id];
+
+                                      return (
+                                        <div
+                                          key={n3.item.item_id}
+                                          className="text-xs p-2 bg-white rounded-lg border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 print:border-slate-200 print:break-inside-avoid"
+                                        >
+                                          <span className="text-slate-700 font-medium">
+                                            &bull; {n3.item.libelle_fr || n3.item.libelle}
+                                          </span>
+                                          <div className="flex items-center gap-2">
+                                            {n3Ans && (
+                                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 print:bg-rose-100 print:border-rose-300">
+                                                {n3Ans}
+                                              </span>
+                                            )}
+                                            {n3Comm && (
+                                              <span className="text-[11px] text-slate-600 italic">
+                                                &ldquo;{n3Comm}&rdquo;
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          );
-                        })}
-                        </div>
-                      )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })) : (
+                  </div>
+                );
+              })
+            ) : (
               // Fallback raw answers list
               <div className="bg-white rounded-2xl border border-slate-200 p-4 divide-y divide-slate-100">
                 {Object.entries(reponsesMap).map(([itemId, rep]) => (
@@ -559,8 +566,8 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
           </div>
         </div>
 
-        {/* ── FOOTER ── */}
-        <footer className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 flex-shrink-0 flex-wrap">
+        {/* ── FOOTER (Hidden in Print) ── */}
+        <footer className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 flex-shrink-0 flex-wrap print:hidden">
           <div className="flex items-center gap-2 flex-wrap">
             {onEdit && (
               <button
@@ -584,7 +591,7 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
                 className="px-4 py-2.5 bg-[#1dc4ff] hover:bg-[#009ae5] text-slate-950 font-black text-xs rounded-xl shadow-md shadow-[#1dc4ff]/20 flex items-center gap-2 cursor-pointer transition-all"
               >
                 <FileText className="w-4 h-4" />
-                <span>{assessment.is_corrected ? "Voir la correction & Imprimer" : "Voir la fiche & Imprimer"}</span>
+                <span>{assessment.is_corrected ? "Voir la correction & Imprimer" : "Voir le rapport & Imprimer"}</span>
               </button>
             )}
           </div>

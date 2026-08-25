@@ -199,8 +199,8 @@ export const AssessmentReportModal: React.FC<AssessmentReportModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 sm:p-6 overflow-y-auto animate-fade-in font-sans">
-      <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] overflow-hidden my-auto print:max-h-none print:m-0 print:border-none print:shadow-none print:rounded-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 sm:p-6 overflow-y-auto animate-fade-in font-sans print:static print:p-0 print:bg-white print:overflow-visible print:block print:w-full">
+      <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] overflow-hidden my-auto print:max-h-none print:m-0 print:border-none print:shadow-none print:rounded-none print:w-full print:block print:overflow-visible">
         {/* ── TOOLBAR (Hidden in Print) ── */}
         <header className="p-4 sm:p-5 bg-slate-900 text-white flex items-center justify-between gap-3 flex-shrink-0 print:hidden">
           <div className="flex items-center gap-3">
@@ -273,7 +273,7 @@ export const AssessmentReportModal: React.FC<AssessmentReportModalProps> = ({
         </header>
 
         {/* ── PRINTABLE REPORT BODY ── */}
-        <div className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1 bg-white print:p-0 print:space-y-4">
+        <div className="p-6 sm:p-8 space-y-6 overflow-y-auto flex-1 bg-white print:p-0 print:space-y-4 print:overflow-visible print:h-auto">
           {/* Header Banner */}
           <div className="border-b-2 border-slate-900 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1">
