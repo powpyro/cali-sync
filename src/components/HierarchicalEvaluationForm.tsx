@@ -508,21 +508,53 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
 
   const isTerminalLeaf = (it: HierarchicalItem) => {
     if (it.niveau === 4) return true;
-    if (it.est_terminal) return true;
-    if (it.commentaire_obligatoire) return true;
+    if (it.est_terminal === true || String(it.est_terminal).toLowerCase() === "true" || String(it.est_terminal).toLowerCase() === "vrai") return true;
+    if (it.commentaire_obligatoire === true || String(it.commentaire_obligatoire).toLowerCase() === "true" || String(it.commentaire_obligatoire).toLowerCase() === "vrai") return true;
     if (it.niveau === 3) {
       const hasN4 = items.some((child) => child.niveau === 4 && child.parent_id === it.item_id);
       return !hasN4;
     }
-    return false;
+    if (it.niveau === 2) {
+      const hasN3 = items.some((child) => child.niveau === 3 && child.parent_id === it.item_id);
+      return !hasN3;
+    }
+    return true;
   };
 
   const missingComments: string[] = [];
-  items.forEach((it) => {
-    if (it.niveau >= 3 && selectedSubs.has(it.item_id) && isTerminalLeaf(it)) {
-      const comm = (comments[it.item_id] || "").trim();
-      if (comm.length < 5) missingComments.push(it.item_id);
-    }
+  tree.forEach((cat) => {
+    const isVoC = cat.label.trim().toLowerCase().includes("voice of");
+    const showSubsOnOui = isVoC || cat.showSubitemsOn === "Oui";
+    cat.questions.forEach((q) => {
+      const ans = answers[q.item.item_id];
+      const isTrigger = showSubsOnOui ? ans === "Oui" : ans === "Non";
+      const hasSubItems = q.children.length > 0;
+
+      // Direct N2 item with no children when non-conforming / trigger answered
+      if (isTrigger && !hasSubItems) {
+        const comm = (comments[q.item.item_id] || "").trim();
+        if (comm.length < 5) missingComments.push(q.item.item_id);
+      }
+
+      // N3 & N4 subitems when selected
+      if (isTrigger && hasSubItems) {
+        q.children.forEach((sub) => {
+          if (selectedSubs.has(sub.item.item_id)) {
+            const subHasChildren = sub.children.length > 0;
+            if (!subHasChildren || isTerminalLeaf(sub.item)) {
+              const comm = (comments[sub.item.item_id] || "").trim();
+              if (comm.length < 5) missingComments.push(sub.item.item_id);
+            }
+            sub.children.forEach((ss) => {
+              if (selectedSubs.has(ss.item.item_id)) {
+                const comm = (comments[ss.item.item_id] || "").trim();
+                if (comm.length < 5) missingComments.push(ss.item.item_id);
+              }
+            });
+          }
+        });
+      }
+    });
   });
 
   const isInteractionSummaryValid = interactionSummary.trim().length >= 5;
@@ -1207,6 +1239,23 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
                             </div>
                           </div>
                         </div>
+
+                        {/* NIVEAU 2 DIRECT — Si pas de sous-items et réponse non-conforme / déclencheur */}
+                        {!hasSubItems && subItemsVisible && (
+                          <div className="pt-2 px-4 pb-4 border-t border-rose-100 bg-rose-50/30">
+                            <p className="text-[11px] font-bold text-rose-500 mb-1.5 flex items-center gap-1">
+                              * Commentaire d'imputation obligatoire (au moins 5 caractères)
+                            </p>
+                            <CommentField
+                              itemId={q.item.item_id}
+                              value={comments[q.item.item_id] || ""}
+                              onChange={(v) => setComments((p) => ({ ...p, [q.item.item_id]: v }))}
+                              lastPauseTimestamp={lastPauseTimestamp}
+                              placeholder="Justification ou précision obligatoire de l'écart..."
+                              disabled={isFormDisabled}
+                            />
+                          </div>
+                        )}
 
                         {/* NIVEAU 3 — Sous-items (revealed dynamically: Non ou Oui selon catégorie) */}
                         {hasSubItems && (
