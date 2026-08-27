@@ -389,6 +389,13 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // 1-second tick to drive live countdowns
+  const [nowTick, setNowTick] = useState(Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Check if user has permission to arbitrate (Admin, Animateur, Gauge, or session assigned ID)
   const canArbitrate = useMemo(() => {
     const role = (userRole || data?.user_role || "").toLowerCase();
@@ -859,6 +866,28 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
   const isLiveReadOnly = effectiveReadOnly && sessionStatut !== "CLOSED";
   const isReadOnly = isClosed || isLiveReadOnly;
 
+  // Live countdown until submission deadline (in seconds)
+  const submissionCountdownSecs = useMemo(() => {
+    if (!data?.heure_fin) return 0;
+    const fin = new Date(data.heure_fin).getTime();
+    return Math.max(0, Math.floor((fin - nowTick) / 1000));
+  }, [data?.heure_fin, nowTick]);
+
+  const formatCountdownCockpit = (totalSecs: number): string => {
+    if (totalSecs <= 0) return "00:00";
+    const h = Math.floor(totalSecs / 3600);
+    const m = Math.floor((totalSecs % 3600) / 60);
+    const s = totalSecs % 60;
+    if (h > 0) return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
+
+  // Block normal evaluators from accessing the Cockpit while submissions are still open
+  const isBlockedEvaluator =
+    !canArbitrate &&
+    sessionStatut === "OPEN" &&
+    (data?.heure_fin ? submissionCountdownSecs > 0 : true);
+
   // ── LOADING SPLASHSCREEN ──────────────────────────────────────────────────
   if (loading && !data) {
     return (
@@ -991,6 +1020,56 @@ export const CockpitScreen: React.FC<CockpitScreenProps> = ({
           </div>
           <button onClick={() => fetchSession(true)} disabled={loading} className="px-6 py-3 bg-[#1dc4ff] hover:bg-[#009ae5] text-slate-950 font-extrabold text-sm rounded-xl transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 mx-auto">
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Actualiser
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── ÉCRAN DE BLOCAGE : ÉVALUATEUR NORMAL TENTE D'ACCÉDER PENDANT LES VOTES ─
+  if (isBlockedEvaluator) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-8 font-sans pb-16">
+        {onBack && (
+          <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm font-bold cursor-pointer">
+            <ArrowLeft className="w-4 h-4" /> Retour au menu
+          </button>
+        )}
+        <div className="bg-white border border-amber-200 rounded-2xl p-14 text-center space-y-6 shadow-sm">
+          <div className="mx-auto w-20 h-20 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center">
+            <Lock className="w-10 h-10 text-amber-500" />
+          </div>
+          <div className="space-y-3 max-w-lg mx-auto">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-black uppercase tracking-wider">
+              <Lock className="w-3.5 h-3.5 text-amber-500" /> Cockpit Verrouillé — Votes en Cours
+            </div>
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight">
+              {data?.nom_session || "Session de calibrage"}
+            </h2>
+            <p className="text-slate-500 text-sm font-medium leading-relaxed">
+              Le Cockpit Live est <strong className="text-amber-700">temporairement verrouillé</strong> pendant la période de soumission des évaluations.<br />
+              Cette restriction garantit l'<strong className="text-slate-700">impartialité des décisions</strong> en empêchant tout évaluateur de voir les votes des autres avant la clôture.
+            </p>
+            {data?.heure_fin && (
+              <div className="inline-flex flex-col items-center gap-1.5 px-6 py-4 rounded-2xl bg-amber-50 border border-amber-200">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-amber-600">Ouverture automatique dans</span>
+                <span className="text-4xl font-black font-mono tabular-nums text-amber-900 tracking-tight">
+                  {formatCountdownCockpit(submissionCountdownSecs)}
+                </span>
+                <span className="text-[10px] text-amber-700 font-medium">
+                  Heure de clôture : {new Date(data.heure_fin).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </div>
+            )}
+            <p className="text-xs text-slate-400 font-medium pt-1">
+              Le Cockpit s'ouvrira automatiquement dès la fin du délai — inutile d'actualiser.
+            </p>
+          </div>
+          <button
+            onClick={onBack}
+            className="px-6 py-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-all flex items-center gap-2 cursor-pointer mx-auto"
+          >
+            <ArrowLeft className="w-4 h-4" /> Retour au menu
           </button>
         </div>
       </div>

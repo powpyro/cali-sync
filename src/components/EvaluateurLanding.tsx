@@ -1050,12 +1050,47 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
                             <CheckCircle2 className="w-4 h-4 text-emerald-600" /> 👁️ Consulter mon évaluation (Lecture seule)
                           </button>
                         )}
-                        <button
-                          onClick={() => onOpenCockpit?.(session.session_id)}
-                          className="w-full py-3 bg-[#0f172a] hover:bg-[#1e293b] text-white font-extrabold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
-                        >
-                          <Sparkles className="w-4 h-4 text-[#1dc4ff]" /> 🚀 Suivre le Cockpit Live
-                        </button>
+
+                        {/* ── Restriction d'accès au Cockpit Live : Uniquement Gauge, Animateur, Admin avant la clôture ── */}
+                        {(() => {
+                          const countdownSecs = getCountdownSeconds(session);
+                          const isSubmissionOpen = session.statut === "OPEN" && (session.heure_fin ? countdownSecs > 0 : true);
+                          const isElevatedUser =
+                            (role as string) === "admin" ||
+                            (role as string) === "animateur" ||
+                            (role as string) === "gauge" ||
+                            session.gauge_id?.toLowerCase() === identifiant.toLowerCase() ||
+                            session.animateur_id?.toLowerCase() === identifiant.toLowerCase();
+                          const canAccessCockpit = isElevatedUser || !isSubmissionOpen;
+
+                          if (canAccessCockpit) {
+                            return (
+                              <button
+                                onClick={() => onOpenCockpit?.(session.session_id)}
+                                className="w-full py-3 bg-[#0f172a] hover:bg-[#1e293b] text-white font-extrabold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                              >
+                                <Sparkles className="w-4 h-4 text-[#1dc4ff]" /> 🚀 Suivre le Cockpit Live
+                              </button>
+                            );
+                          }
+
+                          return (
+                            <div className="p-3 bg-amber-50/90 border border-amber-200/80 rounded-xl text-center space-y-1 shadow-xs">
+                              <div className="flex items-center justify-center gap-1.5 text-xs font-black text-amber-900">
+                                <Lock className="w-3.5 h-3.5 text-amber-600" />
+                                <span>Cockpit verrouillé pendant les votes</span>
+                              </div>
+                              <p className="text-[11px] text-amber-800/90 font-medium leading-snug">
+                                Accessible dès la fin du délai pour préserver l'impartialité des décisions.
+                              </p>
+                              {countdownSecs > 0 && (
+                                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 mt-0.5 rounded-md bg-amber-200/60 text-amber-950 font-mono text-[11px] font-bold tabular-nums">
+                                  <Clock className="w-3 h-3 text-amber-700" /> Ouverture dans : {formatCountdown(countdownSecs)}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
@@ -1258,12 +1293,40 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
                     </div>
 
                     <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                      <button
-                        onClick={() => onOpenCockpit?.(sess.session_id)}
-                        className="px-4 py-2 bg-[#1dc4ff] hover:bg-[#009ae5] text-slate-950 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
-                      >
-                        <Sparkles className="w-3.5 h-3.5" /> 📊 Cockpit Live
-                      </button>
+                      {(() => {
+                        const sessCountdown = getCountdownSeconds(sess as any);
+                        const isSessSubmissionOpen = sess.statut === "OPEN" && (sess.heure_fin ? sessCountdown > 0 : true);
+                        const isElevatedForSess =
+                          (role as string) === "admin" ||
+                          (role as string) === "animateur" ||
+                          (role as string) === "gauge" ||
+                          sess.roles?.includes("Animateur") ||
+                          sess.roles?.includes("Gauge") ||
+                          sess.gauge_id?.toLowerCase() === identifiant.toLowerCase() ||
+                          sess.animateur_id?.toLowerCase() === identifiant.toLowerCase();
+                        const canAccessCockpitForSess = isElevatedForSess || !isSessSubmissionOpen;
+
+                        if (canAccessCockpitForSess) {
+                          return (
+                            <button
+                              onClick={() => onOpenCockpit?.(sess.session_id)}
+                              className="px-4 py-2 bg-[#1dc4ff] hover:bg-[#009ae5] text-slate-950 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" /> 📊 Cockpit Live
+                            </button>
+                          );
+                        }
+
+                        return (
+                          <button
+                            disabled
+                            title="Cockpit verrouillé pour les évaluateurs tant que les soumissions sont en cours"
+                            className="px-3.5 py-2 bg-slate-100 border border-slate-200 text-slate-400 text-xs font-bold rounded-xl cursor-not-allowed flex items-center gap-1.5 opacity-75"
+                          >
+                            <Lock className="w-3.5 h-3.5 text-slate-400" /> 🔒 Cockpit (En attente de clôture)
+                          </button>
+                        );
+                      })()}
                       {sess.roles.includes("Évaluateur") && (
                         <button
                           onClick={() => onOpenSubmission?.(sess.session_id)}
