@@ -76,6 +76,69 @@ function buildTreeFromItems(items: any[]): TreeCategory[] {
   }));
 }
 
+interface ImputedLeaf {
+  item: any;
+  parentItem?: any;
+  rep?: string;
+  comm?: string;
+  level: number;
+}
+
+function getImputedLeaves(
+  q: TreeN2,
+  reponsesMap: Record<string, string>,
+  commentairesMap: Record<string, string>
+): ImputedLeaf[] {
+  const leaves: ImputedLeaf[] = [];
+
+  q.children.forEach((n3) => {
+    const hasN4 = n3.children && n3.children.length > 0;
+    if (hasN4) {
+      let hasImputedN4 = false;
+      n3.children.forEach((n4) => {
+        const rep4 = reponsesMap[n4.item.item_id];
+        const comm4 = commentairesMap[n4.item.item_id];
+        if (rep4 || comm4) {
+          hasImputedN4 = true;
+          leaves.push({
+            item: n4.item,
+            parentItem: n3.item,
+            rep: rep4,
+            comm: comm4,
+            level: 4,
+          });
+        }
+      });
+
+      if (!hasImputedN4) {
+        const rep3 = reponsesMap[n3.item.item_id];
+        const comm3 = commentairesMap[n3.item.item_id];
+        if (rep3 || comm3) {
+          leaves.push({
+            item: n3.item,
+            rep: rep3,
+            comm: comm3,
+            level: 3,
+          });
+        }
+      }
+    } else {
+      const rep3 = reponsesMap[n3.item.item_id];
+      const comm3 = commentairesMap[n3.item.item_id];
+      if (rep3 || comm3) {
+        leaves.push({
+          item: n3.item,
+          rep: rep3,
+          comm: comm3,
+          level: 3,
+        });
+      }
+    }
+  });
+
+  return leaves;
+}
+
 export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
   assessment,
   onClose,
@@ -438,22 +501,8 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
                         const isNon = ans === "Non";
                         const isNA = ans === "N.A.";
 
-                        // Collect all imputed sub-items (N3 and N4) under this question
-                        const imputedChildren: { item: any; rep?: string; comm?: string; level: number }[] = [];
-                        q.children.forEach((n3) => {
-                          const n3Ans = reponsesMap[n3.item.item_id];
-                          const n3Comm = commentairesMap[n3.item.item_id];
-                          if (n3Ans || n3Comm) {
-                            imputedChildren.push({ item: n3.item, rep: n3Ans, comm: n3Comm, level: 3 });
-                          }
-                          n3.children?.forEach((n4) => {
-                            const n4Ans = reponsesMap[n4.item.item_id];
-                            const n4Comm = commentairesMap[n4.item.item_id];
-                            if (n4Ans || n4Comm) {
-                              imputedChildren.push({ item: n4.item, rep: n4Ans, comm: n4Comm, level: 4 });
-                            }
-                          });
-                        });
+                        // Collect only the deepest imputed leaves (sub-items with answer or comment)
+                        const imputedLeaves = getImputedLeaves(q, reponsesMap, commentairesMap);
 
                         return (
                           <div key={q.item.item_id} className={`space-y-3 print:break-inside-avoid ${idx > 0 ? "pt-4" : ""}`}>
@@ -511,7 +560,7 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
                                 </div>
                               </div>
 
-                              {/* Justification Comment */}
+                              {/* Justification Comment on N2 Question */}
                               {comment && (
                                 <div className="mt-3 pt-3 border-t border-slate-200/80">
                                   <div className="text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1.5 print:text-slate-700">
@@ -524,49 +573,55 @@ export const AssessmentViewerModal: React.FC<AssessmentViewerModalProps> = ({
                                 </div>
                               )}
 
-                              {/* Sub-items / Motifs (N3 / N4) */}
-                              {imputedChildren.length > 0 && (
+                              {/* Deepest Imputed Sub-Items / Motifs (Only displayed if imputed) */}
+                              {imputedLeaves.length > 0 && (
                                 <div className="mt-3 pt-3 border-t border-slate-200/80 space-y-2">
                                   <div className="text-[11px] font-bold uppercase tracking-wider text-rose-600 print:text-slate-600 flex items-center gap-1.5">
                                     <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
-                                    Points de contrôle &amp; Motifs imputés :
+                                    Motif(s) / Point(s) imputé(s) :
                                   </div>
-                                  <div className="space-y-1.5 pl-2 border-l-2 border-rose-300 print:border-slate-300">
-                                    {imputedChildren.map((subNode) => {
-                                      const subAns = subNode.rep;
-                                      const subComm = subNode.comm;
-                                      const isSubNon = subAns === "Non";
+                                  <div className="space-y-2 pl-2 border-l-2 border-rose-300 print:border-slate-300">
+                                    {imputedLeaves.map((leaf) => {
+                                      const isLeafNon = leaf.rep === "Non";
 
                                       return (
                                         <div
-                                          key={subNode.item.item_id}
-                                          className={`text-xs p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 print:border-slate-200 print:break-inside-avoid ${
-                                            subNode.level === 4 ? "ml-3 border-l-2 border-l-rose-400" : ""
-                                          } ${
-                                            isSubNon
-                                              ? "bg-rose-50/50 border-rose-200"
-                                              : "bg-white border-slate-200"
+                                          key={leaf.item.item_id}
+                                          className={`text-xs p-3 rounded-xl border flex flex-col gap-1.5 print:border-slate-200 print:break-inside-avoid ${
+                                            isLeafNon
+                                              ? "bg-rose-50/60 border-rose-200 text-rose-950"
+                                              : "bg-slate-50 border-slate-200 text-slate-800"
                                           }`}
                                         >
-                                          <span className="text-slate-800 font-semibold">
-                                            &bull; {subNode.item.libelle_fr || subNode.item.libelle}
-                                          </span>
-                                          <div className="flex items-center gap-2">
-                                            {subAns && (
-                                              <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${
-                                                isSubNon
-                                                  ? "bg-rose-100 text-rose-700 border-rose-200"
-                                                  : "bg-slate-100 text-slate-700 border-slate-200"
-                                              }`}>
-                                                {subAns}
+                                          <div className="flex items-start justify-between gap-2">
+                                            <div className="space-y-0.5">
+                                              {leaf.parentItem && (
+                                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                                  {leaf.parentItem.libelle_fr || leaf.parentItem.libelle}
+                                                </div>
+                                              )}
+                                              <span className="font-bold text-slate-900 leading-snug">
+                                                &bull; {leaf.item.libelle_fr || leaf.item.libelle || leaf.item.item_id}
                                               </span>
-                                            )}
-                                            {subComm && (
-                                              <span className="text-[11px] text-slate-600 italic">
-                                                &ldquo;{subComm}&rdquo;
+                                            </div>
+                                            {leaf.rep && (
+                                              <span
+                                                className={`text-[10px] font-black uppercase px-2 py-0.5 rounded flex-shrink-0 border ${
+                                                  isLeafNon
+                                                    ? "bg-rose-100 text-rose-700 border-rose-200"
+                                                    : "bg-slate-100 text-slate-700 border-slate-200"
+                                                }`}
+                                              >
+                                                {leaf.rep}
                                               </span>
                                             )}
                                           </div>
+
+                                          {leaf.comm && (
+                                            <div className="mt-1 bg-white/90 border border-rose-100 rounded-lg p-2 text-[11px] text-slate-800 font-medium italic">
+                                              &ldquo;{leaf.comm}&rdquo;
+                                            </div>
+                                          )}
                                         </div>
                                       );
                                     })}
