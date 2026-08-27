@@ -218,6 +218,8 @@ function traiterRequete(e) {
   if (action === "annuler_demande_calibrage") return jsonResponse(handleAnnulerDemandeCalibrage(ss, req.demande_id));
   if (action === "supprimer_evaluateur") return jsonResponse(handleSupprimerEvaluateur(ss, req.target_identifiant));
   if (action === "restaurer_grille_genii_complete") return jsonResponse(handleRestaurerGrilleGeniiComplete(ss, req));
+  if (action === "clore_soumissions") return jsonResponse(handleCloreSoumissions(ss, req));
+  if (action === "repousser_heure_fin") return jsonResponse(handleRepousserHeureFin(ss, req));
 
   return jsonResponse({ success: false, message: "Action inconnue: " + action });
 }
@@ -2307,6 +2309,71 @@ function handleCloturerSession(ss, payload) {
       const result = { success: true, message: "Session clôturée." };
       if (pdfUrl) result.pdf_url = pdfUrl;
       return result;
+    }
+  }
+  return { success: false, message: "Session introuvable." };
+}
+
+// ==============================================================================
+// HANDLER — Clore les soumissions immédiatement (OPEN → LOCKED)
+// ==============================================================================
+function handleCloreSoumissions(ss, req) {
+  const sessionId = req.session_id;
+  if (!sessionId) return { success: false, message: "session_id requis." };
+  const sheet = ss.getSheetByName("Sessions");
+  if (!sheet) return { success: false, message: "Feuille sessions introuvable." };
+
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === sessionId) {
+      const currentStatus = data[i][2];
+      if (currentStatus !== "OPEN" && currentStatus !== "LOCKED") {
+        return { success: false, message: "La session doit être OPEN pour clore les soumissions." };
+      }
+      // Set status to LOCKED and heure_fin to now
+      const now = new Date();
+      sheet.getRange(i + 1, 3).setValue("LOCKED");
+      sheet.getRange(i + 1, 8).setValue(now.toISOString());
+      return { success: true, message: "Soumissions closes. La session passe en phase d'arbitrage." };
+    }
+  }
+  return { success: false, message: "Session introuvable." };
+}
+
+// ==============================================================================
+// HANDLER — Repousser l'heure de fin de soumissions
+// ==============================================================================
+function handleRepousserHeureFin(ss, req) {
+  const sessionId = req.session_id;
+  const nouvelleHeureFin = req.nouvelle_heure_fin; // ISO string
+  if (!sessionId) return { success: false, message: "session_id requis." };
+  if (!nouvelleHeureFin) return { success: false, message: "nouvelle_heure_fin (ISO string) requis." };
+
+  const sheet = ss.getSheetByName("Sessions");
+  if (!sheet) return { success: false, message: "Feuille sessions introuvable." };
+
+  const finDate = new Date(nouvelleHeureFin);
+  if (isNaN(finDate.getTime())) return { success: false, message: "Format de date invalide." };
+  if (finDate <= new Date()) return { success: false, message: "La nouvelle heure de fin doit être dans le futur." };
+
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === sessionId) {
+      const currentStatus = data[i][2];
+      // Allow on OPEN or LOCKED sessions (LOCKED can be re-opened by updating heure_fin to future)
+      if (currentStatus !== "OPEN" && currentStatus !== "LOCKED") {
+        return { success: false, message: "La session doit être OPEN ou LOCKED pour modifier l'heure de fin." };
+      }
+      sheet.getRange(i + 1, 8).setValue(finDate.toISOString());
+      // If session was LOCKED but new deadline is in the future, re-open it
+      if (currentStatus === "LOCKED") {
+        sheet.getRange(i + 1, 3).setValue("OPEN");
+      }
+      return {
+        success: true,
+        message: "Heure de fin mise à jour. La session " + (currentStatus === "LOCKED" ? "est de nouveau OPEN." : "reste OPEN."),
+        nouvelle_heure_fin: finDate.toISOString()
+      };
     }
   }
   return { success: false, message: "Session introuvable." };

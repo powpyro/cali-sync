@@ -19,6 +19,8 @@ import {
   getApiUrl,
   setApiUrl,
   getSessionData,
+  cloreSoumissions,
+  repousserHeureFin,
   type SessionInfo,
   type Template,
   type ProfilEvaluateur,
@@ -66,6 +68,8 @@ import {
   KeyRound,
   Eye,
   EyeOff,
+  StopCircle,
+  CalendarClock,
 } from "lucide-react";
 import { getStoredAdminPin, setStoredAdminPin } from "./LoginScreen";
 
@@ -93,6 +97,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [actionFeedback, setActionFeedback] = useState<{ success: boolean; message: string } | null>(null);
   const [sessionToDelete, setSessionToDelete] = useState<SessionInfo | null>(null);
   const [confirmKeyword, setConfirmKeyword] = useState("");
+
+  // ── Deadline Extension Modal State ──────────────────────────────────────────
+  // sessionId of the session whose deadline is being extended (null = modal closed)
+  const [extendDeadlineSessionId, setExtendDeadlineSessionId] = useState<string | null>(null);
+  // datetime-local value e.g. "2026-08-27T14:30"
+  const [newDeadlineValue, setNewDeadlineValue] = useState("");
+  const [extendLoading, setExtendLoading] = useState(false);
 
   // ── Tab System State ────────────────────────────────────────────────────────
   type AdminTab = "sessions" | "demandes" | "nouvelle_session" | "grilles" | "utilisateurs" | "systeme";
@@ -458,7 +469,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  // ── Close Session ───────────────────────────────────────────────────────────
+  // ── Close Session (CLOSED — rapport PDF) ────────────────────────────────────
   const handleCloseSession = async (sessionId: string) => {
     setActionLoadingId(sessionId);
     const res = await cloturerSession(sessionId, identifiant);
@@ -469,6 +480,52 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       fetchSessions();
     } else {
       setActionFeedback({ success: false, message: res.message || "Erreur." });
+    }
+  };
+
+  // ── Lock Submissions Immediately (OPEN → LOCKED) ─────────────────────────────
+  const handleCloreSoumissions = async (sessionId: string, sessionName: string) => {
+    if (!window.confirm(`Clore les soumissions maintenant pour "${sessionName}" ?\n\nLes évaluateurs ne pourront plus soumettre et la phase d'arbitrage commencera immédiatement.`)) return;
+    setActionLoadingId(sessionId);
+    const res = await cloreSoumissions(sessionId);
+    setActionLoadingId(null);
+    if (res.success) {
+      setActionFeedback({ success: true, message: `Soumissions closes — "${sessionName}" passe en arbitrage.` });
+      fetchSessions();
+    } else {
+      setActionFeedback({ success: false, message: res.message || "Erreur lors de la clôture des soumissions." });
+    }
+  };
+
+  // ── Extend / Postpone Deadline ───────────────────────────────────────────────
+  const openExtendDeadlineModal = (sessionId: string, currentHeureFin?: string) => {
+    // Pre-fill with +30 min from now, or from current heure_fin if it's in the future
+    const base = currentHeureFin && new Date(currentHeureFin) > new Date()
+      ? new Date(currentHeureFin)
+      : new Date();
+    // Round up to next 5-minute slot
+    base.setSeconds(0, 0);
+    base.setMinutes(base.getMinutes() + 30);
+    // Format as datetime-local value: YYYY-MM-DDTHH:mm
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const local = `${base.getFullYear()}-${pad(base.getMonth() + 1)}-${pad(base.getDate())}T${pad(base.getHours())}:${pad(base.getMinutes())}`;
+    setNewDeadlineValue(local);
+    setExtendDeadlineSessionId(sessionId);
+  };
+
+  const handleRepousserHeureFin = async (sessionId: string, sessionName: string) => {
+    if (!newDeadlineValue) return;
+    // Convert datetime-local to ISO string (local time → UTC)
+    const isoString = new Date(newDeadlineValue).toISOString();
+    setExtendLoading(true);
+    const res = await repousserHeureFin(sessionId, isoString);
+    setExtendLoading(false);
+    if (res.success) {
+      setActionFeedback({ success: true, message: `Délai de "${sessionName}" repoussé. ${res.message || ""}` });
+      setExtendDeadlineSessionId(null);
+      fetchSessions();
+    } else {
+      setActionFeedback({ success: false, message: res.message || "Erreur lors de la mise à jour du délai." });
     }
   };
 
@@ -1384,6 +1441,65 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         >
                           <Activity className="w-3.5 h-3.5" /> Cockpit Live
                         </button>
+
+                        {/* ── Clore Soumissions (OPEN → LOCKED immédiatement) ── */}
+                        {session.statut === "OPEN" && (
+                          <button
+                            onClick={() => handleCloreSoumissions(session.session_id, session.nom_session || session.session_id)}
+                            disabled={actionLoadingId === session.session_id}
+                            className="px-3 py-1.5 bg-orange-50 border border-orange-300 text-orange-700 text-xs font-bold rounded-xl hover:bg-orange-100 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                            title="Ferme immédiatement la période de soumission sans attendre la fin du délai"
+                          >
+                            {actionLoadingId === session.session_id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <StopCircle className="w-3.5 h-3.5 text-orange-600" />
+                            )}
+                            Clore Soumissions
+                          </button>
+                        )}
+
+                        {/* ── Repousser le délai ── */}
+                        {(session.statut === "OPEN" || session.statut === "LOCKED") && (
+                          <button
+                            onClick={() => openExtendDeadlineModal(session.session_id, session.heure_fin)}
+                            disabled={actionLoadingId === session.session_id}
+                            className="px-3 py-1.5 bg-violet-50 border border-violet-200 text-violet-700 text-xs font-bold rounded-xl hover:bg-violet-100 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                            title={session.statut === "LOCKED" ? "Repousser le délai et rouvrir les soumissions" : "Repousser l'heure de clôture des soumissions"}
+                          >
+                            <CalendarClock className="w-3.5 h-3.5 text-violet-500" />
+                            {session.statut === "LOCKED" ? "Rouvrir & Repousser" : "Repousser le délai"}
+                          </button>
+                        )}
+
+                        {/* ── Inline Deadline Picker ── */}
+                        {extendDeadlineSessionId === session.session_id && (
+                          <div className="w-full mt-2 p-3 bg-violet-50 border border-violet-200 rounded-xl flex flex-wrap items-center gap-3">
+                            <CalendarClock className="w-4 h-4 text-violet-500 shrink-0" />
+                            <span className="text-xs font-bold text-violet-800">Nouvelle heure de clôture :</span>
+                            <input
+                              type="datetime-local"
+                              value={newDeadlineValue}
+                              onChange={(e) => setNewDeadlineValue(e.target.value)}
+                              className="flex-1 min-w-[180px] px-3 py-1.5 rounded-lg border border-violet-300 bg-white text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-400"
+                            />
+                            <button
+                              onClick={() => handleRepousserHeureFin(session.session_id, session.nom_session || session.session_id)}
+                              disabled={extendLoading || !newDeadlineValue}
+                              className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                            >
+                              {extendLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                              Confirmer
+                            </button>
+                            <button
+                              onClick={() => setExtendDeadlineSessionId(null)}
+                              className="px-2.5 py-1.5 bg-white border border-slate-200 text-slate-500 text-xs font-bold rounded-lg hover:bg-slate-50 transition-all cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+
                         <button
                           onClick={() => handleResetArbitrages(session.session_id)}
                           disabled={actionLoadingId === session.session_id}

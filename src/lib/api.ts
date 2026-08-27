@@ -690,6 +690,20 @@ export async function supprimerSession(sessionId: string): Promise<ApiResponse> 
   return callGAS("supprimer_session", { session_id: sessionId });
 }
 
+export async function cloreSoumissions(sessionId: string): Promise<ApiResponse> {
+  return callGAS("clore_soumissions", { session_id: sessionId });
+}
+
+export async function repousserHeureFin(
+  sessionId: string,
+  nouvelleHeureFin: string // ISO string
+): Promise<ApiResponse> {
+  return callGAS("repousser_heure_fin", {
+    session_id: sessionId,
+    nouvelle_heure_fin: nouvelleHeureFin,
+  });
+}
+
 export async function annulerDemandeCalibrage(demandeId: string): Promise<ApiResponse> {
   return callGAS("annuler_demande_calibrage", { demande_id: demandeId });
 }
