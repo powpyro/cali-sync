@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { postCalibration } from "../lib/api";
 import { CountdownTimer } from "./CountdownTimer";
 import { AudioPlayer } from "./AudioPlayer";
@@ -257,6 +257,9 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
 }) => {
   const [timeIsUp, setTimeIsUp] = useState(false);
   const [lastPauseTimestamp, setLastPauseTimestamp] = useState<string | null>(null);
+  // Memoize so the inline arrow never gets a new reference on each keystroke,
+  // which was causing CountdownTimer to restart its interval → blank page flash.
+  const handleTimeout = useCallback(() => setTimeIsUp(true), []);
   const isFormDisabled = sessionLocked || (timeIsUp && !isAssessmentMode);
 
   // Free-text header fields
@@ -791,7 +794,7 @@ export const HierarchicalEvaluationForm: React.FC<HierarchicalEvaluationFormProp
             <div className="flex-shrink-0">
               <CountdownTimer
                 closingDateStr={heureFin}
-                onTimeout={() => setTimeIsUp(true)}
+                onTimeout={handleTimeout}
                 warningThresholdMinutes={60}
               />
             </div>

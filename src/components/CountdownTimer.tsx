@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Clock, AlertTriangle } from "lucide-react";
 
 interface CountdownTimerProps {
@@ -13,6 +13,9 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
   warningThresholdMinutes = 60,
 }) => {
   const [timeLeftMs, setTimeLeftMs] = useState<number | null>(null);
+  // Store onTimeout in a ref so changes to it never restart the interval
+  const onTimeoutRef = useRef(onTimeout);
+  useEffect(() => { onTimeoutRef.current = onTimeout; }, [onTimeout]);
 
   useEffect(() => {
     if (!closingDateStr) return;
@@ -20,16 +23,16 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
     const calculateTimeLeft = () => {
       const closingTime = new Date(closingDateStr).getTime();
       const now = new Date().getTime();
-      const diff = closingTime - now;
-      return diff;
+      return closingTime - now;
     };
 
     // Initial calculation
     const initialDiff = calculateTimeLeft();
     setTimeLeftMs(initialDiff);
 
-    if (initialDiff <= 0 && onTimeout) {
-      onTimeout();
+    if (initialDiff <= 0) {
+      onTimeoutRef.current?.();
+      return; // no interval needed, already expired
     }
 
     const interval = setInterval(() => {
@@ -38,14 +41,15 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
 
       if (diff <= 0) {
         clearInterval(interval);
-        if (onTimeout) {
-          onTimeout();
-        }
+        onTimeoutRef.current?.();
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [closingDateStr, onTimeout]);
+  // ⚠️ onTimeout intentionally excluded — we use the ref so the interval
+  // is NOT recreated on every render (which was causing the blank-page flash).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closingDateStr]);
 
   if (timeLeftMs === null) return null;
 
@@ -91,3 +95,5 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
     </div>
   );
 };
+
+export default CountdownTimer;

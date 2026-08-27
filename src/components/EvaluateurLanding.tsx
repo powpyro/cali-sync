@@ -442,9 +442,12 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
   useEffect(() => {
     fetchSessions();
     fetchTemplates();
+    // Pause auto-refresh while the Gauge proposal form is open to prevent
+    // state updates from interfering with form interactions.
+    if (showProposalGaugePage) return;
     const interval = setInterval(fetchSessions, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [showProposalGaugePage]);
 
   useEffect(() => {
     const interval = setInterval(() => setTick((t) => t + 1), 1000);
