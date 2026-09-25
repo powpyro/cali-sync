@@ -28,6 +28,9 @@ import {
   FileUp,
   FileText,
   X,
+  Download,
+  FileJson,
+  Table2,
 } from "lucide-react";
 
 interface TemplateManagerProps {
@@ -54,6 +57,9 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({ onBack }) => {
   const [importParsedItems, setImportParsedItems] = useState<ImportItem[]>([]);
   const [importing, setImporting] = useState(false);
   const [modalFeedback, setModalFeedback] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Export state
+  const [exportTarget, setExportTarget] = useState<Template | null>(null);
 
   const fetchTemplates = async () => {
     setLoading(true);
@@ -209,6 +215,100 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({ onBack }) => {
         message: err instanceof Error ? err.message : "Erreur réseau lors de l'envoi au backend.",
       });
     }
+  };
+
+  // ── Export ──────────────────────────────────────────────────────────────────
+  const downloadFile = (content: string, filename: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportAsJSON = (template: Template) => {
+    // Build flat hierarchical item list compatible with importerGrilleComplete
+    const items: ImportItem[] = [];
+    template.categories.forEach((cat, catIdx) => {
+      // Niveau 1 — Category root node
+      const catId = `cat_${String(catIdx + 1).padStart(3, "0")}`;
+      items.push({
+        item_id: catId,
+        parent_id: "",
+        niveau: 1,
+        type_noeud: "categorie",
+        categorie_racine_fr: cat.categorie,
+        libelle_fr: cat.categorie,
+        criticite: "Standard",
+        est_terminal: false,
+        commentaire_obligatoire: false,
+        poids: 1,
+      });
+      // Niveau 2 — Items
+      cat.items.forEach((item) => {
+        items.push({
+          item_id: item.item_id,
+          parent_id: catId,
+          niveau: 2,
+          type_noeud: "critere",
+          categorie_racine_fr: cat.categorie,
+          libelle_fr: item.item_libelle,
+          criticite: item.criticite,
+          est_terminal: true,
+          commentaire_obligatoire: false,
+          poids: item.poids ?? 1,
+        });
+      });
+    });
+
+    const exportPayload = {
+      calisync_export_version: "1.0",
+      exported_at: new Date().toISOString(),
+      template: {
+        template_id: template.template_id,
+        nom: template.nom,
+      },
+      items,
+    };
+
+    const filename = `calisync_grille_${template.template_id || "export"}_${new Date().toISOString().slice(0, 10)}.json`;
+    downloadFile(JSON.stringify(exportPayload, null, 2), filename, "application/json");
+  };
+
+  const exportAsTSV = (template: Template) => {
+    const headers = [
+      "item_id", "parent_id", "niveau", "type_noeud",
+      "categorie_racine_fr", "libelle_fr", "criticite",
+      "est_terminal", "commentaire_obligatoire", "poids",
+    ];
+    const rows: string[][] = [headers];
+
+    template.categories.forEach((cat, catIdx) => {
+      const catId = `cat_${String(catIdx + 1).padStart(3, "0")}`;
+      rows.push([catId, "", "1", "categorie", cat.categorie, cat.categorie, "Standard", "FAUX", "FAUX", "1"]);
+      cat.items.forEach((item) => {
+        rows.push([
+          item.item_id,
+          catId,
+          "2",
+          "critere",
+          cat.categorie,
+          item.item_libelle,
+          item.criticite,
+          "VRAI",
+          "FAUX",
+          String(item.poids ?? 1),
+        ]);
+      });
+    });
+
+    const tsv = rows.map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join("\t")).join("\n");
+    const filename = `calisync_grille_${template.template_id || "export"}_${new Date().toISOString().slice(0, 10)}.tsv`;
+    downloadFile(tsv, filename, "text/tab-separated-values;charset=utf-8");
   };
 
   // ── New Template ────────────────────────────────────────────────────────────
@@ -461,6 +561,13 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({ onBack }) => {
                         className="px-3 py-2 bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold rounded-lg hover:bg-slate-700 transition-all cursor-pointer flex items-center justify-center gap-1.5"
                       >
                         <Copy className="w-3 h-3" /> Dupliquer
+                      </button>
+                      <button
+                        onClick={() => setExportTarget(t)}
+                        className="px-3 py-2 bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 text-xs font-bold rounded-lg hover:bg-indigo-600/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                        title="Exporter la grille"
+                      >
+                        <Download className="w-3 h-3" />
                       </button>
                       <button
                         onClick={() => handleDelete(t.template_id)}
@@ -761,6 +868,93 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({ onBack }) => {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Export Modal ────────────────────────────────────────────────────── */}
+      {exportTarget && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-800">
+              <div>
+                <h3 className="font-extrabold text-white text-lg flex items-center gap-2">
+                  <Download className="w-5 h-5 text-indigo-400" />
+                  Exporter la grille
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">{exportTarget.nom}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setExportTarget(null)}
+                className="p-2 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-300">
+                Choisissez le format d'export selon votre usage :
+              </p>
+
+              {/* JSON option */}
+              <button
+                type="button"
+                onClick={() => { exportAsJSON(exportTarget); setExportTarget(null); }}
+                className="w-full flex items-start gap-4 p-4 rounded-xl border border-indigo-500/40 bg-indigo-600/10 hover:bg-indigo-600/20 transition-all group cursor-pointer text-left"
+              >
+                <div className="w-10 h-10 rounded-lg bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                  <FileJson className="w-5 h-5 text-indigo-400" />
+                </div>
+                <div>
+                  <div className="font-bold text-white text-sm group-hover:text-indigo-200 transition-colors">
+                    JSON hiérarchique{" "}
+                    <span className="text-[10px] font-semibold bg-indigo-600/30 text-indigo-300 px-2 py-0.5 rounded-full ml-1">
+                      Recommandé
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-400 mt-0.5 leading-relaxed">
+                    Format natif CaliSync. Réimportable directement via{" "}
+                    <em>Importer Grille CSV/TSV</em>. Inclut les métadonnées complètes
+                    (niveaux, criticité, poids).
+                  </div>
+                </div>
+              </button>
+
+              {/* TSV option */}
+              <button
+                type="button"
+                onClick={() => { exportAsTSV(exportTarget); setExportTarget(null); }}
+                className="w-full flex items-start gap-4 p-4 rounded-xl border border-slate-600/40 bg-slate-800/40 hover:bg-slate-700/40 transition-all group cursor-pointer text-left"
+              >
+                <div className="w-10 h-10 rounded-lg bg-slate-700/50 border border-slate-600/40 flex items-center justify-center flex-shrink-0">
+                  <Table2 className="w-5 h-5 text-slate-300" />
+                </div>
+                <div>
+                  <div className="font-bold text-white text-sm group-hover:text-slate-100 transition-colors">
+                    TSV tabulaire
+                  </div>
+                  <div className="text-xs text-slate-400 mt-0.5 leading-relaxed">
+                    Compatible Excel / Google Sheets. Idéal pour modifier la grille
+                    avant réimportation. Ouvrable dans n'importe quel tableur.
+                  </div>
+                </div>
+              </button>
+
+              {/* Summary stats */}
+              <div className="flex items-center gap-3 text-xs text-slate-500 pt-1">
+                <span>{exportTarget.categories.length} catégorie(s)</span>
+                <span>•</span>
+                <span>
+                  {exportTarget.categories.reduce((a, c) => a + c.items.length, 0)} critère(s)
+                </span>
+                <span>•</span>
+                <span>ID : {exportTarget.template_id}</span>
+              </div>
             </div>
           </div>
         </div>
