@@ -17,7 +17,10 @@ import {
   Globe,
   ArrowUp,
   ArrowDown,
-  Sparkles
+  Sparkles,
+  Download,
+  FileJson,
+  Table2,
 } from "lucide-react";
 import { getConfigTemplate, dupliquerTemplate, creerVersionAnglaiseGenii, sauvegarderGrilleComplete, supprimerTemplate, restaurerGrilleGeniiComplete, type Template } from "../lib/api";
 import { CaliSyncLogo } from "./ui/CaliSyncLogo";
@@ -183,6 +186,7 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
   const [saving, setSaving] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [feedback, setFeedback] = useState<{ success: boolean; message: string } | null>(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   // Active view: 'editor' | 'preview'
   const [viewMode, setViewMode] = useState<"editor" | "preview">("editor");
@@ -363,6 +367,79 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
       setFeedback({ success: false, message: "Erreur lors de la suppression." });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const downloadFile = (content: string, filename: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportStudio = (format: "json" | "tsv") => {
+    const payloadItems = items.map((it) => ({
+      item_id: it.item_id,
+      parent_id: it.parent_id,
+      niveau: it.niveau,
+      type_noeud: it.niveau === 1 ? "categorie" : it.niveau === 2 ? "critere" : "sous_critere",
+      categorie_racine_fr: it.categorie_racine_fr || "Général",
+      libelle_fr: it.libelle,
+      criticite: it.criticite,
+      est_terminal: it.est_terminal,
+      commentaire_obligatoire: it.commentaire_obligatoire,
+      poids: 1,
+    }));
+
+    if (format === "json") {
+      const exportPayload = {
+        calisync_export_version: "2.0",
+        exported_at: new Date().toISOString(),
+        template: {
+          template_id: template.template_id,
+          nom: templateName,
+        },
+        stats: {
+          total_items: payloadItems.length,
+          niveaux_detectes: Array.from(new Set(payloadItems.map((i) => i.niveau))).sort((a, b) => a - b),
+          categories_n1: payloadItems.filter((i) => i.niveau === 1).length,
+          criteres_n2: payloadItems.filter((i) => i.niveau === 2).length,
+          sous_criteres_n3: payloadItems.filter((i) => i.niveau === 3).length,
+          precisions_n4: payloadItems.filter((i) => i.niveau === 4).length,
+        },
+        items: payloadItems,
+      };
+      const filename = `calisync_grille_${template.template_id || "export"}_complete_${new Date().toISOString().slice(0, 10)}.json`;
+      downloadFile(JSON.stringify(exportPayload, null, 2), filename, "application/json");
+    } else {
+      const headers = [
+        "item_id", "parent_id", "niveau", "type_noeud",
+        "categorie_racine_fr", "libelle_fr", "criticite",
+        "est_terminal", "commentaire_obligatoire", "poids",
+      ];
+      const rows: string[][] = [headers];
+      payloadItems.forEach((it) => {
+        rows.push([
+          it.item_id,
+          it.parent_id,
+          String(it.niveau),
+          it.type_noeud,
+          it.categorie_racine_fr,
+          it.libelle_fr,
+          it.criticite,
+          it.est_terminal ? "VRAI" : "FAUX",
+          it.commentaire_obligatoire ? "VRAI" : "FAUX",
+          String(it.poids),
+        ]);
+      });
+      const tsv = rows.map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join("\t")).join("\n");
+      const filename = `calisync_grille_${template.template_id || "export"}_complete_${new Date().toISOString().slice(0, 10)}.tsv`;
+      downloadFile(tsv, filename, "text/tab-separated-values;charset=utf-8");
     }
   };
 
@@ -619,6 +696,37 @@ export const TemplateStudioModal: React.FC<TemplateStudioModalProps> = ({
                   {duplicating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4 text-teal-400" />}
                   Dupliquer Template
                 </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowExportMenu(!showExportMenu)}
+                    className="px-3.5 py-2.5 bg-indigo-950/80 hover:bg-indigo-900/80 border border-indigo-500/40 text-indigo-200 font-bold text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-sm"
+                    title="Exporter la grille complète (tous les niveaux N1 à N4)"
+                  >
+                    <Download className="w-4 h-4 text-indigo-400" />
+                    Exporter
+                  </button>
+                  {showExportMenu && (
+                    <div className="absolute right-0 top-full mt-2 w-56 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-1.5 z-50 space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => { handleExportStudio("json"); setShowExportMenu(false); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-200 hover:text-white hover:bg-indigo-600/30 rounded-lg transition-colors cursor-pointer text-left"
+                      >
+                        <FileJson className="w-4 h-4 text-indigo-400" />
+                        JSON ({items.length} items)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { handleExportStudio("tsv"); setShowExportMenu(false); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-200 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer text-left"
+                      >
+                        <Table2 className="w-4 h-4 text-teal-400" />
+                        TSV tabulaire (Excel)
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={handleDeleteInModal}

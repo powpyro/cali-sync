@@ -4,6 +4,7 @@ import {
   sauvegarderTemplate,
   supprimerTemplate,
   importerGrilleComplete,
+  getConfigTemplate,
   type Template,
   type TemplateCategory,
   type TemplateItem,
@@ -60,6 +61,8 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({ onBack }) => {
 
   // Export state
   const [exportTarget, setExportTarget] = useState<Template | null>(null);
+  const [exportItems, setExportItems] = useState<ImportItem[]>([]);
+  const [exportLoading, setExportLoading] = useState(false);
 
   const fetchTemplates = async () => {
     setLoading(true);
@@ -102,6 +105,41 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({ onBack }) => {
     if (!text.trim()) {
       setImportParsedItems([]);
       return;
+    }
+
+    // Support direct JSON file import
+    const trimmed = text.trim();
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      try {
+        const json = JSON.parse(trimmed);
+        const rawItems = Array.isArray(json) ? json : Array.isArray(json.items) ? json.items : null;
+        if (rawItems && rawItems.length > 0) {
+          if (!Array.isArray(json) && json.template) {
+            if (json.template.template_id && !importTemplateId) {
+              setImportTemplateId(json.template.template_id);
+            }
+            if (json.template.nom && !importTemplateName) {
+              setImportTemplateName(json.template.nom);
+            }
+          }
+          const parsed: ImportItem[] = rawItems.map((it: any) => ({
+            item_id: String(it.item_id || it.id || ""),
+            parent_id: String(it.parent_id || it.parent || ""),
+            niveau: parseInt(it.niveau || it.level, 10) || 2,
+            type_noeud: it.type_noeud || it.type || "",
+            categorie_racine_fr: it.categorie_racine_fr || it.categorie || it.category || "",
+            libelle_fr: it.libelle_fr || it.libelle || it.label || "",
+            criticite: it.criticite || it.criticality || "Standard",
+            est_terminal: it.est_terminal === true || String(it.est_terminal).toUpperCase() === "VRAI",
+            commentaire_obligatoire: it.commentaire_obligatoire === true || String(it.commentaire_obligatoire).toUpperCase() === "VRAI",
+            poids: typeof it.poids === "number" ? it.poids : (it.poids ? parseFloat(it.poids) : 1),
+          }));
+          setImportParsedItems(parsed);
+          return;
+        }
+      } catch (e) {
+        // Fallback to TSV/CSV line parsing
+      }
     }
 
     const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
@@ -230,56 +268,133 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({ onBack }) => {
     URL.revokeObjectURL(url);
   };
 
-  const exportAsJSON = (template: Template) => {
-    // Build flat hierarchical item list compatible with importerGrilleComplete
-    const items: ImportItem[] = [];
-    template.categories.forEach((cat, catIdx) => {
-      // Niveau 1 — Category root node
-      const catId = `cat_${String(catIdx + 1).padStart(3, "0")}`;
-      items.push({
-        item_id: catId,
-        parent_id: "",
-        niveau: 1,
-        type_noeud: "categorie",
-        categorie_racine_fr: cat.categorie,
-        libelle_fr: cat.categorie,
-        criticite: "Standard",
-        est_terminal: false,
-        commentaire_obligatoire: false,
-        poids: 1,
-      });
-      // Niveau 2 — Items
-      cat.items.forEach((item) => {
-        items.push({
-          item_id: item.item_id,
-          parent_id: catId,
-          niveau: 2,
-          type_noeud: "critere",
+  const handleOpenExport = async (template: Template) => {
+    setExportTarget(template);
+    setExportLoading(true);
+    setExportItems([]);
+
+    try {
+      const res = await getConfigTemplate(template.template_id);
+      if (res && res.success && Array.isArray(res.items) && res.items.length > 0) {
+        // Full hierarchical tree found (all levels N1, N2, N3, N4, ...)
+        const fullItems: ImportItem[] = res.items.map((it: any) => {
+          const niveau = parseInt(it.niveau, 10) || 2;
+          const estTerminal = it.est_terminal === true || String(it.est_terminal).toUpperCase() === "VRAI";
+          const commOblig = it.commentaire_obligatoire === true || String(it.commentaire_obligatoire).toUpperCase() === "VRAI";
+          const criticite = it.criticite === "Critical" ? "Critical" : "Standard";
+          const poids = typeof it.poids === "number" ? it.poids : (it.poids ? parseFloat(it.poids) : 1);
+          const typeNoeud = it.type_noeud || (niveau === 1 ? "categorie" : niveau === 2 ? "critere" : "sous_critere");
+
+          return {
+            item_id: String(it.item_id || ""),
+            parent_id: String(it.parent_id || ""),
+            niveau,
+            type_noeud: typeNoeud,
+            categorie_racine_fr: String(it.categorie_racine_fr || ""),
+            libelle_fr: String(it.libelle_fr || it.libelle || ""),
+            criticite,
+            est_terminal: estTerminal,
+            commentaire_obligatoire: commOblig,
+            poids,
+          };
+        });
+        setExportItems(fullItems);
+      } else {
+        // Fallback: build from template.categories (N1 and N2) if no hierarchical config exists
+        const fallbackItems: ImportItem[] = [];
+        template.categories.forEach((cat, catIdx) => {
+          const catId = `cat_${String(catIdx + 1).padStart(3, "0")}`;
+          fallbackItems.push({
+            item_id: catId,
+            parent_id: "",
+            niveau: 1,
+            type_noeud: "categorie",
+            categorie_racine_fr: cat.categorie,
+            libelle_fr: cat.categorie,
+            criticite: "Standard",
+            est_terminal: false,
+            commentaire_obligatoire: false,
+            poids: 1,
+          });
+          cat.items.forEach((item) => {
+            fallbackItems.push({
+              item_id: item.item_id,
+              parent_id: catId,
+              niveau: 2,
+              type_noeud: "critere",
+              categorie_racine_fr: cat.categorie,
+              libelle_fr: item.item_libelle,
+              criticite: item.criticite,
+              est_terminal: true,
+              commentaire_obligatoire: false,
+              poids: item.poids ?? 1,
+            });
+          });
+        });
+        setExportItems(fallbackItems);
+      }
+    } catch (e) {
+      console.error("Erreur lors de la récupération de la grille complète pour l'export:", e);
+      const fallbackItems: ImportItem[] = [];
+      template.categories.forEach((cat, catIdx) => {
+        const catId = `cat_${String(catIdx + 1).padStart(3, "0")}`;
+        fallbackItems.push({
+          item_id: catId,
+          parent_id: "",
+          niveau: 1,
+          type_noeud: "categorie",
           categorie_racine_fr: cat.categorie,
-          libelle_fr: item.item_libelle,
-          criticite: item.criticite,
-          est_terminal: true,
+          libelle_fr: cat.categorie,
+          criticite: "Standard",
+          est_terminal: false,
           commentaire_obligatoire: false,
-          poids: item.poids ?? 1,
+          poids: 1,
+        });
+        cat.items.forEach((item) => {
+          fallbackItems.push({
+            item_id: item.item_id,
+            parent_id: catId,
+            niveau: 2,
+            type_noeud: "critere",
+            categorie_racine_fr: cat.categorie,
+            libelle_fr: item.item_libelle,
+            criticite: item.criticite,
+            est_terminal: true,
+            commentaire_obligatoire: false,
+            poids: item.poids ?? 1,
+          });
         });
       });
-    });
+      setExportItems(fallbackItems);
+    } finally {
+      setExportLoading(false);
+    }
+  };
 
+  const exportAsJSON = (template: Template, itemsToExport: ImportItem[]) => {
     const exportPayload = {
-      calisync_export_version: "1.0",
+      calisync_export_version: "2.0",
       exported_at: new Date().toISOString(),
       template: {
         template_id: template.template_id,
         nom: template.nom,
       },
-      items,
+      stats: {
+        total_items: itemsToExport.length,
+        niveaux_detectes: Array.from(new Set(itemsToExport.map((i) => i.niveau))).sort((a, b) => a - b),
+        categories_n1: itemsToExport.filter((i) => i.niveau === 1).length,
+        criteres_n2: itemsToExport.filter((i) => i.niveau === 2).length,
+        sous_criteres_n3: itemsToExport.filter((i) => i.niveau === 3).length,
+        precisions_n4: itemsToExport.filter((i) => i.niveau === 4).length,
+      },
+      items: itemsToExport,
     };
 
-    const filename = `calisync_grille_${template.template_id || "export"}_${new Date().toISOString().slice(0, 10)}.json`;
+    const filename = `calisync_grille_${template.template_id || "export"}_complete_${new Date().toISOString().slice(0, 10)}.json`;
     downloadFile(JSON.stringify(exportPayload, null, 2), filename, "application/json");
   };
 
-  const exportAsTSV = (template: Template) => {
+  const exportAsTSV = (template: Template, itemsToExport: ImportItem[]) => {
     const headers = [
       "item_id", "parent_id", "niveau", "type_noeud",
       "categorie_racine_fr", "libelle_fr", "criticite",
@@ -287,27 +402,23 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({ onBack }) => {
     ];
     const rows: string[][] = [headers];
 
-    template.categories.forEach((cat, catIdx) => {
-      const catId = `cat_${String(catIdx + 1).padStart(3, "0")}`;
-      rows.push([catId, "", "1", "categorie", cat.categorie, cat.categorie, "Standard", "FAUX", "FAUX", "1"]);
-      cat.items.forEach((item) => {
-        rows.push([
-          item.item_id,
-          catId,
-          "2",
-          "critere",
-          cat.categorie,
-          item.item_libelle,
-          item.criticite,
-          "VRAI",
-          "FAUX",
-          String(item.poids ?? 1),
-        ]);
-      });
+    itemsToExport.forEach((it) => {
+      rows.push([
+        it.item_id,
+        it.parent_id,
+        String(it.niveau),
+        it.type_noeud,
+        it.categorie_racine_fr,
+        it.libelle_fr,
+        it.criticite,
+        it.est_terminal ? "VRAI" : "FAUX",
+        it.commentaire_obligatoire ? "VRAI" : "FAUX",
+        String(it.poids ?? 1),
+      ]);
     });
 
     const tsv = rows.map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join("\t")).join("\n");
-    const filename = `calisync_grille_${template.template_id || "export"}_${new Date().toISOString().slice(0, 10)}.tsv`;
+    const filename = `calisync_grille_${template.template_id || "export"}_complete_${new Date().toISOString().slice(0, 10)}.tsv`;
     downloadFile(tsv, filename, "text/tab-separated-values;charset=utf-8");
   };
 
@@ -563,9 +674,9 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({ onBack }) => {
                         <Copy className="w-3 h-3" /> Dupliquer
                       </button>
                       <button
-                        onClick={() => setExportTarget(t)}
+                        onClick={() => handleOpenExport(t)}
                         className="px-3 py-2 bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 text-xs font-bold rounded-lg hover:bg-indigo-600/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                        title="Exporter la grille"
+                        title="Exporter la grille complète (tous niveaux)"
                       >
                         <Download className="w-3 h-3" />
                       </button>
@@ -876,15 +987,15 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({ onBack }) => {
       {/* ── Export Modal ────────────────────────────────────────────────────── */}
       {exportTarget && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl">
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-slate-800">
               <div>
                 <h3 className="font-extrabold text-white text-lg flex items-center gap-2">
                   <Download className="w-5 h-5 text-indigo-400" />
-                  Exporter la grille
+                  Exporter la grille complète
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">{exportTarget.nom}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{exportTarget.nom} ({exportTarget.template_id})</p>
               </div>
               <button
                 type="button"
@@ -897,64 +1008,95 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({ onBack }) => {
 
             {/* Body */}
             <div className="p-6 space-y-4">
-              <p className="text-sm text-slate-300">
-                Choisissez le format d'export selon votre usage :
-              </p>
+              {exportLoading ? (
+                <div className="py-8 flex flex-col items-center justify-center gap-3">
+                  <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
+                  <p className="text-sm text-slate-300 font-medium">Chargement de l'arborescence complète (niveaux 1 à 4)...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Detailed arborescence breakdown */}
+                  <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3.5 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-300">Arborescence complète détectée :</span>
+                      <span className="font-extrabold text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded-full">
+                        {exportItems.length} items au total
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                      <div className="bg-slate-900/60 rounded-lg p-2 text-center border border-slate-800">
+                        <div className="text-[10px] uppercase font-bold text-slate-400">N1 Catégories</div>
+                        <div className="text-base font-extrabold text-white">
+                          {exportItems.filter((i) => i.niveau === 1).length}
+                        </div>
+                      </div>
+                      <div className="bg-slate-900/60 rounded-lg p-2 text-center border border-slate-800">
+                        <div className="text-[10px] uppercase font-bold text-teal-400">N2 Critères</div>
+                        <div className="text-base font-extrabold text-teal-300">
+                          {exportItems.filter((i) => i.niveau === 2).length}
+                        </div>
+                      </div>
+                      <div className="bg-slate-900/60 rounded-lg p-2 text-center border border-slate-800">
+                        <div className="text-[10px] uppercase font-bold text-amber-400">N3 Sous-critères</div>
+                        <div className="text-base font-extrabold text-amber-300">
+                          {exportItems.filter((i) => i.niveau === 3).length}
+                        </div>
+                      </div>
+                      <div className="bg-slate-900/60 rounded-lg p-2 text-center border border-slate-800">
+                        <div className="text-[10px] uppercase font-bold text-indigo-400">N4 Précisions</div>
+                        <div className="text-base font-extrabold text-indigo-300">
+                          {exportItems.filter((i) => i.niveau === 4).length}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
-              {/* JSON option */}
-              <button
-                type="button"
-                onClick={() => { exportAsJSON(exportTarget); setExportTarget(null); }}
-                className="w-full flex items-start gap-4 p-4 rounded-xl border border-indigo-500/40 bg-indigo-600/10 hover:bg-indigo-600/20 transition-all group cursor-pointer text-left"
-              >
-                <div className="w-10 h-10 rounded-lg bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
-                  <FileJson className="w-5 h-5 text-indigo-400" />
-                </div>
-                <div>
-                  <div className="font-bold text-white text-sm group-hover:text-indigo-200 transition-colors">
-                    JSON hiérarchique{" "}
-                    <span className="text-[10px] font-semibold bg-indigo-600/30 text-indigo-300 px-2 py-0.5 rounded-full ml-1">
-                      Recommandé
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-400 mt-0.5 leading-relaxed">
-                    Format natif CaliSync. Réimportable directement via{" "}
-                    <em>Importer Grille CSV/TSV</em>. Inclut les métadonnées complètes
-                    (niveaux, criticité, poids).
-                  </div>
-                </div>
-              </button>
+                  <p className="text-xs text-slate-300">
+                    Sélectionnez le format souhaité pour télécharger l'intégralité des niveaux :
+                  </p>
 
-              {/* TSV option */}
-              <button
-                type="button"
-                onClick={() => { exportAsTSV(exportTarget); setExportTarget(null); }}
-                className="w-full flex items-start gap-4 p-4 rounded-xl border border-slate-600/40 bg-slate-800/40 hover:bg-slate-700/40 transition-all group cursor-pointer text-left"
-              >
-                <div className="w-10 h-10 rounded-lg bg-slate-700/50 border border-slate-600/40 flex items-center justify-center flex-shrink-0">
-                  <Table2 className="w-5 h-5 text-slate-300" />
-                </div>
-                <div>
-                  <div className="font-bold text-white text-sm group-hover:text-slate-100 transition-colors">
-                    TSV tabulaire
-                  </div>
-                  <div className="text-xs text-slate-400 mt-0.5 leading-relaxed">
-                    Compatible Excel / Google Sheets. Idéal pour modifier la grille
-                    avant réimportation. Ouvrable dans n'importe quel tableur.
-                  </div>
-                </div>
-              </button>
+                  {/* JSON option */}
+                  <button
+                    type="button"
+                    onClick={() => { exportAsJSON(exportTarget, exportItems); setExportTarget(null); }}
+                    className="w-full flex items-start gap-4 p-4 rounded-xl border border-indigo-500/40 bg-indigo-600/10 hover:bg-indigo-600/20 transition-all group cursor-pointer text-left"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                      <FileJson className="w-5 h-5 text-indigo-400" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-white text-sm group-hover:text-indigo-200 transition-colors">
+                        JSON hiérarchique intégral{" "}
+                        <span className="text-[10px] font-semibold bg-indigo-600/30 text-indigo-300 px-2 py-0.5 rounded-full ml-1">
+                          Recommandé
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-400 mt-0.5 leading-relaxed">
+                        Format structuré CaliSync complet (niveaux 1 à 4, criticité, terminaux). Réimportable directement d'un clic dans l'onglet Importer Grille.
+                      </div>
+                    </div>
+                  </button>
 
-              {/* Summary stats */}
-              <div className="flex items-center gap-3 text-xs text-slate-500 pt-1">
-                <span>{exportTarget.categories.length} catégorie(s)</span>
-                <span>•</span>
-                <span>
-                  {exportTarget.categories.reduce((a, c) => a + c.items.length, 0)} critère(s)
-                </span>
-                <span>•</span>
-                <span>ID : {exportTarget.template_id}</span>
-              </div>
+                  {/* TSV option */}
+                  <button
+                    type="button"
+                    onClick={() => { exportAsTSV(exportTarget, exportItems); setExportTarget(null); }}
+                    className="w-full flex items-start gap-4 p-4 rounded-xl border border-slate-600/40 bg-slate-800/40 hover:bg-slate-700/40 transition-all group cursor-pointer text-left"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-slate-700/50 border border-slate-600/40 flex items-center justify-center flex-shrink-0">
+                      <Table2 className="w-5 h-5 text-slate-300" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-white text-sm group-hover:text-slate-100 transition-colors">
+                        TSV tabulaire intégral
+                      </div>
+                      <div className="text-xs text-slate-400 mt-0.5 leading-relaxed">
+                        Feuille de calcul complète (tous les niveaux avec parent_id). Ouvrable et modifiable dans Excel ou Google Sheets, réimportable dans CaliSync.
+                      </div>
+                    </div>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
