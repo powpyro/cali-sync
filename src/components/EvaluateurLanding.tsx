@@ -223,6 +223,7 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
 
   // 2-Step Proposal: Dedicated Full-Page Gauge state
   const [showProposalGaugePage, setShowProposalGaugePage] = useState(false);
+  const [proposalSessionId, setProposalSessionId] = useState<string>("");
   const [proposalItems, setProposalItems] = useState<HierarchicalItem[]>([]);
   const [fetchingConfigItems, setFetchingConfigItems] = useState(false);
 
@@ -442,17 +443,19 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
   useEffect(() => {
     fetchSessions();
     fetchTemplates();
-    // Pause auto-refresh while the Gauge proposal form is open to prevent
-    // state updates from interfering with form interactions.
-    if (showProposalGaugePage) return;
+    // Pause auto-refresh while the Gauge proposal form or assessment is open
+    // to prevent background state updates from interfering with form interactions.
+    if (showProposalGaugePage || runningAssessment) return;
     const interval = setInterval(fetchSessions, 10000);
     return () => clearInterval(interval);
-  }, [showProposalGaugePage]);
+  }, [showProposalGaugePage, runningAssessment]);
 
   useEffect(() => {
+    // Also pause 1s tick while form is open to prevent unnecessary full component re-renders
+    if (showProposalGaugePage || runningAssessment) return;
     const interval = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [showProposalGaugePage, runningAssessment]);
 
   const getCountdownSeconds = (session: SessionInfo): number => {
     if (!session.heure_fin) return 0;
@@ -570,6 +573,7 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
       return;
     }
 
+    setProposalSessionId(`PROP_${Date.now().toString().slice(-6)}`);
     setProposalItems(itemsForGauge);
     setShowProposalModal(false);
     setShowProposalGaugePage(true);
@@ -620,6 +624,7 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
     }
 
     if (itemsForGauge.length > 0) {
+      setProposalSessionId(`GAUGE_${session.session_id}`);
       setProposalItems(itemsForGauge);
       setShowProposalGaugePage(true);
     }
@@ -667,7 +672,7 @@ export const EvaluateurLanding: React.FC<EvaluateurLandingProps> = ({
       <HierarchicalEvaluationForm
         items={proposalItems}
         isGaugeMode={true}
-        sessionId={`PROP_${Date.now().toString().slice(-6)}`}
+        sessionId={proposalSessionId || `PROP_${identifiant}`}
         evaluateurId={identifiant}
         callName={propTitle ? `${propTitle}${propConseiller ? ` — Conseiller : ${propConseiller}` : ""}` : (propConseiller || "Proposition de Calibrage")}
         audioUrl={propAudio}

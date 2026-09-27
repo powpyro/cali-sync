@@ -148,7 +148,7 @@ type PillChoice = "Oui" | "Non" | "N.A.";
 // COMMENT FIELD
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CommentField: React.FC<{
+const CommentField = React.memo<{
   itemId: string;
   value: string;
   onChange: (v: string) => void;
@@ -156,7 +156,7 @@ const CommentField: React.FC<{
   lastPauseTimestamp?: string | null;
   placeholder?: string;
   disabled?: boolean;
-}> = ({ itemId, value, onChange, audioRef, lastPauseTimestamp, placeholder, disabled = false }) => {
+}>(({ itemId, value, onChange, audioRef, lastPauseTimestamp, placeholder, disabled = false }) => {
   const [bumping, setBumping] = useState(false);
 
   const insertTimestamp = (tsToInsert?: string) => {
@@ -178,7 +178,7 @@ const CommentField: React.FC<{
   return (
     <div className="space-y-2 pt-2 border-t border-rose-200/60">
       <div className="flex items-center justify-between text-xs flex-wrap gap-2">
-        <label className={`font-bold flex items-center gap-1.5 ${empty && !disabled ? "text-rose-600 animate-pulse" : "text-slate-700"}`}>
+        <label className={`font-bold flex items-center gap-1.5 ${empty && !disabled ? "text-rose-600" : "text-slate-700"}`}>
           <MessageSquare className="w-3.5 h-3.5" />
           Commentaire obligatoire {empty && "*"}
         </label>
@@ -188,7 +188,7 @@ const CommentField: React.FC<{
               type="button"
               onClick={() => insertTimestamp(lastPauseTimestamp)}
               disabled={disabled}
-              className={`transition-all px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 text-[11px] font-extrabold flex items-center gap-1 shadow-xs animate-pulse ${
+              className={`transition-all px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 text-[11px] font-extrabold flex items-center gap-1 shadow-xs ${
                 disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-emerald-500/20 cursor-pointer"
               }`}
               title="Insérer le minutage capturé lors de la mise en pause"
@@ -229,7 +229,7 @@ const CommentField: React.FC<{
       />
     </div>
   );
-};
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN COMPONENT
